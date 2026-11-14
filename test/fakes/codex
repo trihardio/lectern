@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+'use strict';
+// A stand-in for the Codex CLI, used only by the tests.
+const fs = require('fs');
+const path = require('path');
+const fx = require(path.join(__dirname, '..', 'fixtures'));
+const args = process.argv.slice(2);
+const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
+
+// `codex login status`: the saved-login check. FAKE_SIGNED_OUT pretends nobody is signed in.
+if (args[0] === 'login' && args[1] === 'status') {
+  process.stderr.write(process.env.FAKE_SIGNED_OUT ? 'Not logged in\n' : 'Logged in using ChatGPT\n'); // the real one uses stderr
+  process.exit(process.env.FAKE_SIGNED_OUT ? 1 : 0);
+}
+
+const reject = process.env.FAKE_REJECT_FLAG;
+if (reject && args.includes(reject)) { process.stderr.write(`error: unexpected argument '${reject}' found\n`); process.exit(2); }
+if (process.env.FAKE_REJECT_WEB && args.some((a) => a.startsWith('web_search='))) { process.stderr.write('Error: invalid configuration: unknown key web_search\n'); process.exit(1); }
+
+let input = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (c) => { input += c; });
+process.stdin.on('end', () => {
+  if (process.env.FAKE_PARTIAL_FAIL) {
+    out({ type: 'item.completed', item: { type: 'agent_message', text: 'Partial answer' } });
+    out({ type: 'turn.failed', error: { message: 'provider failed after partial output' } });
+    process.exit(1);
+  }
+  if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ tool: 'codex', args, cwd: process.cwd(), hasApiKey: 'OPENAI_API_KEY' in process.env }) + '\n');
+  let text = fx.ANSWER_TEXT;
+  if (/search queries/i.test(input)) text = fx.PLAN_JSON;
+  else if (/judge each/i.test(input)) text = fx.insightsJson((input.match(/^\[\d+\] /gm) || []).length, input);
+  else if (/exactly the word/i.test(input)) text = 'ready';
+  else if (/choose figures from research papers/i.test(input)) text = process.env.FAKE_NO_FIGURES ? '{"figures": []}' : fx.figuresJson(input);
+  else if (/claim-citation pairs/i.test(input)) text = process.env.FAKE_NO_CITATIONS ? '{"items": []}' : fx.VERIFY_JSON;
+  out({ type: 'thread.started', thread_id: 't1' });
+  out({ type: 'turn.started' });
+  out({ type: 'item.completed', item: { id: 'item_0', type: 'reasoning', text: 'Comparing designs.' } });
+  out({ type: 'item.completed', item: { id: 'item_1', type: 'agent_message', text } });
+  out({ type: 'turn.completed', usage: { input_tokens: 8800, cached_input_tokens: 0, output_tokens: 450, reasoning_output_tokens: 100 } });
+});

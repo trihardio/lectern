@@ -1,0 +1,21 @@
+{
+  "name": "lectern",
+  "productName": "Lectern",
+  "version": "0.1.0",
+  "description": "Ask a research question and get an answer grounded in real, linkable papers.",
+  "main": "electron/main.js",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "web": "node server/start.js",
+    "test": "node --test test/*.test.js",
+    "make-app": "bash scripts/make-app.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0"
+  }
+}

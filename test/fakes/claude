@@ -1,0 +1,49 @@
+#!/usr/bin/env node
+'use strict';
+// A stand-in for the Claude Code CLI, used only by the tests.
+const fs = require('fs');
+const path = require('path');
+const fx = require(path.join(__dirname, '..', 'fixtures'));
+const args = process.argv.slice(2);
+const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
+
+// `claude auth status`: the saved-login check. FAKE_SIGNED_OUT pretends nobody is signed in.
+if (args[0] === 'auth' && args[1] === 'status') {
+  out({ loggedIn: !process.env.FAKE_SIGNED_OUT, authMethod: 'claude.ai', email: 'student@example.org', subscriptionType: 'pro' });
+  process.exit(process.env.FAKE_SIGNED_OUT ? 1 : 0);
+}
+
+const reject = process.env.FAKE_REJECT_FLAG;
+if (reject && args.includes(reject)) { process.stderr.write(`error: unknown option '${reject}'\n`); process.exit(1); }
+
+let input = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (c) => { input += c; });
+process.stdin.on('end', () => {
+  if (process.env.FAKE_LOG) {
+    fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ tool: 'claude', args, cwd: process.cwd(), hasApiKey: 'ANTHROPIC_API_KEY' in process.env, inputLength: input.length, input }) + '\n');
+  }
+  if (process.env.FAKE_AUTH_FAIL) {
+    out({ type: 'result', subtype: 'success', is_error: true, result: 'Not logged in · Please run /login' });
+    process.exit(1);
+  }
+  const sys = args[args.indexOf('--system-prompt') + 1] || '';
+  let text = fx.ANSWER_TEXT;
+  if (/search queries/i.test(sys)) text = fx.PLAN_JSON;
+  else if (/judge each/i.test(sys)) text = fx.insightsJson((input.match(/^\[\d+\] /gm) || []).length, input);
+  else if (/exactly the word/i.test(sys)) text = 'ready';
+  else if (/choose figures from research papers/i.test(sys)) text = process.env.FAKE_NO_FIGURES ? '{"figures": []}' : fx.figuresJson(input);
+  else if (/claim-citation pairs/i.test(sys)) text = process.env.FAKE_NO_CITATIONS ? '{"items": []}' : fx.VERIFY_JSON;
+  // With web search on, cite a web page the way the CLI does: as a markdown link.
+  if (args.includes('WebSearch,WebFetch') && text === fx.ANSWER_TEXT) text += ' See [Sample report](https://example.org/report).';
+
+  out({ type: 'system', subtype: 'init', model: args[args.indexOf('--model') + 1] || 'default', tools: [] });
+  const partial = args.includes('--include-partial-messages');
+  if (partial) {
+    out({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } }, parent_tool_use_id: null });
+    out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Considering the evidence.' } }, parent_tool_use_id: null });
+    for (const c of text.match(/[\s\S]{1,50}/g)) out({ type: 'stream_event', event: { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: c } }, parent_tool_use_id: null });
+  }
+  out({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] }, parent_tool_use_id: null });
+  out({ type: 'result', subtype: 'success', is_error: false, result: text, total_cost_usd: 0.01, usage: { input_tokens: 9000, output_tokens: 500 } });
+});

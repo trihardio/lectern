@@ -1,0 +1,8 @@
+node_modules/
+dist/
+release/
+.DS_Store
+*.log
+
+# The owner's private Obsidian notes for this project. They stay on the owner's Mac.
+/Lectern/
