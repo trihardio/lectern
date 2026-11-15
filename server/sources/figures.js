@@ -59,7 +59,8 @@ const text = (s) => stripTags(String(s || ''))
 /** The <fig> elements of a JATS full text: [{ id, label, title, caption, href }]. */
 function parseFigures(xml) {
   const out = [];
-  for (const m of String(xml || '').matchAll(/<fig\b([^>]*)>([\s\S]*?)<\/fig>/g)) {
+  // `(?=[\s>])`, not `\b`: front matter has <fig-count count="2"/>, which `\b` would match.
+  for (const m of String(xml || '').matchAll(/<fig(?=[\s>])([^>]*)>([\s\S]*?)<\/fig>/g)) {
     const body = m[2];
     const href = (/<graphic\b[^>]*?xlink:href="([^"]+)"/.exec(body) || [])[1];
     if (!href) continue;
@@ -77,10 +78,13 @@ function parseFigures(xml) {
   return out;
 }
 
-/** The image file in the bucket for a figure's href (hrefs come with or without an extension). */
+/**
+ * The image file in the bucket for a figure's href (hrefs come with or without an extension).
+ * Newer articles ship their figures as .webp only, which the window (Chromium) shows.
+ */
 function imageKey(keys, href) {
-  const base = href.replace(/\.(jpe?g|png|gif|tiff?)$/i, '');
-  const images = keys.filter((k) => /\.(jpe?g|png|gif)$/i.test(k));
+  const base = href.replace(/\.(jpe?g|png|gif|webp|tiff?)$/i, '');
+  const images = keys.filter((k) => /\.(jpe?g|png|gif|webp)$/i.test(k));
   return images.find((k) => k.endsWith(`/${href}`)) || images.find((k) => k.split('/').pop().replace(/\.[a-z]+$/i, '') === base) || null;
 }
 
@@ -138,7 +142,10 @@ async function candidates(papers, { signal, look = 10, open = 4, perPaper = 4, m
  * label, title or caption. Returns the guide, or '' when it fails that check.
  */
 function groundedRead(read, fig) {
-  const guide = clip(String(read || '').replace(/\s+/g, ' ').trim(), 320);
+  const full = String(read || '').replace(/\s+/g, ' ').trim();
+  // Models overrun the length asked for; end on the last whole sentence rather than mid-word.
+  const cut = full.length > 320 ? full.slice(0, 320).replace(/(?<=[.!?])\s[^.!?]*$/, '') : full;
+  const guide = /[.!?]$/.test(cut) ? cut : clip(full, 320);
   if (!guide) return '';
   const source = `${fig.label} ${fig.title} ${fig.caption}`.replace(/,(?=\d{3}\b)/g, '');
   const nums = guide.replace(/,(?=\d{3}\b)/g, '').match(/\d+(?:\.\d+)?/g) || [];

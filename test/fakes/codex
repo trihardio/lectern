@@ -13,6 +13,23 @@ if (args[0] === 'login' && args[1] === 'status') {
   process.exit(process.env.FAKE_SIGNED_OUT ? 1 : 0);
 }
 
+if (args[0] === 'app-server') {
+  const lines = require('readline').createInterface({ input: process.stdin });
+  lines.on('line', (line) => {
+    const msg = JSON.parse(line);
+    if (process.env.FAKE_USAGE_HANG) return;
+    if (msg.method === 'initialize') out({ id: msg.id, result: { userAgent: 'fake-codex' } });
+    if (msg.method === 'account/rateLimits/read') {
+      if (process.env.FAKE_SIGNED_OUT) out({ id: msg.id, error: { code: -1, message: 'Not signed in' } });
+      else out({ id: msg.id, result: { rateLimits: {
+        primary: { usedPercent: 18, windowDurationMins: 300, resetsAt: Math.floor(Date.now() / 1000) + 3600 },
+        secondary: { usedPercent: 44, windowDurationMins: 10080, resetsAt: Math.floor(Date.now() / 1000) + 86400 },
+      } } });
+    }
+  });
+  return;
+}
+
 const reject = process.env.FAKE_REJECT_FLAG;
 if (reject && args.includes(reject)) { process.stderr.write(`error: unexpected argument '${reject}' found\n`); process.exit(2); }
 if (process.env.FAKE_REJECT_WEB && args.some((a) => a.startsWith('web_search='))) { process.stderr.write('Error: invalid configuration: unknown key web_search\n'); process.exit(1); }

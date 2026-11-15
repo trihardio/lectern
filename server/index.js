@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const { Config, EFFORTS } = require('./config');
 const { Store } = require('./store');
 const llm = require('./llm');
+const { createUsageMonitor } = require('./llm/usage');
 const { runAsk } = require('./pipeline');
 const { SOURCES } = require('./sources');
 const { cleanFilters, options: filterOptions } = require('./filters');
@@ -23,6 +24,7 @@ const STATIC = {
   '/evidence-ui.js': ['ui/evidence.js', 'text/javascript; charset=utf-8'],
   '/': ['ui/index.html', 'text/html; charset=utf-8'],
   '/styles.css': ['ui/styles.css', 'text/css; charset=utf-8'],
+  '/world.css': ['ui/world.css', 'text/css; charset=utf-8'],
   '/app.js': ['ui/app.js', 'text/javascript; charset=utf-8'],
   '/render.js': ['ui/render.js', 'text/javascript; charset=utf-8'],
   '/cite.js': ['shared/cite.js', 'text/javascript; charset=utf-8'],
@@ -60,6 +62,7 @@ function readBody(req, limit = 2 * 1024 * 1024) {
 function createApp({ dataDir, onDictate } = {}) {
   const config = new Config(dataDir);
   const store = new Store(config.dataDir);
+  const usage = createUsageMonitor();
   // The window receives this token inside its HTML and must send it back with every API call.
   // Another website open in a browser can reach 127.0.0.1 but cannot read the token, so it
   // cannot spend your credits or read your library.
@@ -83,6 +86,7 @@ function createApp({ dataDir, onDictate } = {}) {
 
   const routes = {
     'GET /api/state': async () => publicState(),
+    'GET /api/usage': async () => usage(config.get()),
 
     'PUT /api/settings': async (body) => { config.update(body); return publicState(); },
 
@@ -188,6 +192,16 @@ function createApp({ dataDir, onDictate } = {}) {
       const host = String(req.headers.host || '');
       if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) {
         res.writeHead(403); return res.end('Forbidden');
+      }
+
+      // The typefaces ship inside the app (ui/fonts, SIL Open Font License); names are checked
+      // against a strict pattern so nothing outside that folder can be read.
+      const font = /^\/fonts\/([a-z0-9-]+\.woff2)$/.exec(url.pathname);
+      if (req.method === 'GET' && font) {
+        let data;
+        try { data = fs.readFileSync(path.join(ROOT, 'ui', 'fonts', font[1])); } catch { res.writeHead(404); return res.end('Not found'); }
+        res.writeHead(200, { 'content-type': 'font/woff2', 'cache-control': 'max-age=31536000, immutable', 'x-content-type-options': 'nosniff' });
+        return res.end(data);
       }
 
       if (req.method === 'GET' && STATIC[url.pathname]) {

@@ -27,6 +27,19 @@ test('captions are read from the full text, with entities decoded and the image 
   assert.deepEqual(figures.parseFigures('<fig id="x"><caption><p>no graphic</p></caption></fig>'), []);
 });
 
+test('newer articles: <fig-count> in the front matter is not a figure, and .webp images are used', () => {
+  const xml = `<article><front><counts><fig-count count="1"/><table-count count="1"/></counts></front><body>
+    <fig position="float" id="F1" fig-type="figure"><label>Figure 1.</label><caption><title>Scores by group.</title></caption>
+    <graphic xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="art-g001.webp"/></fig></body></article>`;
+  const figs = figures.parseFigures(xml);
+  assert.equal(figs.length, 1);
+  assert.equal(figs[0].id, 'F1', 'the match starts at the real <fig>, not at <fig-count>');
+  assert.equal(figs[0].label, 'Figure 1.');
+  const keys = ['PMC1.1/PMC1.1.xml', 'PMC1.1/art-g001.webp', 'PMC1.1/art-s001.docx'];
+  assert.equal(figures.imageKey(keys, 'art-g001.webp'), 'PMC1.1/art-g001.webp');
+  assert.equal(figures.imageKey(keys, 'art-g001'), 'PMC1.1/art-g001.webp', 'href without an extension');
+});
+
 test('candidates: only open-access papers, newest version, no selection flow charts, ids in order', async () => {
   mock.reset();
   const c = await figures.candidates([paper(1), paper(2), paper(3), paper(4), { n: 9, title: 'no doi' }]);
@@ -53,6 +66,9 @@ test('a reading guide may not add numbers the caption does not state', () => {
   assert.equal(figures.groundedRead('Each square is a study; the 95% line is its interval.', fig), 'Each square is a study; the 95% line is its interval.');
   assert.equal(figures.groundedRead('All 61 studies, 48210 employees in total.', fig), 'All 61 studies, 48210 employees in total.', 'thousands separators do not matter');
   assert.equal(figures.groundedRead('The effect doubles after 3 days.', fig), '');
+  const long = `${'Each square is one study and its line is the interval. '.repeat(6)}Compare the squares to see whether`;
+  const cut = figures.groundedRead(long, fig);
+  assert.ok(cut.length <= 320 && cut.endsWith('interval.'), 'an overlong guide ends on its last whole sentence');
   assert.equal(figures.groundedRead('', fig), '');
 });
 

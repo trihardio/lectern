@@ -22,7 +22,7 @@ npx --yes "@electron/packager@$PACKAGER_VERSION" . Lectern \
   --app-bundle-id=local.lectern.app \
   --app-version="$VERSION" --build-version="$VERSION" \
   --app-copyright="Lectern $VERSION" \
-  --ignore='^/(test|dist|release|scripts|Lectern|\.git|\.github|\.vscode|CLAUDE\.md)($|/)'
+  --ignore='^/(test|dist|release|scripts|Lectern|\.git|\.github|\.vscode|\.impeccable|CLAUDE\.md|PRODUCT\.md|DESIGN\.md)($|/)'
 
 APP="dist/Lectern-darwin-$ARCH/Lectern.app"
 # Apple Silicon only runs signed apps. An "ad-hoc" signature is enough for an app you built yourself.

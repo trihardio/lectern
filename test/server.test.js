@@ -51,6 +51,21 @@ async function start() {
   return { app, base, call, askStream, dataDir, stop: () => app.close() };
 }
 
+test('usage endpoint is authenticated and reports disconnected providers without a model call', async () => {
+  const s = await start();
+  try {
+    const noToken = await mock.realFetch(`${s.base}api/usage`);
+    assert.equal(noToken.status, 403);
+    const response = await s.call('GET', '/api/usage');
+    assert.equal(response.status, 200);
+    for (const id of ['claude-code', 'codex']) {
+      assert.equal(response.json.providers[id].weekly, null);
+      assert.equal(response.json.providers[id].fiveHour, null);
+      assert.match(response.json.providers[id].detail, /Connect/);
+    }
+  } finally { await s.stop(); }
+});
+
 test('serves the window with its token and locks the API to it', async () => {
   const s = await start();
   try {

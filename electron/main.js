@@ -2,7 +2,7 @@
 // The desktop shell. It starts the local server (server/index.js) on a free port and
 // shows it in a window. All real work happens in the server; this file only owns the window.
 
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, nativeTheme } = require('electron');
 const { createApp } = require('../server');
 
 let lectern = null;
@@ -18,9 +18,9 @@ async function createWindow() {
     minWidth: 900,
     minHeight: 620,
     title: 'Lectern',
-    backgroundColor: '#F3F5F8',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 18, y: 20 },
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0D1512' : '#EBEFEA',
+    // macOS: the traffic lights sit on the green rail. Windows keeps its normal title bar and controls.
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 20 } } : { autoHideMenuBar: true }),
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true },
   });
 
@@ -50,8 +50,9 @@ if (!app.requestSingleInstanceLock()) {
     lectern = createApp({
       // The microphone button: hand over to macOS Dictation, in whatever text box has the cursor.
       // (The browser engine inside Electron has no speech recognition service of its own.)
-      onDictate: () => {
-        if (!win || process.platform !== 'darwin') return false;
+      // Windows has no such hand-over; the window points people to Windows voice typing instead.
+      onDictate: process.platform !== 'darwin' ? undefined : () => {
+        if (!win) return false;
         win.focus();
         win.webContents.focus();
         Menu.sendActionToFirstResponder('startDictation:');

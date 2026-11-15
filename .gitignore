@@ -6,3 +6,6 @@ release/
 
 # The owner's private Obsidian notes for this project. They stay on the owner's Mac.
 /Lectern/
+
+# Design tooling (decision pages, sketches); PRODUCT.md and DESIGN.md stay in the repo
+/.impeccable/

@@ -6,7 +6,8 @@
   const TOKEN = document.querySelector('meta[name="lectern-token"]').content;
   const Cite = window.LecternCite;
   const Render = window.LecternRender;
-  if (/Electron/i.test(navigator.userAgent)) document.documentElement.classList.add('is-desktop');
+  // The Mac window has no title bar (the traffic lights sit on the rail); Windows keeps its own.
+  if (/Electron/i.test(navigator.userAgent) && /Macintosh/i.test(navigator.userAgent)) document.documentElement.classList.add('is-desktop');
 
   // ------------------------------------------------------------------ helpers
   function h(tag, attrs, ...kids) {
@@ -445,6 +446,7 @@
     app: null, // { settings, engines, activeEngine, efforts, sources, dataDir }
     threads: [],
     library: [],
+    usage: {},
     view: 'home', // home | thread | library
     thread: null, // { id, title, turns }
     live: null, // the question currently being answered (or the last one that failed)
@@ -544,6 +546,107 @@
   const modeInfo = (id) => S.app.modes.find((m) => m.id === id) || S.app.modes[0];
 
   // ------------------------------------------------------------------ rail
+  const USAGE_PROVIDERS = [['claude-code', 'Claude'], ['codex', 'GPT']];
+  let usageRequest = null;
+  let usageLastFetch = 0;
+  let redrawUsageDialog = null;
+
+  // A reset is not evidence of 0% usage: wait for a new reading after the reset.
+  function currentUsageWindow(provider, name) {
+    const w = S.usage[provider]?.[name];
+    return w && (!w.resetsAt || Date.parse(w.resetsAt) > Date.now()) ? w : null;
+  }
+  const usagePercent = (w) => w ? `${Math.round(w.usedPercent)}% used` : 'Unavailable';
+  function usageDescription(id, label) {
+    const data = S.usage[id];
+    const weekly = currentUsageWindow(id, 'weekly');
+    const fiveHour = currentUsageWindow(id, 'fiveHour');
+    return `${label}${id === 'codex' ? ' (Codex)' : ''}: weekly ${usagePercent(weekly)}, five-hour ${usagePercent(fiveHour)}${data?.stale ? '. Last known reading' : ''}`;
+  }
+
+  function usageRing(id) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    for (const [key, value] of Object.entries({ viewBox: '0 0 40 40', width: '36', height: '36', fill: 'none', 'aria-hidden': 'true', class: 'usage-ring' })) svg.setAttribute(key, value);
+    const point = (angle) => [20 + 15.5 * Math.cos(angle * Math.PI / 180), 20 + 15.5 * Math.sin(angle * Math.PI / 180)];
+    // Leave room for the round caps at both breaks; remaining arc lengths have a 2:1 ratio.
+    const weeklySweep = 328 * 2 / 3;
+    for (const [name, start, sweep] of [['weekly', -82, weeklySweep], ['fiveHour', -82 + weeklySweep + 16, 328 / 3]]) {
+      const a = point(start), b = point(start + sweep);
+      const d = `M${a.join(' ')} A15.5 15.5 0 ${sweep > 180 ? 1 : 0} 1 ${b.join(' ')}`;
+      const w = currentUsageWindow(id, name);
+      for (const layer of ['track', 'fill']) {
+        if (layer === 'fill' && w?.usedPercent === 0) continue;
+        const p = document.createElementNS(NS, 'path');
+        for (const [key, value] of Object.entries({ d, pathLength: '100', 'stroke-width': '3',
+          'stroke-linecap': w ? 'round' : 'butt',
+          class: `usage-${layer} usage-${name}${!w ? ' usage-unknown' : ''}`,
+          ...(layer === 'fill' ? { 'stroke-dasharray': w ? `${w.usedPercent} 100` : '2 8' } : {}),
+        })) p.setAttribute(key, value);
+        svg.append(p);
+      }
+    }
+    return svg;
+  }
+
+  function renderUsageMeters() {
+    return h('div', { class: 'usage-meters', role: 'group', 'aria-label': 'Plan usage' },
+      USAGE_PROVIDERS.map(([id, label]) => h('button', {
+        type: 'button', class: `usage-meter usage-${id}${S.usage[id]?.stale ? ' is-stale' : ''}`,
+        title: `${usageDescription(id, label)}. Click for details.`,
+        'aria-label': `${usageDescription(id, label)}. Show usage details`, 'aria-haspopup': 'dialog',
+        onclick: () => openUsage(id, label),
+      }, usageRing(id), h('span', { class: 'usage-label' }, label))));
+  }
+
+  async function refreshUsage() {
+    if (!S.app || document.hidden || usageRequest || Date.now() - usageLastFetch < 15000) return usageRequest;
+    usageLastFetch = Date.now();
+    usageRequest = (async () => {
+      try { S.usage = (await api('GET', '/api/usage')).providers; }
+      catch {
+        for (const [id] of USAGE_PROVIDERS) S.usage[id] = { ...S.usage[id], stale: true, detail: 'Could not refresh usage. Check your connection.' };
+      }
+      // Update only the meters, preserving focus, the composer and conversation scroll.
+      const old = $('.usage-meters');
+      const focused = old && [...old.children].indexOf(document.activeElement);
+      if (old) {
+        const next = renderUsageMeters();
+        old.replaceWith(next);
+        if (focused >= 0) next.children[focused]?.focus();
+      }
+      if (redrawUsageDialog) redrawUsageDialog();
+    })().finally(() => { usageRequest = null; });
+    return usageRequest;
+  }
+
+  function openUsage(id, label) {
+    const body = h('div', { class: `dialog-body usage-details usage-${id}` });
+    const draw = () => {
+      const data = S.usage[id];
+      const checked = data?.checkedAt && new Date(data.checkedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      fill(body,
+        h('p', { class: 'help' }, id === 'codex' ? 'Your GPT usage through Codex, shared across apps using this account.' : 'Your Claude account usage, shared across apps using this plan.'),
+        h('div', { class: 'usage-detail-head' }, usageRing(id), h('span', null, 'Filled = used', h('small', null, 'Empty = 0% · Full = 100%'))),
+        [['weekly', 'Weekly', '⅔ of the ring'], ['fiveHour', 'Five-hour', '⅓ of the ring']].map(([name, title, portion]) => {
+          const w = currentUsageWindow(id, name);
+          const expired = data?.[name]?.resetsAt && Date.parse(data[name].resetsAt) <= Date.now();
+          const reset = w?.resetsAt ? `Resets ${new Date(w.resetsAt).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' })}` : '';
+          return h('div', { class: 'usage-detail-row' },
+            h('div', null, h('b', null, title), h('small', null, portion)),
+            h('div', null, h('b', null, usagePercent(w)), h('small', null, w ? `${Math.round(100 - w.usedPercent)}% left` : expired ? 'Reset passed; awaiting a fresh reading' : 'No reading available'),
+              reset && h('small', null, reset)));
+        }),
+        data?.detail && h('p', { class: 'help' }, data.detail),
+        h('p', { class: 'help usage-updated' }, data ? `${data.stale ? 'Last known reading' : 'Updated'}${checked ? ` · ${checked}` : ''}. Checks automatically every 2 minutes.` : 'Checking account usage…'));
+    };
+    draw();
+    openDialog(`${label}${id === 'codex' ? ' / Codex' : ''} usage`, body);
+    redrawUsageDialog = draw;
+    $('#dialog').addEventListener('close', () => { if (redrawUsageDialog === draw) redrawUsageDialog = null; }, { once: true });
+    refreshUsage();
+  }
+
   function renameField(t) {
     let done = false;
     const finish = async (save) => {
@@ -601,11 +704,12 @@
                 h('button', { class: 'history-act del', title: 'Delete', 'aria-label': `Delete "${t.title}"`, onclick: () => deleteThread(t) }, '×')),
             ]), t.id, i))),
       h('div', { class: 'rail-foot' },
-        h('button', { class: 'rail-link engine-pill', onclick: openSettings },
+        h('div', { class: 'rail-model-row' }, h('button', { class: 'rail-link engine-pill', onclick: openSettings },
           h('span', null,
             h('span', { class: `dot${active ? '' : ' off'}` }), ' ',
             active ? active.short : 'No model connected',
-            active && h('small', null, `${prettyModel(S.compose.model, active.id)}, ${EFFORT_LABEL[S.compose.effort].toLowerCase()} effort`))),
+            active && h('small', { title: `${prettyModel(S.compose.model, active.id)}, ${EFFORT_LABEL[S.compose.effort].toLowerCase()} effort` }, `${prettyModel(S.compose.model, active.id)}, ${EFFORT_LABEL[S.compose.effort].toLowerCase()} effort`))),
+          renderUsageMeters()),
         h('button', { class: 'rail-link', onclick: openSettings }, 'Settings')));
     Motion.settle('history');
     Motion.glide($('.history', rail), 'li:not(.history-empty)');
@@ -845,6 +949,11 @@
       return;
     }
     if (listening) { stopDictation(); return; }
+    if (/Electron/i.test(navigator.userAgent) && /Windows/i.test(navigator.userAgent)) {
+      box()?.focus();
+      toast('Press Windows key + H to dictate into the box.');
+      return;
+    }
     const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Speech) { toast('This browser has no voice input. On a Mac, click in the box and press the Dictation key.'); return; }
     const before = S.compose.draft ? `${S.compose.draft.trimEnd()} ` : '';
@@ -1006,6 +1115,21 @@
     return [`${who} (${p.year || 'n.d.'})`, p.venue && '. ', p.venue && h('i', null, p.venue)];
   }
 
+  /**
+   * The herbarium folder a paper is filed in: its kind of study, read from the abstract when there is a
+   * reading, else from the database record. Only a colour and a word; never a judgement of quality.
+   */
+  function folderOf(p, ins) {
+    const d = `${(ins && ins.design) || ''} ${p.kind || ''}`.toLowerCase();
+    if (/meta-analy|systematic/.test(d)) return 'meta';
+    if (/random|trial|experiment/.test(d)) return 'trial';
+    if (/cohort|longitudinal|panel|prospective|follow-up/.test(d)) return 'cohort';
+    if (/cross-section|survey|questionnaire/.test(d)) return 'cross';
+    if (/qualitative|interview|case stud|ethnograph/.test(d)) return 'qual';
+    return 'other';
+  }
+  const FOLDER_LABEL = { meta: 'Review of studies', trial: 'Trial', cohort: 'Cohort', cross: 'Survey', qual: 'Qualitative', other: 'Study' };
+
   function paperRow(p, { turn, showNumber }) {
     const ins = turn ? insightFor(turn, p.n) : null;
     const saved = S.library.some((x) => x.id === p.id);
@@ -1034,7 +1158,7 @@
       },
     }, saved ? 'Saved' : 'Save');
 
-    return h('li', { class: `paper${ins && !ins.relevant ? ' dim' : ''}`, 'data-n': showNumber ? p.n : null },
+    return h('li', { class: `paper${ins && !ins.relevant ? ' dim' : ''}`, 'data-n': showNumber ? p.n : null, 'data-folder': folderOf(p, ins) },
       showNumber ? h('span', { class: `tab ${tabClass}`, title: stance ? STANCE_LABEL[stance] : null }, p.n) : h('span'),
       h('div', { class: 'paper-body' },
         href ? h('a', { class: 'paper-title', href, target: '_blank', rel: 'noopener noreferrer' }, p.title) : h('span', { class: 'paper-title' }, p.title),
@@ -1184,10 +1308,21 @@
     }
   });
 
+  /**
+   * Point at a paper (its stamp, its margin label or its row in References): its stamps light, and a
+   * highlighter sweeps over every claim it supports, in the colour of what the paper found.
+   */
   function highlightPaper(turn, n) {
     const article = [...document.querySelectorAll('.turn')].find((el) => el._turn === turn);
     if (!article) return;
-    for (const chip of article.querySelectorAll('.cite[data-n]')) chip.classList.toggle('hot', Number(chip.dataset.n) === Number(n));
+    const key = n == null ? '' : String(Number(n));
+    for (const chip of article.querySelectorAll('.cite[data-n], .specimen[data-n]')) chip.classList.toggle('hot', chip.dataset.n === key);
+    const tone = key ? (insightFor(turn, Number(key))?.stance || 'plain') : '';
+    for (const claim of article.querySelectorAll('.claim')) {
+      const on = !!key && claim.dataset.ns.split(' ').includes(key);
+      claim.classList.toggle('lit', on);
+      if (on) claim.dataset.tone = ['supports', 'against', 'conditional', 'mixed'].includes(tone) ? tone : 'plain';
+    }
   }
 
   function focusPaper(turn, n) {
@@ -1331,10 +1466,12 @@
     // asked every time, so the memory knows the card was not there before the opening arrived
     const shown = Motion.age(turn, 'lead', !!parts.hasLead);
     if (!parts.hasLead) return h('div', { hidden: true });
+    const text = h('div', { class: 'answer summary-text', html: parts.lead.html });
+    markClaims(text);
     const card = h('section', { class: 'answer-summary', 'aria-label': 'Answer in brief' },
-      h('p', { class: 'summary-eyebrow' }, 'Answer in brief'),
-      h('div', { class: 'answer summary-text', html: parts.lead.html }),
-      h('p', { class: 'summary-source' }, `${(turn.papers || []).length} retrieved papers · Abstract-level synthesis · Open the evidence you rely on`));
+      h('p', { class: 'summary-eyebrow' }, h('span', null, 'Answer in brief'), h('span', { class: 'summary-tally' }, `${(turn.papers || []).length} papers · abstracts`)),
+      text,
+      h('p', { class: 'summary-source' }, 'Abstract-level synthesis. Open the evidence you rely on.'));
     return shown == null ? card : Motion.enter(card, 0, shown); // the card rises in when the opening first arrives
   }
 
@@ -1363,8 +1500,81 @@
     return card;
   }
 
+  /**
+   * Wrap the words each group of citation marks supports in a .claim span, back to the previous
+   * sentence end, so pointing at a stamp can sweep a highlighter over exactly that claim. Existing
+   * nodes only move into the span: nothing is parsed or re-escaped.
+   */
+  const ENDS_SENTENCE = /[.!?;:]["'”’)\]]*\s*$/;
+  function markClaims(root) {
+    for (const group of root.querySelectorAll('.cites')) {
+      const ns = [...new Set([...group.querySelectorAll('.cite[data-n]')].map((c) => c.dataset.n))];
+      if (!ns.length) continue;
+      const take = [];
+      const hasWords = () => take.some((n) => /\S/.test(n.textContent));
+      let node = group.previousSibling;
+      while (node) {
+        if (node.nodeType === 1 && node.matches('.cites, .claim, br')) break;
+        const text = node.textContent;
+        if (hasWords() && ENDS_SENTENCE.test(text)) break; // the sentence before this claim
+        if (node.nodeType === 3) {
+          let cut = -1;
+          for (const m of text.matchAll(/[.!?;:]["'”’)\]]*\s+(?=\S)/g)) cut = m.index + m[0].length;
+          if (cut > 0) { take.unshift(node.splitText(cut)); break; } // the tail of the text is this claim
+        }
+        take.unshift(node);
+        node = node.previousSibling;
+      }
+      if (!hasWords()) continue;
+      const claim = h('span', { class: 'claim', 'data-ns': ns.join(' ') });
+      take[0].before(claim);
+      claim.append(...take);
+    }
+  }
+
+  /**
+   * The margin: beside each paragraph, a small specimen label for each paper it cites for the first
+   * time (kind of study as a folder colour, author and year, sample when the abstract states one).
+   * Laid out on the answer's own grid, so each label sits level with its paragraph; hidden by CSS when
+   * the window is too narrow for a margin.
+   */
+  function addMargin(turn, el) {
+    const labels = citeLabels(turn);
+    const byN = new Map((turn.papers || []).map((p) => [p.n, p]));
+    const seen = new Set();
+    let row = 0;
+    const notes = [];
+    for (const block of [...el.children]) {
+      row += 1;
+      block.style.gridRow = String(row);
+      if (block.classList.contains('paper-figure')) continue;
+      const fresh = [...new Set([...block.querySelectorAll('.cite[data-n]')].map((c) => Number(c.dataset.n)))]
+        .filter((n) => byN.has(n) && !seen.has(n));
+      if (!fresh.length) continue;
+      fresh.forEach((n) => seen.add(n));
+      const shown = fresh.slice(0, 3);
+      const note = h('div', { class: 'margin-note' },
+        shown.map((n) => {
+          const p = byN.get(n);
+          const ins = insightFor(turn, n);
+          const folder = folderOf(p, ins);
+          const name = labels?.get(n) || byLine(p)[0];
+          return h('button', { type: 'button', class: 'specimen', 'data-n': n, 'data-folder': folder, 'aria-label': `Paper ${n}: ${name}. Show it in References.` },
+            h('span', { class: 'sp-no' }, `No. ${String(n).padStart(2, '0')}`, p.year ? ` · ${p.year}` : ''),
+            h('span', { class: 'sp-name' }, name),
+            h('span', { class: 'sp-det' }, (ins && ins.design) || (p.kind !== 'Article' ? p.kind : FOLDER_LABEL[folder])),
+            ins && ins.sample && h('span', { class: 'sp-n' }, `N ${ins.sample}`));
+        }),
+        fresh.length > 3 && h('span', { class: 'sp-more' }, `+${fresh.length - 3} more in References`));
+      note.style.gridRow = String(row);
+      notes.push(note);
+    }
+    if (notes.length) { el.classList.add('has-margin'); el.append(...notes); }
+  }
+
   function buildAnswer(turn) {
     const el = h('div', { class: 'answer answer-body', 'data-evidence-section': 'synthesis', tabindex: '-1', html: answerParts(turn).body.html });
+    markClaims(el);
     // Once the answer is complete, each figure goes after the first paragraph that cites its paper
     // (while it streams they wait below it, in buildFigures, so images do not reload on every word).
     if (!turn.running) {
@@ -1376,6 +1586,7 @@
         const card = figureCard(turn, f, i === 0);
         if (block) { (lastAfter.get(block) || block).after(card); lastAfter.set(block, card); } else el.append(card);
       });
+      addMargin(turn, el);
     }
     return el;
   }
@@ -1612,17 +1823,25 @@
         view.nav, view.reasoning, view.answer, view.figures, view.evidence, view.foot, view.next));
     view.el._turn = turn;
     const citeChip = (e) => e.target.closest('button.cite[data-n]');
+    const specimen = (e) => e.target.closest('button.specimen[data-n]');
+    let pointed = null; // the paper whose claims are lit, so moving within one stamp does not re-sweep
+    const point = (n) => { if (n !== pointed) { pointed = n; highlightPaper(turn, n); } };
     view.el.addEventListener('click', (e) => {
-      const chip = citeChip(e);
+      const chip = citeChip(e) || specimen(e);
       if (chip) focusPaper(turn, Number(chip.dataset.n));
     });
     view.el.addEventListener('mouseover', (e) => {
       const chip = citeChip(e);
       if (chip) showCiteCard(chip, turn); else hideCiteCard();
+      const any = chip || specimen(e);
+      point(any ? any.dataset.n : null);
     });
-    view.el.addEventListener('mouseleave', hideCiteCard);
-    view.el.addEventListener('focusin', (e) => { const chip = citeChip(e); if (chip) showCiteCard(chip, turn); });
-    view.el.addEventListener('focusout', hideCiteCard);
+    view.el.addEventListener('mouseleave', () => { hideCiteCard(); point(null); });
+    view.el.addEventListener('focusin', (e) => {
+      const chip = citeChip(e); if (chip) showCiteCard(chip, turn);
+      const any = chip || specimen(e); point(any ? any.dataset.n : null);
+    });
+    view.el.addEventListener('focusout', () => { hideCiteCard(); point(null); });
     return view;
   }
 
@@ -1818,6 +2037,7 @@
     S.app = await api('GET', '/api/state');
     settleCompose();
     render();
+    refreshUsage();
   }
 
   function openSettings() {
@@ -2076,6 +2296,7 @@
     }
     aborter = null;
     live.running = false;
+    refreshUsage();
 
     if (finished) {
       // The answer is saved on disk; move it from "live" into the conversation.
@@ -2208,6 +2429,7 @@
       if (!localStorage.getItem('lectern.compose')) { S.compose.effort = app.settings.effort; S.compose.web = app.settings.web; }
       render();
       // First launch: ask once what the reader studies. After that it lives on the home page and in Settings.
+      refreshUsage();
       if (!app.settings.profile.asked && !profileLabel()) {
         openProfile();
         saveSettings({ profile: { asked: true } }).catch(() => { /* asking again next time is harmless */ });
@@ -2217,5 +2439,8 @@
     }
   }
 
+  setInterval(refreshUsage, 2 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshUsage(); });
+  window.addEventListener('focus', () => refreshUsage());
   boot();
 })();

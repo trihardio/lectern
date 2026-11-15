@@ -8,15 +8,29 @@ const path = require('path');
 const { spawn, execFile } = require('child_process');
 
 let cachedPath = null;
+let isWin = process.platform === 'win32';
+const SEP = () => (isWin ? ';' : ':'); // PATH separator; a Windows path itself contains ':' (C:\…)
+
+/** Places the Windows installers put the tools (native installer, npm, winget, scoop, Volta). */
+function windowsExtras(home) {
+  const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+  const local = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+  return [
+    path.join(home, '.local', 'bin'), path.join(appData, 'npm'), path.join(local, 'Microsoft', 'WinGet', 'Links'),
+    path.join(home, 'scoop', 'shims'), path.join(local, 'Volta', 'bin'), path.join(home, '.bun', 'bin'),
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'nodejs'),
+  ];
+}
 
 /**
  * Apps launched from Finder get a bare PATH (/usr/bin:/bin…), so tools installed by
  * Homebrew, npm or nvm are invisible. Ask the user's login shell for its PATH once.
+ * On Windows the app inherits the user's PATH, plus the usual install folders.
  */
 function shellPath() {
   if (cachedPath) return Promise.resolve(cachedPath);
   const home = os.homedir();
-  const extras = [
+  const extras = isWin ? windowsExtras(home) : [
     path.join(home, '.local', 'bin'), path.join(home, '.claude', 'local'), path.join(home, '.claude', 'bin'),
     '/opt/homebrew/bin', '/usr/local/bin', path.join(home, '.npm-global', 'bin'), path.join(home, '.bun', 'bin'),
     path.join(home, '.volta', 'bin'), path.join(home, 'Library', 'pnpm'), path.join(home, '.codex', 'bin'),
@@ -27,12 +41,12 @@ function shellPath() {
   } catch { /* nvm not installed */ }
 
   const finish = (fromShell) => {
-    const parts = [...(fromShell || '').split(':'), ...(process.env.PATH || '').split(':'), ...extras];
-    cachedPath = [...new Set(parts.filter(Boolean))].join(':');
+    const parts = [...(fromShell || '').split(SEP()), ...(process.env.PATH || process.env.Path || '').split(SEP()), ...extras];
+    cachedPath = [...new Set(parts.filter(Boolean))].join(SEP());
     return cachedPath;
   };
 
-  if (process.platform === 'win32') return Promise.resolve(finish(''));
+  if (isWin) return Promise.resolve(finish(''));
   return new Promise((resolve) => {
     const shell = process.env.SHELL || '/bin/zsh';
     execFile(shell, ['-ilc', 'printf "__LP__%s__LP__" "$PATH"'], { timeout: 5000, env: process.env }, (err, stdout) => {
@@ -88,11 +102,38 @@ function bundledBins(name) {
  */
 async function findBin(name, explicit) {
   if (explicit) return isExec(explicit) ? explicit : null;
-  for (const dir of (await shellPath()).split(':')) {
-    const full = path.join(dir, name);
-    if (isExec(full)) return full;
+  // Windows: the native installer gives claude.exe; npm gives claude.cmd (a small script that runs node).
+  const names = isWin ? [`${name}.exe`, `${name}.cmd`, `${name}.bat`, name] : [name];
+  for (const dir of (await shellPath()).split(SEP())) {
+    for (const n of names) {
+      const full = path.join(dir, n);
+      if (isExec(full)) return full;
+    }
   }
   return bundledBins(name).find(isExec) || null;
+}
+
+/**
+ * How to start a tool. Usually just the file. On Windows, npm installs a tool as a .cmd script,
+ * which Node will only start through cmd.exe, and cmd.exe would mangle a long prompt passed as an
+ * argument. So read the script for the JavaScript file it runs and start that with node directly.
+ */
+async function launch(bin, args) {
+  if (!isWin || !/\.(cmd|bat)$/i.test(bin)) return { file: bin, args, shell: false };
+  let script = null;
+  try {
+    const text = fs.readFileSync(bin, 'utf8');
+    const m = /"%~?dp0%?\\?([^"%]+?\.[cm]?js)"/i.exec(text);
+    if (m) script = path.join(path.dirname(bin), ...m[1].split(/[\\/]+/).filter(Boolean));
+  } catch { /* unreadable: handled below */ }
+  if (script && fs.existsSync(script)) {
+    const beside = path.join(path.dirname(bin), 'node.exe');
+    const node = isExec(beside) ? beside : await findBin('node');
+    if (node) return { file: node, args: [script, ...args], shell: false };
+  }
+  // Last resort: through cmd.exe, but only for short, plain arguments.
+  if (args.every((a) => /^[\w.,=:/\\@+-]*$/.test(a))) return { file: bin, args, shell: true };
+  throw new Error(`Could not start ${path.basename(bin)}. Reinstall it with its official Windows installer, or set its full path in Settings.`);
 }
 
 /** Run a short command (such as a login check) and resolve { code, stdout, output }. Never rejects.
@@ -100,8 +141,10 @@ async function findBin(name, explicit) {
 async function runQuick(bin, args, { dropEnv = [], timeout = 8000 } = {}) {
   const env = { ...process.env, PATH: await shellPath() };
   for (const k of dropEnv) delete env[k];
+  let how;
+  try { how = await launch(bin, args); } catch (e) { return { code: 1, stdout: '', output: e.message }; }
   return new Promise((resolve) => {
-    const child = execFile(bin, args, { cwd: scratchDir(), env, timeout }, (err, stdout, stderr) => {
+    const child = execFile(how.file, how.args, { cwd: scratchDir(), env, timeout, shell: how.shell, windowsHide: true }, (err, stdout, stderr) => {
       const out = String(stdout || '');
       resolve({ code: err ? (typeof err.code === 'number' ? err.code : 1) : 0, stdout: out, output: `${out}\n${stderr || ''}` });
     });
@@ -139,10 +182,11 @@ function scratchDir() {
 async function runCli({ bin, args, input, env = {}, dropEnv = [], signal, onLine, timeout = 20 * 60 * 1000 }) {
   const childEnv = { ...process.env, ...env, PATH: await shellPath() };
   for (const k of dropEnv) delete childEnv[k];
+  const how = await launch(bin, args);
 
   return new Promise((resolve, reject) => {
     if (signal && signal.aborted) return reject(new Error('Stopped'));
-    const child = spawn(bin, args, { cwd: scratchDir(), env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(how.file, how.args, { cwd: scratchDir(), env: childEnv, stdio: ['pipe', 'pipe', 'pipe'], shell: how.shell, windowsHide: true });
     let stderr = '';
     let buf = '';
     let done = false;
@@ -190,4 +234,8 @@ function withoutFlag(args, flag, takesValue) {
   return out;
 }
 
-module.exports = { shellPath, findBin, bundledBins, runQuick, statusCache, scratchDir, runCli, unknownFlag, withoutFlag, _resetPathCache: () => { cachedPath = null; } };
+module.exports = {
+  shellPath, findBin, bundledBins, launch, runQuick, statusCache, scratchDir, runCli, unknownFlag, withoutFlag,
+  _resetPathCache: () => { cachedPath = null; },
+  _setPlatformForTest: (win) => { isWin = win; cachedPath = null; },
+};

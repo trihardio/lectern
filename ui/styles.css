@@ -1,28 +1,55 @@
-/* Lectern — a reading desk.
-   Palette: cool desk grey, white sheet, navy ink, and one highlighter yellow that
-   marks everything citation-related. Type: Charter for reading, Avenir Next for controls
-   (both ship with macOS, so the app needs no font downloads). */
+/* Lectern — the herbarium and the margin.
+   Every paper is a specimen: mounted on a bright sheet, labelled, filed in a cabinet-green rail.
+   Every claim is marked up: violet accession stamps are the citations (violet means "citation" and
+   nothing else), and pointing at one sweeps a highlighter over the claim it supports, in the colour of
+   what the paper found. Study designs keep herbarium folder colours. Type ships with the app
+   (ui/fonts, SIL Open Font License): Literata to read, Atkinson Hyperlegible Next for controls,
+   Courier Prime only for label data (numbers, years, samples). The specimen components are in world.css. */
 
 :root {
-  --desk: #F3F5F8;
-  --sheet: #FFFFFF;
-  --ink: #16233F;
-  --ink-2: #455069;
-  --ink-3: #6C778C;
-  --line: #D8DEE7;
-  --line-soft: #E7EBF1;
-  --mark: #FFE066;
-  --mark-soft: #FFF3B8;
-  --spruce: #1F6657;
-  --spruce-soft: #DDEFE9;
-  --amber: #9A6200;
-  --amber-soft: #FBEBC8;
-  --slate-soft: #E3E7EE;
-  --brick: #AE3F38;
-  --brick-soft: #F7DEDB;
-  --focus: #2B59D9;
-  --serif: Charter, "Bitstream Charter", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  --sans: "Avenir Next", Avenir, "Segoe UI", system-ui, -apple-system, sans-serif;
+  --desk: #EBEFEA;
+  --sheet: #FCFDFB;
+  --ink: #18201C;
+  --ink-2: #47514B;
+  --ink-3: #636D67;
+  --line: #D3DAD4;
+  --line-soft: #E4E9E4;
+  --mark: #F7E64A;           /* the highlighter: mixed or context */
+  --mark-soft: #FBF3B4;
+  --spruce: #2B6A37;          /* finds higher / supports */
+  --spruce-soft: #DDF2D6;
+  --amber: #805B00;           /* depends on conditions */
+  --amber-soft: #FAF0BC;
+  --slate-soft: #E2E8E3;
+  --brick: #A3324D;           /* finds lower / against */
+  --brick-soft: #FADDE7;
+  --focus: #1F6FB2;
+  /* the cabinet: the rail and anything that files */
+  --cab: #1F3A33;
+  --cab-2: #284A40;
+  --cab-3: #36594E;
+  --cab-line: #3B5D53;
+  --cab-ink: #EAF1EC;
+  --cab-ink-2: #A8C1B7;
+  /* the accession stamp: citations only */
+  --stamp: #5B3FA8;
+  --stamp-soft: #EEE8FB;
+  --stamp-ink: #FFFFFF;
+  /* herbarium folder colours, one per kind of study */
+  --f-meta: #B5482F;
+  --f-trial: #B88412;
+  --f-cohort: #2F6DA3;
+  --f-cross: #5E8C4A;
+  --f-qual: #8A5A9E;
+  --f-other: #9AA39D;
+  /* highlighter washes laid over a claim */
+  --hl-supports: rgba(150, 226, 128, .62);
+  --hl-against: rgba(246, 150, 190, .58);
+  --hl-mixed: rgba(247, 230, 74, .66);
+  --hl-plain: rgba(247, 230, 74, .66);
+  --serif: "Literata", Charter, "Iowan Old Style", Georgia, serif;
+  --sans: "Atkinson Hyperlegible Next", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --mono: "Courier Prime", "Courier New", ui-monospace, monospace;
   --rail: 264px;
   --shelf: clamp(340px, 30vw, 430px);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);       /* arrives and settles */
@@ -32,23 +59,43 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --desk: #131C2E;
-    --sheet: #1B2740;
-    --ink: #E8ECF4;
-    --ink-2: #B5BFD2;
-    --ink-3: #8A96AD;
-    --line: #2F3C58;
-    --line-soft: #27334D;
-    --mark: #FFE066;
-    --mark-soft: #4A4320;
-    --spruce: #6FCBB5;
-    --spruce-soft: #1D3D3A;
-    --amber: #E6B450;
-    --amber-soft: #40351A;
-    --slate-soft: #2B3650;
-    --brick: #F08A80;
-    --brick-soft: #47262A;
-    --focus: #8FB0FF;
+    /* the cabinet after dark: the sheet dims to deep green-black, the stamp and washes glow softly */
+    --desk: #0D1512;
+    --sheet: #131D19;
+    --ink: #E5EDE8;
+    --ink-2: #B2C0B8;
+    --ink-3: #8B9A92;
+    --line: #283731;
+    --line-soft: #1E2B26;
+    --mark: #F2DE4C;
+    --mark-soft: #3D3818;
+    --spruce: #8AD596;
+    --spruce-soft: #1C3523;
+    --amber: #E5C15A;
+    --amber-soft: #3A3218;
+    --slate-soft: #22302A;
+    --brick: #F29DBB;
+    --brick-soft: #3E2230;
+    --focus: #7DB7F0;
+    --cab: #0A110F;
+    --cab-2: #15211D;
+    --cab-3: #1F2F29;
+    --cab-line: #21302A;
+    --cab-ink: #DDE8E2;
+    --cab-ink-2: #8FA79C;
+    --stamp: #B9A6F5;
+    --stamp-soft: #2A2247;
+    --stamp-ink: #160F2E;
+    --f-meta: #E07A5F;
+    --f-trial: #E2B24A;
+    --f-cohort: #6FA8DC;
+    --f-cross: #8DC077;
+    --f-qual: #C39BD3;
+    --f-other: #6E7A73;
+    --hl-supports: rgba(138, 213, 150, .26);
+    --hl-against: rgba(242, 157, 187, .26);
+    --hl-mixed: rgba(242, 222, 76, .24);
+    --hl-plain: rgba(242, 222, 76, .24);
     color-scheme: dark;
   }
 }
@@ -82,7 +129,6 @@ a { color: inherit; }
 
 .wordmark { font: 600 22px/1 var(--serif); letter-spacing: -0.01em; padding: 0 8px 16px; }
 .wordmark span { background: linear-gradient(transparent 58%, var(--mark) 58%, var(--mark) 92%, transparent 92%); padding: 0 2px; }
-@media (prefers-color-scheme: dark) { .wordmark span { background: none; border-bottom: 3px solid var(--mark); } }
 
 .btn {
   border: 1px solid var(--line); background: var(--sheet); border-radius: 9px;
@@ -129,6 +175,33 @@ a { color: inherit; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--spruce); flex: none; transform: translateY(-1px); }
 .dot.off { background: var(--brick); }
 .engine-pill small { display: block; color: var(--ink-3); font-size: 12px; }
+.rail-model-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.rail-model-row .engine-pill { flex: 1; min-width: 0; }
+.rail-model-row .engine-pill > span { min-width: 0; }
+.rail-model-row .engine-pill small { overflow-wrap: anywhere; }
+.usage-meters { display: flex; align-items: center; gap: 2px; flex: none; }
+.usage-claude-code { --usage-color: #C46E48; }
+.usage-codex { --usage-color: #6865D8; }
+.usage-meter { display: flex; flex-direction: column; align-items: center; gap: 1px; border: 0; border-radius: 8px; padding: 3px 2px; background: transparent; color: var(--usage-color); }
+.usage-meter:hover { background: var(--line-soft); }
+.usage-ring { display: block; flex: none; }
+.usage-track { stroke: var(--line); }
+.usage-fill { stroke: var(--usage-color); }
+.usage-fill.usage-fiveHour { opacity: .68; }
+.usage-fill.usage-unknown { opacity: .45; }
+.usage-label { font-size: 9px; line-height: 1.2; font-weight: 600; letter-spacing: .02em; }
+.usage-meter.is-stale .usage-label::after { content: ' ·'; }
+.usage-detail-head { display: flex; gap: 14px; align-items: center; margin: 22px 0; font-weight: 600; }
+.usage-detail-head .usage-ring { width: 52px; height: 52px; }
+.usage-details small { display: block; color: var(--ink-3); font-size: 12px; font-weight: 400; margin-top: 3px; }
+.usage-detail-row { display: flex; justify-content: space-between; gap: 16px; padding: 16px 0; border-top: 1px solid var(--line); }
+.usage-detail-row > div:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.usage-detail-row > div:last-child b { color: var(--usage-color); }
+.usage-updated { border-top: 1px solid var(--line); padding-top: 16px; }
+@media (prefers-color-scheme: dark) {
+  .usage-claude-code { --usage-color: #E69A74; }
+  .usage-codex { --usage-color: #A39AFF; }
+}
 
 .main { overflow-y: auto; min-width: 0; scroll-behavior: auto; position: relative; }
 .topstrip { height: 0; }
@@ -385,7 +458,7 @@ button.tab:hover { transform: translateY(-1px); }
 .answer a { text-decoration-color: var(--ink-3); text-underline-offset: 2px; }
 .answer code { font-size: .88em; background: var(--line-soft); padding: 1px 4px; border-radius: 4px; }
 .answer pre { overflow: auto; background: var(--line-soft); padding: 10px 12px; border-radius: 8px; font-size: 13px; }
-.answer blockquote { margin: 0 0 14px; padding-left: 14px; border-left: 2px solid var(--line); color: var(--ink-2); }
+.answer blockquote { margin: 0 0 14px; padding-left: 14px; border-left: 1px solid var(--line); color: var(--ink-2); }
 .answer hr { border: 0; border-top: 1px solid var(--line); margin: 20px 0; }
 
 .cites { margin-left: 2px; }
