@@ -20,6 +20,7 @@ const { extractText } = require('./checks/extract');
 const { runAiCheck } = require('./checks/aiscore');
 const { runSimilarityCheck } = require('./checks/similarity');
 const { runRewrite } = require('./checks/rewrite');
+const { runProofread } = require('./checks/proofread');
 const { quoteAndCite } = require('./checks/citefix');
 
 const ROOT = path.join(__dirname, '..');
@@ -35,6 +36,13 @@ const STATIC = {
   '/cite.js': ['shared/cite.js', 'text/javascript; charset=utf-8'],
   '/checks.js': ['ui/checks.js', 'text/javascript; charset=utf-8'],
   '/checks.css': ['ui/checks.css', 'text/css; charset=utf-8'],
+  '/answerpdf.js': ['ui/answerpdf.js', 'text/javascript; charset=utf-8'],
+  '/answerpdf.css': ['ui/answerpdf.css', 'text/css; charset=utf-8'],
+  '/proofread.js': ['ui/proofread.js', 'text/javascript; charset=utf-8'],
+  '/proofread.css': ['ui/proofread.css', 'text/css; charset=utf-8'],
+  '/proofrules.js': ['shared/proofrules.js', 'text/javascript; charset=utf-8'],
+  '/misspellings.js': ['shared/misspellings.js', 'text/javascript; charset=utf-8'],
+  '/icon.svg': ['ui/icon.svg', 'image/svg+xml; charset=utf-8'],
 };
 const CSP = "default-src 'self'; img-src 'self' data: https://pmc-oa-opendata.s3.amazonaws.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 
@@ -162,21 +170,21 @@ function createApp({ dataDir, voice, pdf } = {}) {
     'POST /api/library': async (body) => ({ papers: store.addToLibrary(body.paper) }),
     'DELETE /api/library': async (_b, url) => ({ papers: store.removeFromLibrary(url.searchParams.get('id')) }),
 
-    // AI score page: save the report the window is showing as a PDF (desktop app only; a browser prints instead).
+    // Writing desk: save the report the window is showing as a PDF (desktop app only; a browser prints instead).
     'POST /api/checks/pdf': async (body) => {
       if (!pdf || typeof pdf.save !== 'function') return { ok: false, error: 'Saving a PDF needs the desktop app. In a browser, use Print and choose Save as PDF.' };
       const base = String(body.name || 'Lectern report').replace(/\.pdf$/i, '').replace(/[\u0000-\u001f\u007f/\\:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120).trim() || 'Lectern report';
       try { return await pdf.save({ name: `${base}.pdf` }); } catch (e) { return { ok: false, error: `The PDF could not be saved: ${e.message}` }; }
     },
 
-    // AI score page: put matched passages in quotation marks and cite their sources (from the similarity result).
+    // Writing desk: put matched passages in quotation marks and cite their sources (from the similarity result).
     'POST /api/checks/cite': async (body) => {
       const r = body.result;
       if (!r || typeof r.text !== 'string' || !Array.isArray(r.spans) || !Array.isArray(r.sources)) throw Object.assign(new Error('Run the similarity check first.'), { status: 400 });
       return quoteAndCite(String(body.text || ''), r);
     },
 
-    // AI score page: plain text from a dropped document ({ name, data: base64 }). Nothing is stored.
+    // Writing desk: plain text from a dropped document ({ name, data: base64 }). Nothing is stored.
     'POST /api/checks/extract': async (body) => {
       const data = Buffer.from(String(body.data || ''), 'base64');
       const { text, kind } = extractText({ name: String(body.name || '').slice(0, 200), data });
@@ -226,7 +234,7 @@ function createApp({ dataDir, voice, pdf } = {}) {
     }
   }
 
-  /** AI score page: run one check and stream its progress as server-sent events. Nothing is stored. */
+  /** Writing desk: run one check and stream its progress as server-sent events. Nothing is stored. */
   async function handleCheck(req, res, kind) {
     const body = await readBody(req, 3 * 1024 * 1024);
     const text = String(body.text || '');
@@ -245,7 +253,10 @@ function createApp({ dataDir, voice, pdf } = {}) {
     const engine = typeof body.engine === 'string' ? body.engine : undefined;
     try {
       const o = body.options || {};
-      const result = kind === 'rewrite'
+      const model = typeof body.model === 'string' ? body.model.slice(0, 100) : undefined;
+      const result = kind === 'proofread'
+        ? await runProofread({ text, config, signal: abort.signal, emit, engine, selectedModel: model, variant: typeof body.variant === 'string' ? body.variant : 'auto' })
+        : kind === 'rewrite'
         ? await runRewrite({ text, config, signal: abort.signal, emit, engine, selectedModel: typeof body.model === 'string' ? body.model.slice(0, 100) : undefined })
         : kind === 'ai'
         ? await runAiCheck({ text, config, signal: abort.signal, emit, engine, selectedModel: typeof body.model === 'string' ? body.model.slice(0, 100) : undefined })
@@ -299,6 +310,7 @@ function createApp({ dataDir, voice, pdf } = {}) {
       if (req.method === 'POST' && url.pathname === '/api/checks/ai') return await handleCheck(req, res, 'ai');
       if (req.method === 'POST' && url.pathname === '/api/checks/rewrite') return await handleCheck(req, res, 'rewrite');
       if (req.method === 'POST' && url.pathname === '/api/checks/similarity') return await handleCheck(req, res, 'similarity');
+      if (req.method === 'POST' && url.pathname === '/api/checks/proofread') return await handleCheck(req, res, 'proofread');
 
       const route = routes[`${req.method} ${url.pathname}`];
       if (!route) return json(res, 404, { error: 'Not found' });

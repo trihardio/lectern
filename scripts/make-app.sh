@@ -26,7 +26,8 @@ npx --yes "@electron/packager@$PACKAGER_VERSION" . Lectern \
   --app-version="$VERSION" --build-version="$VERSION" \
   --app-copyright="Lectern $VERSION" \
   --asar.unpackDir=native \
-  --ignore='^/(test|dist|release|scripts|Lectern|\.git|\.github|\.vscode|\.impeccable|\.scratch|output|bench|CLAUDE\.md|PRODUCT\.md|DESIGN\.md)($|/)'
+  --icon=build/icon.icns \
+  --ignore='^/(test|dist|release|build|scripts|Lectern|\.git|\.github|\.vscode|\.impeccable|\.scratch|output|bench|CLAUDE\.md|PRODUCT\.md|DESIGN\.md)($|/)'
 
 APP="dist/Lectern-darwin-$ARCH/Lectern.app"
 

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- The same icon drawn for 16-32 pixel sizes: fewer, bolder shapes (no page lines but the highlighted one). -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2E5448"/>
+      <stop offset="1" stop-color="#1F3A33"/>
+    </linearGradient>
+    <clipPath id="tileClip"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/>
+  <g clip-path="url(#tileClip)">
+    <g transform="translate(0 -56)"><!-- centred on the tile -->
+    <rect x="316" y="748" width="392" height="72" rx="24" fill="#94680C"/>
+    <path d="M456 590 L568 590 L584 768 L440 768 Z" fill="#B88412"/>
+    <path d="M270 410 L754 410 L812 590 L212 590 Z" fill="#B88412"/>
+    <rect x="196" y="572" width="632" height="56" rx="18" fill="#94680C"/>
+    <path d="M512 386 C 448 350 356 344 268 364 L 268 590 C 356 574 448 578 512 606 C 576 578 668 574 756 590 L 756 364 C 668 344 576 350 512 386 Z" fill="#FCFDFB"/>
+    <path d="M512 386 L512 606" stroke="#B9C4BC" stroke-width="10"/>
+    <path d="M304 486 Q 396 462 486 490" stroke="#F7E64A" stroke-width="64" stroke-linecap="round" fill="none"/>
+    </g>
+  </g>
+</svg>

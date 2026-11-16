@@ -18,3 +18,9 @@ native/
 
 # Local working documents (audit reports and other inputs) stay out of the repository.
 /output/
+
+# Grammar benchmark: the ERRANT environment and the CWEB texts stay local (CC BY-NC-SA; not republished).
+/bench/grammar/.venv/
+/bench/grammar/data/*
+!/bench/grammar/data/manifest.json
+!/bench/grammar/data/splits.json

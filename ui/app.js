@@ -729,8 +729,8 @@
       h('nav', { class: 'rail-nav' },
         h('button', { class: `rail-link${S.view === 'library' ? ' on' : ''}`, onclick: openLibrary, title: `Library (${mod('L')})`, 'aria-keyshortcuts': IS_MAC ? 'Meta+L' : 'Control+L' },
           'Library', h('span', { class: 'rail-keys' }, h('span', { class: 'count' }, (S.library.length + S.threads.filter((x) => x.saved).length + S.threads.reduce((n, x) => n + (x.prompts || []).length, 0)) || ''), h('kbd', { class: 'kbd', 'aria-hidden': 'true' }, mod('L')))),
-        h('button', { class: `rail-link${S.view === 'score' ? ' on' : ''}`, onclick: openScore, title: `AI score (${mod('K')})`, 'aria-keyshortcuts': IS_MAC ? 'Meta+K' : 'Control+K' },
-          'AI score', h('span', { class: 'rail-keys' }, h('kbd', { class: 'kbd', 'aria-hidden': 'true' }, mod('K'))))),
+        h('button', { class: `rail-link${S.view === 'score' ? ' on' : ''}`, onclick: openScore, title: `Writing desk (${mod('K')})`, 'aria-keyshortcuts': IS_MAC ? 'Meta+K' : 'Control+K' },
+          'Writing desk', h('span', { class: 'rail-keys' }, h('kbd', { class: 'kbd', 'aria-hidden': 'true' }, mod('K'))))),
       h('div', { class: 'rail-label' }, 'Recent'),
       h('ul', { class: 'history' },
         liveElsewhere && h('li', null,
@@ -1950,6 +1950,9 @@
         }, 'Retry'),
         hasRefs && [
         h('button', { class: 'btn small', onclick: () => copyAnswer(turn) }, 'Copy answer'),
+        // The whole answer as a PDF: answer, findings by paper, figures, references and abstracts (ui/answerpdf.js).
+        h('button', { class: 'btn small', onclick: (e) => window.LecternAnswerPdf.export({ turn, button: e.currentTarget,
+          deps: { h, api, toast, Cite, Render, state: S, answerParts, insightFor, citeLabels, prettyModel, engineInfo } }) }, 'Download PDF'),
         h('button', { class: 'btn small', onclick: () => copyRich(Cite.formatList(exportPapers(turn), style), 'Reference list copied') },
           `Copy reference list (${Cite.STYLES[style].label})`),
         h('button', { class: 'btn small', onclick: () => download('lectern-references.bib', Cite.formatList(exportPapers(turn), 'bibtex').text) }, 'Download .bib'),
@@ -2190,10 +2193,10 @@
     }, icon('bookmark'), saved ? 'Saved' : 'Save chat');
   }
 
-  /** The AI score page: the AI-writing and similarity checks (ui/checks.js keeps its own state). */
+  /** The Writing desk: proofreading, AI-writing, similarity and rewrite tools (ui/checks.js keeps its own state). */
   let checks = null;
   function renderScore() {
-    if (!checks) checks = window.LecternChecks({ h, fill, api, toast, Motion, TOKEN, picker, state: S });
+    if (!checks) checks = window.LecternChecks({ h, fill, api, toast, Motion, TOKEN, picker, prettyModel, state: S });
     return checks.view();
   }
 
@@ -2362,13 +2365,16 @@
     function pick(v) { close(true); if (always || String(v) !== String(current)) { current = v; paint(); onChange(v); } }
     function open() {
       if (menu) { close(true); return; }
+      // Options may carry `group` (and `groupNote`): a heading is shown where the group changes. Headings are not options.
       menu = h('ul', { class: 'cmenu left picker-menu', role: 'listbox', tabindex: '-1', 'aria-label': label },
-        options.map((o) => {
+        options.map((o, i) => {
           const on = String(o.value) === String(current);
-          return h('li', { class: `picker-opt${on ? ' on' : ''}`, role: 'option', tabindex: '-1', 'aria-selected': String(on), 'data-value': o.value, onclick: () => pick(o.value) },
+          const heading = o.group && (i === 0 || options[i - 1].group !== o.group)
+            && h('li', { class: 'picker-group', role: 'presentation' }, h('span', null, o.group), o.groupNote && h('span', { class: 'picker-group-note' }, o.groupNote));
+          return [heading, h('li', { class: `picker-opt${on ? ' on' : ''}`, role: 'option', tabindex: '-1', 'aria-selected': String(on), 'data-value': o.value, onclick: () => pick(o.value) },
             h('span', { class: 'picker-check' }, on && icon('check')),
             o.tag && h('span', { class: 'picker-tag' }, o.tag),
-            h('span', { class: 'picker-text' }, o.label));
+            h('span', { class: 'picker-text' }, o.label))];
         }));
       menu.addEventListener('keydown', (e) => {
         const items = [...menu.querySelectorAll('.picker-opt')];

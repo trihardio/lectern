@@ -1,0 +1,47 @@
+{
+ "split": "dev",
+ "label": "sanity-source",
+ "sentences": 300,
+ "scorer": "ERRANT 3.0.0 errant_compare, span-based correction (default) and detection; spaCy 3.8.7, en_core_web_sm 3.8.0",
+ "correction": {
+  "tp": 0,
+  "fp": 0,
+  "fn": 45,
+  "precision": 1.0,
+  "recall": 0.0,
+  "f05": 0.0,
+  "ci95": {
+   "precision": [
+    1.0,
+    1.0
+   ],
+   "recall": [
+    0.0,
+    0.0
+   ],
+   "f05": [
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "detection": {
+  "tp": 0,
+  "fp": 0,
+  "fn": 45,
+  "precision": 1.0,
+  "recall": 0.0,
+  "f05": 0.0
+ },
+ "falseAlarms": {
+  "cleanSentences": 192,
+  "changedBySystem": 0,
+  "rate": 0.0,
+  "ci95": [
+   0,
+   0.0196
+  ]
+ },
+ "sentencesChangedBySystem": 0,
+ "errantCompare": "=========== Span-Based Correction ============\nTP\tFP\tFN\tPrec\tRec\tF0.5\n0\t0\t45\t1.0\t0.0\t0.0\n=============================================="
+}

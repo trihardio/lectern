@@ -1,0 +1,130 @@
+/* The Writing desk's proofreader (ui/proofread.js). Loaded after checks.css; uses its sheet, lede and model row.
+   Three kinds of mark, told apart by colour AND line style (never colour alone):
+     wavy red     spelling and word choice
+     solid ochre  grammar
+     dotted teal  punctuation, capital letters and spacing
+   Pointing at a suggestion sweeps the highlighter over its words, as a citation stamp does on the answer page. */
+:root {
+  --pf-word: #A3324D;
+  --pf-gram: #8A5A00;
+  --pf-mech: #1D6E73;
+  --pf-wash: color-mix(in srgb, var(--mark) 62%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --pf-word: #F29DBB;
+    --pf-gram: #E5C15A;
+    --pf-mech: #7FD0CC;
+    --pf-wash: color-mix(in srgb, var(--mark) 30%, transparent);
+  }
+}
+
+.pf { container: pf / inline-size; }
+.pf-controls { display: grid; gap: 6px; margin: 0 0 16px; }
+.pf-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; }
+.pf-row .chk-model { margin: 0; }
+.pf-help { margin: 0; font: 400 13px/1.45 var(--sans); color: var(--ink-3); }
+.pf-run { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-left: auto; }
+.pf-variant { min-width: 170px; }
+.pf-check { min-width: 92px; }
+
+.pf-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); gap: 24px; align-items: start; }
+.pf-main { min-width: 0; }
+
+/* ---- the sheet: a real text box over a mirror that draws the marks */
+.pf-top-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.pf-edit { position: relative; min-height: max(320px, 46vh); }
+.pf-back, .pf-text {
+  box-sizing: border-box; margin: 0; border: 0; padding: 22px 26px 26px;
+  font: 400 17px/1.7 var(--serif); letter-spacing: normal; word-spacing: normal; font-variant-ligatures: none; font-kerning: normal;
+  white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; tab-size: 4; text-align: left;
+}
+.pf-back { min-height: inherit; color: transparent; pointer-events: none; }
+.pf-text {
+  position: absolute; inset: 0; width: 100%; height: 100%; resize: none; overflow: hidden; outline: none;
+  background: transparent; color: var(--ink); caret-color: var(--cab-3);
+}
+.pf-text::placeholder { color: var(--ink-3); }
+.pf-text::selection { background: color-mix(in srgb, var(--focus) 26%, transparent); }
+
+.pf-u { --mark-c: var(--pf-gram); border-radius: 2px; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  text-decoration-color: var(--mark-c); text-decoration-skip-ink: none; text-underline-offset: 4px;
+  background: linear-gradient(var(--pf-wash), var(--pf-wash)) left center / 0% 100% no-repeat;
+  transition: background-size .14s ease-out; }
+.pf-u.on { background-size: 100% 100%; transition: background-size .42s var(--ease); }
+.pf-u.spell { --mark-c: var(--pf-word); text-decoration-line: underline; text-decoration-style: wavy; text-decoration-thickness: 1.5px; }
+.pf-u.gram { --mark-c: var(--pf-gram); text-decoration-line: underline; text-decoration-style: solid; text-decoration-thickness: 2px; }
+.pf-u.mech { --mark-c: var(--pf-mech); text-decoration-line: underline; text-decoration-style: dotted; text-decoration-thickness: 2.5px; }
+
+.pf-status { min-height: 1.5em; margin: 10px 2px 0; font: 400 13.5px/1.5 var(--sans); color: var(--ink-2); }
+.pf-status .chk-busy { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--cab-3); vertical-align: middle; }
+.pf-warn { color: var(--amber); }
+.pf-error { color: var(--brick); font-weight: 500; }
+.pf-limits { margin-top: 6px; }
+.pf-acc { max-width: 74ch; margin: 8px 0 0; font: 400 13px/1.55 var(--sans); color: var(--ink-3); }
+.pf-acc summary { width: fit-content; cursor: pointer; color: var(--ink-2); font-weight: 500; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.pf-acc summary:hover { color: var(--ink); }
+.pf-acc p { margin: 8px 0 0; }
+
+/* ---- the rail of suggestions */
+.pf-rail {
+  position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; overscroll-behavior: contain; overflow-anchor: none;
+  padding: 14px; border: 1px solid var(--line); border-radius: 4px; background: var(--sheet);
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+}
+.pf-rail-head { display: grid; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
+.pf-total { display: flex; align-items: baseline; gap: 8px; font: 500 14px/1.2 var(--sans); color: var(--ink-2); }
+.pf-total-n { font: 600 26px/1 var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+.pf-counts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; font: 500 13px/1.4 var(--sans); color: var(--ink-2); }
+.pf-count { display: inline-flex; align-items: center; gap: 6px; }
+.pf-count .pf-n { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+.pf-swatch { width: 14px; height: 0; border-bottom: 2.5px solid var(--sw); }
+.pf-count.spell .pf-swatch { --sw: var(--pf-word); border-bottom-style: solid; border-radius: 2px; }
+.pf-count.gram .pf-swatch { --sw: var(--pf-gram); }
+.pf-count.mech .pf-swatch { --sw: var(--pf-mech); border-bottom-style: dotted; }
+.pf-all { justify-self: start; }
+
+.pf-list { display: grid; gap: 10px; margin: 12px 0 0; padding: 0; list-style: none; }
+.pf-card {
+  --tab: var(--pf-gram);
+  position: relative; padding: 13px 12px 11px; border: 1px solid var(--line); border-radius: 4px; background: var(--sheet);
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.pf-card::before { content: ''; position: absolute; top: -1px; left: 12px; width: 30px; height: 4px; border-radius: 0 0 2px 2px; background: var(--tab); }
+.pf-card.spell { --tab: var(--pf-word); }
+.pf-card.mech { --tab: var(--pf-mech); }
+.pf-card.on { border-color: var(--sel); background: color-mix(in srgb, var(--sheet) 70%, var(--slate-soft)); }
+.pf-card-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 8px; }
+.pf-kind { font: 700 10.5px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--tab); }
+.pf-title { grid-column: 1 / -1; font: 600 13.5px/1.35 var(--sans); color: var(--ink); }
+.pf-src { font: 500 10px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.pf-change { margin: 7px 0 4px; font: 400 16px/1.5 var(--serif); color: var(--ink); overflow-wrap: anywhere; }
+.pf-from { color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1.5px; text-decoration-color: var(--ink-3); white-space: pre-wrap; }
+.pf-arrow { color: var(--ink-3); font-family: var(--sans); }
+.pf-to { text-decoration: none; font-weight: 600; padding: 0 3px; border-radius: 2px; background: var(--pf-wash); white-space: pre-wrap; }
+.pf-remove { font: italic 500 14px/1.5 var(--sans); color: var(--ink-2); background: transparent; padding: 0; }
+/* a space or a single mark, shown between the words around it */
+.pf-in-context { display: grid; gap: 2px; }
+.pf-in-context .pf-arrow { display: none; }
+.pf-was, .pf-now { white-space: pre-wrap; }
+.pf-was { color: var(--ink-3); }
+.pf-was .pf-from { text-decoration-thickness: 2px; text-decoration-color: var(--pf-word); }
+.pf-now .pf-to { padding: 0 1px; }
+.pf-why { margin: 0; font: 400 13px/1.45 var(--sans); color: var(--ink-2); }
+.pf-acts { display: flex; gap: 6px; margin-top: 9px; }
+/* Accept is outlined; the suggestion being pointed at, or tabbed to, gets the filled primary look */
+.pf-card.on .pf-accept { background: var(--cab); border-color: var(--cab); color: var(--cab-ink); }
+@media (prefers-color-scheme: dark) { .pf-card.on .pf-accept { background: var(--cab-ink); border-color: var(--cab-ink); color: var(--cab); } }
+.pf-empty { padding: 14px 4px 4px; font: 400 14.5px/1.55 var(--serif); color: var(--ink-3); }
+
+.pf-stats-wrap { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.pf-h { margin: 0 0 8px; font: 700 10.5px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.pf-stats { display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; margin: 0; font: 400 13px/1.4 var(--sans); }
+.pf-stats dt { color: var(--ink-3); }
+.pf-stats dd { margin: 0; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+
+@container pf (max-width: 900px) {
+  .pf-grid { grid-template-columns: minmax(0, 1fr); }
+  .pf-rail { position: static; max-height: none; }
+  .pf-run { margin-left: 0; }
+}

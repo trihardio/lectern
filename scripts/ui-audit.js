@@ -4,7 +4,7 @@
 // It records long tasks, layout shifts, frame gaps, every animation and transition (flagging any that animate
 // layout properties), animations still running when the window is idle, classes left half way, page overflow,
 // clipped text, uneven rows of controls, overlapping controls and small targets, on home, a streamed answer,
-// citation hovers, folds, menus, Settings, Library, AI score, dark mode, 390px and Reduce motion.
+// citation hovers, folds, menus, Settings, Library, Writing desk, dark mode, 390px and Reduce motion.
 // Read the numbers, then look at the pictures in <out>/shots. Overlaps under the docked composer and the sticky
 // thread bar are expected (content scrolls beneath them), and so are overlaps with the page behind a dialog.
 // First-use timings are cold (styles and fonts load once); repeat an action to judge lag.
@@ -128,7 +128,7 @@ module.exports = async ({ ev, send, sleep, until, shot, dark, motion, errors }) 
   await take('settings open');
   await key('Escape', 0, 'Escape'); await sleep(500); await take('settings close'); await idle('after settings');
 
-  // ---- library and its tabs; AI score; new question
+  // ---- library and its tabs; Writing desk; new question
   await key('l', MOD); await sleep(700); await even('library'); await shot('library');
   for (const tab of [1, 2, 0]) { await click('.lib-tab', tab); await sleep(400); }
   await take('library tabs'); await idle('library');

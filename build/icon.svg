@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Lectern's app icon: an open book on a reading stand, one line swept with the highlighter.
+       Palette from ui/styles.css: cabinet green (--cab, --cab-2), sheet (--sheet), highlighter (--mark),
+       folder ochre (--f-trial) for the oak stand, folder red-brown (--f-meta) for the ribbon.
+       The tile follows the macOS grid: an 824 x 824 rounded square inside the 1024 canvas. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2E5448"/>
+      <stop offset="1" stop-color="#1F3A33"/>
+    </linearGradient>
+    <linearGradient id="oak" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C8952A"/>
+      <stop offset="1" stop-color="#A9780F"/>
+    </linearGradient>
+    <linearGradient id="oakDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#94680C"/>
+      <stop offset="1" stop-color="#7A5509"/>
+    </linearGradient>
+    <linearGradient id="pageL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FCFDFB"/>
+      <stop offset=".78" stop-color="#F4F7F3"/>
+      <stop offset="1" stop-color="#D9E1DA"/>
+    </linearGradient>
+    <linearGradient id="pageR" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0" stop-color="#FCFDFB"/>
+      <stop offset=".78" stop-color="#F4F7F3"/>
+      <stop offset="1" stop-color="#D9E1DA"/>
+    </linearGradient>
+    <filter id="drop" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#06100D" flood-opacity=".32"/>
+    </filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#0B1814" flood-opacity=".38"/>
+    </filter>
+    <clipPath id="tileClip"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  </defs>
+
+  <g filter="url(#drop)">
+    <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/>
+  </g>
+  <g clip-path="url(#tileClip)">
+    <!-- a faint light along the top edge of the tile -->
+    <rect x="100" y="100" width="824" height="824" rx="185" fill="none" stroke="#FFFFFF" stroke-opacity=".07" stroke-width="6"/>
+
+    <g transform="translate(0 -56)"><!-- centred on the tile -->
+    <!-- the stand: base, post, ledge and the slanted book rest -->
+    <g filter="url(#soft)">
+      <rect x="330" y="768" width="364" height="44" rx="16" fill="url(#oakDark)"/>
+      <path d="M470 600 L554 600 L566 776 L458 776 Z" fill="url(#oak)"/>
+      <path d="M286 424 L738 424 L790 586 L234 586 Z" fill="url(#oak)"/>
+      <rect x="222" y="576" width="580" height="38" rx="12" fill="url(#oakDark)"/>
+    </g>
+
+    <!-- the book: page edges, then the two open pages -->
+    <path d="M512 404 C 452 372 368 366 288 384 L 288 586 C 368 572 452 576 512 600 C 572 576 656 572 736 586 L 736 384 C 656 366 572 372 512 404 Z" fill="#C9D3CB" transform="translate(0 14)"/>
+    <path d="M512 404 C 452 372 368 366 288 384 L 288 586 C 368 572 452 576 512 600 Z" fill="url(#pageL)"/>
+    <path d="M512 404 C 572 372 656 366 736 384 L 736 586 C 656 572 572 576 512 600 Z" fill="url(#pageR)"/>
+    <path d="M512 404 L512 600" stroke="#B9C4BC" stroke-width="3"/>
+
+    <!-- lines of text; the third line on the left page is swept with the highlighter -->
+    <g stroke="#9DAAA2" stroke-width="11" stroke-linecap="round" fill="none">
+      <path d="M326 432 Q 400 418 476 434"/>
+      <path d="M326 470 Q 400 456 476 472"/>
+      <path d="M326 546 Q 380 536 440 546"/>
+      <path d="M548 434 Q 624 418 698 432"/>
+      <path d="M548 472 Q 624 456 698 470"/>
+      <path d="M548 510 Q 624 494 698 508"/>
+      <path d="M548 548 Q 600 536 652 544"/>
+    </g>
+    <path d="M314 509 Q 400 490 490 512" stroke="#F7E64A" stroke-width="34" stroke-linecap="round" fill="none"/>
+    <path d="M326 509 Q 400 494 476 510" stroke="#47514B" stroke-width="11" stroke-linecap="round" fill="none"/>
+
+    <!-- the ribbon bookmark -->
+    <path d="M500 596 L524 596 L524 676 L512 662 L500 676 Z" fill="#B5482F"/>
+    </g>
+  </g>
+</svg>

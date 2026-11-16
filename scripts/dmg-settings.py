@@ -5,6 +5,8 @@ import os.path
 
 app = defines.get('app')  # noqa: F821  (dmgbuild provides `defines`)
 background = defines.get('background')  # noqa: F821
+# The disk's own icon in Finder: Lectern's app icon (build/icon.icns, made by scripts/make-icon.js).
+icon = defines.get('icon')  # noqa: F821
 app_name = os.path.basename(app)
 
 # LZMA-compressed image (macOS 10.15 or later; Lectern needs 13). About a quarter smaller than zlib (UDZO)

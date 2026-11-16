@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 VERSION="$(node -p "require('./package.json').version")"
 PACKAGER_VERSION=20.3.0
 DMGBUILD_VERSION=1.6.5
-IGNORE='^/(test|dist|release|scripts|Lectern|\.git|\.github|\.vscode|\.impeccable|\.scratch|output|bench|native|CLAUDE\.md|PRODUCT\.md|DESIGN\.md)($|/)'
+IGNORE='^/(test|dist|release|build|scripts|Lectern|\.git|\.github|\.vscode|\.impeccable|\.scratch|output|bench|native|CLAUDE\.md|PRODUCT\.md|DESIGN\.md)($|/)'
 mkdir -p release
 
 echo "== tests"
@@ -25,7 +25,7 @@ node scripts/dmg-background.js dist/dmg
 [ -x dist/.dmgbuild-venv/bin/dmgbuild ] || { python3 -m venv dist/.dmgbuild-venv && dist/.dmgbuild-venv/bin/pip install -q "dmgbuild==$DMGBUILD_VERSION"; }
 DMG="release/Lectern-$VERSION.dmg"
 rm -f "$DMG"
-dist/.dmgbuild-venv/bin/dmgbuild -s scripts/dmg-settings.py -D app="$APP" -D background=dist/dmg/background.png "Lectern $VERSION" "$DMG"
+dist/.dmgbuild-venv/bin/dmgbuild -s scripts/dmg-settings.py -D app="$APP" -D background=dist/dmg/background.png -D icon=build/icon.icns "Lectern $VERSION" "$DMG"
 hdiutil verify "$DMG"
 
 echo "== Windows app (x64)"
@@ -33,6 +33,7 @@ npx --yes "@electron/packager@$PACKAGER_VERSION" . Lectern \
   --platform=win32 --arch=x64 --out=dist --overwrite \
   --app-version="$VERSION" --build-version="$VERSION" --app-copyright="Lectern $VERSION" \
   --win32metadata.CompanyName=Lectern --win32metadata.ProductName=Lectern --win32metadata.FileDescription=Lectern \
+  --icon=build/icon.ico \
   --ignore="$IGNORE"
 # Smaller download: keep only Chromium's English built-in messages (Lectern's window is English).
 find dist/Lectern-win32-x64/locales -name '*.pak' ! -name 'en-US.pak' ! -name 'en-GB.pak' -delete

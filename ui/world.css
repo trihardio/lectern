@@ -483,7 +483,7 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
   @keyframes mic-pop { from { transform: scale(.78); } }
 }
 
-/* ---------- sidebar links with their shortcuts, and the AI score page ---------- */
+/* ---------- sidebar links with their shortcuts, and the Writing desk page ---------- */
 .rail-nav .rail-link { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 /* The primary action and navigation share text and shortcut columns in every state. */
 .rail .btn.new, .rail-nav .rail-link { min-height: 44px; padding: 9px 12px; border-radius: 8px; }

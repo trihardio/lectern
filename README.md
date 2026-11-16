@@ -1,5 +1,7 @@
 # Lectern
 
+<img src="build/icon.svg" width="96" height="96" alt="Lectern's icon: an open book on a reading stand, one line marked with a yellow highlighter">
+
 Ask a research question in plain words. Lectern searches academic paper databases, reads the
 abstracts, and writes an answer where every citation links to a real paper you can open and check.
 
@@ -14,7 +16,7 @@ It runs on your Mac or Windows PC. Your conversations and saved papers stay on y
 
 ## Install on a Mac
 
-1. Open the [latest release](../../releases/latest) and download **Lectern-0.1.21.dmg**.
+1. Open the [latest release](../../releases/latest) and download **Lectern-0.2.0.dmg**.
 2. Open the downloaded file and drag **Lectern** onto **Applications**.
 3. Open Lectern from Applications. The first time, macOS says it cannot check the app for
    malicious software. Click **Done**, then open **System Settings > Privacy & Security**, scroll
@@ -25,7 +27,7 @@ It runs on your Mac or Windows PC. Your conversations and saved papers stay on y
 
 ## Install on Windows
 
-1. From the [latest release](../../releases/latest), download **Lectern-0.1.21-windows-x64.zip**.
+1. From the [latest release](../../releases/latest), download **Lectern-0.2.0-windows-x64.zip**.
 2. Right-click the file, choose **Extract All**, and put the **Lectern** folder somewhere that suits you
    (for example your Documents folder).
 3. Open the folder and double-click **Lectern.exe**. The first time, Windows SmartScreen may say it
@@ -47,6 +49,8 @@ It runs on your Mac or Windows PC. Your conversations and saved papers stay on y
 
 Then type a question, for example *Does remote work improve employee productivity?*, and press Enter.
 
+**Download PDF** under an answer saves the whole answer as a PDF: the question, the answer with its citations, any figures, each paper's findings, the reference list in your chosen style, and every paper's abstract.
+
 ## Voice input
 
 In the Mac app, click the mic beside the question box. On first use, allow **Lectern Voice**
@@ -61,9 +65,21 @@ Sessions end after two minutes. Browser mode uses the browser's speech service; 
 Development builds need Apple's Command Line Tools to compile the small native helper on first use.
 Packaged Mac builds include it and do not need a compiler.
 
-## Writing checks
+## Writing desk
 
-Open **AI score** in the sidebar for three separate tools. **AI writing** highlights writing patterns
+Open **Writing desk** in the sidebar (Cmd+K on a Mac, Ctrl+K on Windows) for four separate tools.
+
+**Proofread** marks spelling, grammar, punctuation, capital-letter and spacing mistakes in your text and lists a
+suggestion for each, which you accept or dismiss (Cmd/Ctrl+Z undoes an accepted change). Common misspellings,
+repeated words, "a" and "an", spacing and a lower-case "i" are marked as you type, on your computer, without using
+your plan. Press **Check** to have your selected model read every sentence; checking again sends only the sentences
+you changed. Choose American, British, Australian or Canadian English, or leave it on Any English to keep your own
+spelling. Quotations, citations, links and code are never changed. Tested on 300 held-out sentences of public web
+text (CWEB) with Claude Opus 5.5, 63% of the model's changes matched a human editor's correction and it changed 3% of
+the sentences the editors left alone; it found 41% of the editors' corrections. It misses mistakes and some
+suggestions are wrong, so read each one before you accept it. Method and numbers: `bench/grammar/README.md`.
+
+**AI writing** highlights writing patterns
 and gives sentence-level reasons and writing suggestions. Its experimental score is not a validated
 probability of AI authorship. Select a connected review model above the text box; the initial
 selection is GPT-6.1 Sol, and the choice is remembered. **Plagiarism / similarity** compares passages against paper abstracts,

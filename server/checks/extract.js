@@ -1,5 +1,5 @@
 'use strict';
-// Plain text from a document the user drops on the AI score page. Node built-ins only:
+// Plain text from a document the user drops on the Writing desk page. Node built-ins only:
 // .docx / .odt are zip files of XML (read with zlib), PDFs are parsed here (text layer only,
 // no scanned images), web pages and plain text are stripped of markup.
 

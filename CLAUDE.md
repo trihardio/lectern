@@ -31,6 +31,11 @@ PRODUCT.md, DESIGN.md  product truth and the visual world (read by the design sk
 shared/cite.js        reference formats (APA, Harvard, MLA, AGLC4, BibTeX, RIS); used by UI and tests
 ui/app.js             all window logic, plain DOM; ui/render.js = markdown + citation marks
 ui/world.css          the look (herbarium and margin): specimen pieces, picker, fonts; tokens are in ui/styles.css; ui/fonts ships the typefaces (OFL)
+server/checks/*       Writing desk tools: proofread.js (proofreader), aiscore.js, similarity.js, rewrite.js, citefix.js, extract.js
+shared/proofrules.js  instant proofreading rules (no model); shared/misspellings.js = filtered Wikipedia list (CC BY-SA)
+ui/checks.js          the Writing desk page (Cmd/Ctrl+K); ui/proofread.js = the proofreader's editor and suggestion rail
+build/icon.svg        the app icon; scripts/make-icon.js makes build/icon.icns, build/icon.ico and ui/icon.svg
+bench/, bench/grammar/  AI-writing benchmark, and the proofreader benchmark (CWEB + ERRANT; read PREREGISTRATION.md first)
 ```
 
 ## Rules for changes

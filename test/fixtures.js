@@ -303,7 +303,7 @@ function figuresJson(input) {
   });
 }
 
-// ---- AI score page: a web page that a submission copies from, and canned model replies
+// ---- Writing desk: a web page that a submission copies from, and canned model replies
 const CHECK_SOURCE_TEXT = 'Remote work has become a defining feature of the modern workplace since the pandemic. In a randomised trial at a Chinese travel agency, call-centre employees who worked from home were 13 percent more productive than colleagues in the office, and attrition among them fell by half. Managers reported that the gains came mostly from fewer breaks and sick days and from a quieter working environment at home.';
 function checkPage(path) {
   if (path === '/robots.txt') return { status: 200, type: 'text/plain', body: 'User-agent: *\nDisallow: /members/\n' };
@@ -332,7 +332,27 @@ function aiReviewJson(input) {
 }
 const SOURCE_HUNT_JSON = JSON.stringify({ sources: [{ url: 'https://example.edu/remote-work', passages: [1] }, { url: 'https://example.edu/members/copy', passages: [1] }, { url: 'https://example.edu/to-local', passages: [2] }, { url: 'not a url' }] });
 
+// ---- Writing desk proofreader: a stand-in reply that corrects a few known mistakes in the numbered sentences.
+const PROOF_FIXES = [
+  [/\bShe have\b/, 'She has', 'have', 'has', 'VERB:SVA', 'The subject "She" is singular.'],
+  [/\bhomeworks\b/, 'homework', 'homeworks', 'homework', 'NOUN:INFL', '"Homework" has no plural.'],
+  [/\bwether\b/, 'whether', 'wether', 'whether', 'SPELL', 'Misspelling of "whether".'],
+  [/^When the samples arrived we\b/, 'When the samples arrived, we', 'arrived', 'arrived,', 'PUNCT', 'Comma after an introductory clause.'],
+  [/\bresults was\b/, 'results were', 'was', 'were', 'VERB:SVA', '"Results" is plural.'],
+];
+function proofreadJson(input) {
+  const fixes = [];
+  for (const m of input.matchAll(/^\[(\d+)\] (.*)$/gm)) {
+    let text = m[2];
+    const changes = [];
+    for (const [re, to, from, toWord, type, why] of PROOF_FIXES) if (re.test(text)) { text = text.replace(re, to); changes.push({ from, to: toWord, type, why }); }
+    if (changes.length) fixes.push({ n: Number(m[1]), text, changes });
+  }
+  return JSON.stringify({ fixes });
+}
+
 module.exports = {
+  proofreadJson,
   CHECK_SOURCE_TEXT, checkPage, aiReviewJson, SOURCE_HUNT_JSON,
   FIGURE_PMC, europepmcLite, bucketList, BUCKET_FILES, FIGURE_XML, FIGURE_JSON, figuresJson,
   BASE, doi, openalex, openalexWork, openalexSources, semanticscholar, crossref, europepmc, PLAN_JSON, ANSWER_TEXT, VERIFY_JSON, insightsJson };

@@ -1,4 +1,6 @@
-// The AI score page: two separate checks on the same page.
+// The Writing desk (formerly "AI score"): four separate tools on one page.
+//   Proofread   - spelling, grammar and punctuation marked in place, with suggestions to accept or dismiss
+//                 (ui/proofread.js; instant checks from shared/proofrules.js, the model from server/checks/proofread.js).
 //   AI writing  - a writing-pattern review: which sentences the selected model rates as showing generic,
 //                 AI-like writing patterns, with the reasons, what was and was not reviewed, and writing
 //                 suggestions anchored to the sentence they quote. Not an authorship verdict.
@@ -14,6 +16,14 @@
   const countWords = (s) => (String(s).match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) || []).length;
 
   const TOOLS = {
+    proof: {
+      label: 'Proofread',
+      title: 'Spelling, grammar and punctuation, marked in place',
+      run: 'Check',
+      min: 1,
+      steps: [],
+      limits: '',
+    },
     ai: {
       label: 'AI writing',
       title: 'Which sentences show AI-like writing patterns?',
@@ -41,19 +51,31 @@
   };
 
   window.LecternChecks = function create(deps) {
-    const { h, fill, api, toast, Motion, TOKEN, picker, state } = deps;
+    const { h, fill, api, toast, Motion, TOKEN, picker, state, prettyModel } = deps;
     const fresh = () => ({ text: '', file: null, phase: 'input', steps: {}, notices: [], result: null, error: '', abort: null, pick: null, tab: 'flags', source: null, extracting: false,
       options: { web: true, papers: true, quotes: true, references: true } });
-    const st = { tool: 'ai', ai: fresh(), sim: fresh(), rewrite: fresh() };
+    const st = { tool: 'proof', proof: fresh(), ai: fresh(), sim: fresh(), rewrite: fresh() };
     let aiChoice = 'codex|gpt-6.1-sol';
     try { aiChoice = localStorage.getItem('lectern.aiScoreModel') || aiChoice; } catch { /* use default */ }
+    // Model menu in sections: one per provider, with ChatGPT's earlier generations in a section of their own.
+    // Names read as people say them ("Opus 5.5", "GPT-6.1 Sol"); the provider is the section heading, not repeated.
+    const EARLIER = /^gpt-5|^gpt-6-sol$/;
+    const nameOf = (id, engine) => {
+      const name = prettyModel ? prettyModel(id, engine) : id;
+      return engine === 'claude-code' ? name.replace(/^Claude\s+/, '') : name;
+    };
     function choices() {
       return (state.app?.engines || []).flatMap((e) => {
         const ids = new Set([...(e.models || []), state.app.settings.models[e.id]]);
         if (e.id === 'codex') ids.add('gpt-6.1-sol');
-        return [...ids].filter((id) => typeof id === 'string' && id.length > 0).map((id) => ({
-          value: `${e.id}|${id}`, label: `${e.label} · ${id}${e.ready ? '' : ' (not connected)'}`,
-        }));
+        const note = e.ready ? '' : 'not connected';
+        return [...ids].filter((id) => typeof id === 'string' && id.length > 0)
+          .map((id) => ({ id, older: e.id === 'codex' && EARLIER.test(id) }))
+          .sort((a, b) => a.older - b.older)
+          .map(({ id, older }) => ({
+            value: `${e.id}|${id}`, label: nameOf(id, e.id), engineLabel: e.label,
+            group: older ? `${e.label} · earlier models` : e.label, groupNote: note,
+          }));
       });
     }
     function selected() {
@@ -66,11 +88,13 @@
       let opts = choices();
       const choice = selected();
       const known = opts.some((o) => o.value === aiChoice);
-      if (!known) opts = [{ value: aiChoice, label: `${choice.model || 'default'} (not available)` }, ...opts];
+      if (!known) opts = [{ value: aiChoice, label: `${choice.model || 'default'} (not available)`, engineLabel: '', group: 'No longer offered' }, ...opts];
       const ready = known && (state.app.engines || []).find((e) => e.id === choice.engine)?.ready;
       return h('div', { class: 'chk-model' },
-        h('span', { class: 'chk-model-label' }, st.tool === 'rewrite' ? 'Rewrite model' : 'Review model'),
-        picker({ label: st.tool === 'rewrite' ? 'Rewrite model' : 'AI writing review model', options: opts, value: aiChoice, cls: 'chk-model-picker', onChange: (value) => {
+        h('span', { class: 'chk-model-label' }, st.tool === 'rewrite' ? 'Rewrite model' : st.tool === 'proof' ? 'Proofreading model' : 'Review model'),
+        picker({ label: st.tool === 'rewrite' ? 'Rewrite model' : st.tool === 'proof' ? 'Proofreading model' : 'AI writing review model', options: opts, value: aiChoice, cls: 'chk-model-picker',
+          face: (o) => [o.engineLabel && h('span', { class: 'chk-model-engine' }, o.engineLabel), h('span', { class: 'picker-value' }, o.label)],
+          onChange: (value) => {
           aiChoice = value;
           try { localStorage.setItem('lectern.aiScoreModel', value); } catch { /* storage unavailable */ }
           draw();
@@ -78,6 +102,18 @@
         h('span', { class: 'chk-model-help', role: ready ? null : 'status' }, ready
           ? 'Uses your connected plan. If this model is unavailable the request stops instead of switching.'
           : !known ? 'This model is no longer offered. Choose another one to run the review.' : 'This provider is not connected. Connect it in Settings or choose another model.'));
+    }
+    // The proofreader keeps its own text, marks and undo history; it is made once and moved back in on each draw.
+    let proof = null;
+    function proofreader() {
+      if (!proof && window.LecternProofread) {
+        proof = window.LecternProofread({
+          h, fill, api, toast, TOKEN, picker, nameOf, modelPicker: () => modelPicker(), selected, modelReady: () => modelReady(),
+          transfer: (id, text, file) => transfer(id, text, file),
+          onBusy: (busy) => { st.proof.phase = busy ? 'running' : 'input'; const sw = root.querySelector('.chk-switch'); if (sw) sw.replaceWith(toolSwitch()); },
+        });
+      }
+      return proof;
     }
     const modelReady = () => {
       const choice = selected();
@@ -110,9 +146,9 @@
       const slipTop = !changed && oldSlip ? oldSlip.scrollTop : 0;
       fill(root,
         h('header', { class: 'chk-head' },
-          h('h1', null, 'AI score'),
+          h('h1', null, 'Writing desk'),
           toolSwitch()),
-        h('div', { class: `chk-body${changed ? ' chk-enter' : ''}` }, t.phase === 'report' && t.result ? report() : t.phase === 'running' ? running() : input()));
+        h('div', { class: `chk-body${changed ? ' chk-enter' : ''}` }, st.tool === 'proof' && proofreader() ? proofreader().view() : t.phase === 'report' && t.result ? report() : t.phase === 'running' ? running() : input()));
       const slip = root.querySelector('.chk-slip');
       if (slip && slipTop) slip.scrollTop = slipTop;
     }
@@ -123,7 +159,7 @@
           type: 'button', role: 'radio', class: 'chk-tool', 'aria-checked': String(st.tool === id),
           onclick: () => { if (st.tool !== id) { st.tool = id; draw(); } },
         }, tool.label, st[id].phase === 'running' && h('span', { class: 'chk-busy', 'aria-label': 'running' }),
-        id !== 'rewrite' && st[id].phase === 'report' && st[id].result && h('span', { class: 'chk-tool-score' }, scoreText(id)))));
+        id !== 'rewrite' && id !== 'proof' && st[id].phase === 'report' && st[id].result && h('span', { class: 'chk-tool-score' }, scoreText(id)))));
       return Motion.slide(group, 'checks-tool');
     }
 
@@ -307,6 +343,7 @@
         h('button', { type: 'button', class: 'btn', onclick: () => copyReport(st.tool, r) }, 'Copy report'),
         h('button', { type: 'button', class: 'btn', onclick: (e) => exportPdf(st.tool, t, r, e.currentTarget) }, 'Export PDF'),
         st.tool === 'sim' && r.spans.length > 0 && h('button', { type: 'button', class: 'btn', onclick: (e) => quoteAndCite(t, r, e.currentTarget) }, 'Quote and cite matches'),
+        h('button', { type: 'button', class: 'btn', onclick: () => transfer('proof', r.text, t.file) }, 'Proofread this text'),
         h('button', { type: 'button', class: 'btn', onclick: () => transfer('rewrite', r.text, t.file) }, 'Rewrite this text'),
         h('button', { type: 'button', class: 'chk-link chk-cross', onclick: () => { if (st[other].phase === 'running' || st[other].extracting) { st.tool = other; draw(); return; } st[other] = { ...fresh(), text: r.text, file: t.file, options: st[other].options }; st.tool = other; draw(); } },
           st.tool === 'ai' ? 'Check this text for similarity' : 'Check this text for AI writing'));
@@ -334,6 +371,14 @@
     }
 
     function transfer(id, text, file) {
+      if (id === 'proof') {
+        const p = proofreader();
+        if (p && p.busy()) { st.tool = id; draw(); toast('A check is already running in this tool'); return; }
+        if (p) p.setText(text, file || null);
+        st.tool = id;
+        draw();
+        return;
+      }
       if (st[id].phase === 'running' || st[id].extracting) { st.tool = id; draw(); toast('A task is already running in this tool'); return; }
       st[id] = { ...fresh(), text, file: file || null, options: st[id].options };
       st.tool = id;

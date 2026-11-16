@@ -1,0 +1,70 @@
+{
+ "dataset": "CWEB (Corrected Websites)",
+ "citation": "Flachs, Lacroix, Yannakoudakis, Rei and Søgaard (2020). Grammatical Error Correction in Low Error Density Domains: A New Benchmark and Analyses. EMNLP 2020, pages 8467-8478.",
+ "licence": "CC BY-NC-SA 4.0 (https://creativecommons.org/licenses/by-nc-sa/4.0/). Used here for non-commercial evaluation; the texts are not redistributed.",
+ "source": "https://github.com/SimonHFL/CWEB/tree/08d1da0ff2b78885b1f060b4fa11460a98eb9218/data/raw",
+ "commit": "08d1da0ff2b78885b1f060b4fa11460a98eb9218",
+ "fetched": "2026-11-16T18:47:34.790Z",
+ "files": {
+  "CWEB-G.dev.source": {
+   "sha256": "d579f2193a35d6d833936cd0920e5d3c1138ffb4e48ad12dae791b8a0c9c115f",
+   "bytes": 407885,
+   "lines": 3867
+  },
+  "CWEB-G.dev.ann1": {
+   "sha256": "63242d3eb62c784116dd5788f366417ae39c175c485fa13576bfd0099bccda89",
+   "bytes": 408116,
+   "lines": 3867
+  },
+  "CWEB-G.dev.ann2": {
+   "sha256": "e97922e7f0b62024d0b7cadc5744ea79f05e1d7646e983e837ea03891a6dd424",
+   "bytes": 408333,
+   "lines": 3867
+  },
+  "CWEB-G.test.source": {
+   "sha256": "48356b71e930dc5b6a87c669f522809aa5e34ecd3e974af743ca5cefd6c9652c",
+   "bytes": 410634,
+   "lines": 3981
+  },
+  "CWEB-G.test.ann1": {
+   "sha256": "77611707ee0b5ecf315a2e29ab01d621e5342b56fedc3922a9e6739e080dc9b4",
+   "bytes": 410335,
+   "lines": 3981
+  },
+  "CWEB-G.test.ann2": {
+   "sha256": "e4f3398dfec39979ddfc6c013de40c00bb42f989bfcd3ec2b970a5082133cd81",
+   "bytes": 410732,
+   "lines": 3981
+  },
+  "CWEB-S.dev.source": {
+   "sha256": "61a4961c6576c6d463e60c8c537b20f411e18f40eeed58c38b5970aa87f9b154",
+   "bytes": 381618,
+   "lines": 2862
+  },
+  "CWEB-S.dev.ann1": {
+   "sha256": "2a4a3100c22acc7b7923b365d697b2ff4569ae77b682d0a5ec9c0468561d8541",
+   "bytes": 382395,
+   "lines": 2862
+  },
+  "CWEB-S.dev.ann2": {
+   "sha256": "b995878092438b79b702623f9657b96e06862cc9d59a6c90855061347efe193a",
+   "bytes": 382443,
+   "lines": 2862
+  },
+  "CWEB-S.test.source": {
+   "sha256": "53fb7e7d458e67dc53defd3f3e0f0eafc09d3eb3b5542c5cdc2911ae9ee6fece",
+   "bytes": 377157,
+   "lines": 2864
+  },
+  "CWEB-S.test.ann1": {
+   "sha256": "6e5cae55bb8bdcd9dfbf6818147dee4ca7ef1bb911be3a126691924ec90d0775",
+   "bytes": 378002,
+   "lines": 2864
+  },
+  "CWEB-S.test.ann2": {
+   "sha256": "02a467a693e83602b9642de721575a45f3df1b142e9e28c975fbdf4f0d166d30",
+   "bytes": 378260,
+   "lines": 2864
+  }
+ }
+}

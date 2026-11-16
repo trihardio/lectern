@@ -51,7 +51,7 @@ Tokens live in `ui/styles.css` (`:root`, light and dark). The specimen component
 
 ## Writing check workspace
 
-The AI score page contains independent AI-writing and plagiarism/similarity workspaces, each with
+The Writing desk page (formerly "AI score") contains independent proofreading, AI-writing, rewrite and plagiarism/similarity workspaces, each with
 its own draft, run state and report. `ui/checks.js` builds text-only DOM nodes and `ui/checks.css`
 provides document highlights, a report sidebar, sentence evidence, writing suggestions and source
 excerpts. Orange and yellow distinguish stronger and weaker writing patterns; source matches have
@@ -71,7 +71,7 @@ docked composers use the same session controller.
 
 ## Sidebar action alignment
 
-New question, Library and AI score share 44px minimum row heights, 12px horizontal padding,
+New question, Library and Writing desk share 44px minimum row heights, 12px horizontal padding,
 1px border space and 4px gaps. Labels and shortcut badges stay in common columns through hover
 and selection. Shortcut badges remain hidden on narrow screens.
 
@@ -85,3 +85,24 @@ A sliding highlight box (`Motion.slide` in `ui/app.js`) must stay visible above 
 opaque. The default model card in Settings is opaque, so its outline box paints above the cards and the
 DEFAULT tab above the box. The chosen reference style in the cite dialog uses the primary-button colour
 (`--cab`, or `--cab-ink` in dark mode), the same colour it has when Reduce motion removes the box.
+
+## Proofreader (Writing desk, `ui/proofread.js`, `ui/proofread.css`)
+
+The writer's text sits in a sheet as a real `<textarea>` laid over a mirror of the same text (`.pf-back`); the mirror
+draws the marks, so caret, selection and undo stay native and nothing moves while typing. Marks are told apart by
+colour **and** line style: wavy `--pf-word` (spelling, word choice), solid `--pf-gram` (grammar), dotted `--pf-mech`
+(punctuation, capitals, spacing); each token has a dark value. Pointing at a suggestion, or putting the caret in its
+words, sweeps the highlighter (`--pf-wash`) over them, as a citation stamp does on the answer page. Suggestions are
+cards in a sticky rail: a 4px folder tab in the category colour, the category in mono tiny caps, the source
+(INSTANT or MODEL), the change (struck original, replacement on the highlighter; a space or single mark is shown
+between the words around it), a short reason, an outlined Accept (filled when the card is active) and a quiet Dismiss.
+The rail ends with plain writing statistics. Below 900px the rail follows the sheet. The four-tool switch wraps whole
+buttons on narrow windows.
+
+## App icon (`build/icon.svg`, `build/icon-small.svg`)
+
+An open book on an oak lectern, one line swept with the highlighter, a red-brown ribbon, on a cabinet-green tile:
+`--cab`/`--cab-2` tile, `--f-trial` ochre stand, `--sheet` pages, `--mark` highlight, `--f-meta` ribbon. Violet is not
+used (it stays reserved for citations). The macOS tile is an 824px rounded square in the 1024 canvas; the Windows icon
+and the window's favicon use the same drawing cropped to the tile. Sizes of 32px and below use the simplified drawing.
+`scripts/make-icon.js` renders every size from the vector source in headless Chrome.

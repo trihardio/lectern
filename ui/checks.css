@@ -1,4 +1,4 @@
-/* The AI score page (ui/checks.js): AI-writing check and similarity check.
+/* The Writing desk page (ui/checks.js): AI-writing check, similarity check and rewrite (the proofreader is in proofread.css).
    Same world as the rest of Lectern: bright sheet on the desk, hairline seams, Literata for the
    text being read, Atkinson for controls, mono only for numbers and tiny labels. Violet stays
    reserved for citations, so the source colours below avoid it. */
@@ -28,7 +28,8 @@
 /* ---------------------------------------------------------------- header and the two-tool switch */
 .chk-head { display: flex; align-items: center; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; margin-bottom: 18px; }
 .chk-head h1 { margin: 0; }
-.chk-switch { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--sheet); }
+.chk-switch { display: inline-flex; flex-wrap: wrap; gap: 2px; max-width: 100%; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--sheet); }
+.chk-switch .chk-tool { white-space: nowrap; } /* four tools: a narrow window wraps whole buttons, never a label */
 .chk-tool {
   display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border: 1px solid transparent; border-radius: 7px;
   background: transparent; color: var(--ink-2); font: 600 14px/1.2 var(--sans); cursor: pointer;
@@ -361,3 +362,12 @@
   .chk-print .chk-limits-list { font-size: 9pt; }
   .chk-print-foot { margin-top: 20pt; padding-top: 8pt; border-top: 1px solid var(--line-soft); color: var(--ink-3); font-size: 8.5pt; }
 }
+
+/* ---------------------------------------------------------------- model picker sections (picker() option `group`) */
+.picker-group { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 12px 10px 5px 8px; font: 600 12.5px/1.2 var(--sans); color: var(--ink-2); cursor: default; }
+.picker-group:first-child { padding-top: 6px; }
+.picker-group + .picker-opt { margin-top: 1px; }
+.picker-opt + .picker-group { margin-top: 6px; border-top: 1px solid var(--line-soft); }
+.picker-group-note { font-weight: 500; color: var(--ink-3); }
+.chk-model-picker .picker-btn { display: inline-flex; align-items: baseline; gap: 7px; }
+.chk-model-engine { color: var(--ink-3); font-weight: 500; }

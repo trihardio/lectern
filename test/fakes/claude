@@ -34,6 +34,7 @@ process.stdin.on('end', () => {
   else if (/exactly the word/i.test(sys)) text = 'ready';
   else if (/choose figures from research papers/i.test(sys)) text = process.env.FAKE_NO_FIGURES ? '{"figures": []}' : fx.figuresJson(input);
   else if (/careful writing analyst/i.test(sys)) text = fx.aiReviewJson(input);
+  else if (/proofreading system for English writing/i.test(sys)) text = fx.proofreadJson(input);
   else if (/plagiarism check find web pages/i.test(sys)) text = fx.SOURCE_HUNT_JSON;
   else if (/claim-citation pairs/i.test(sys)) text = process.env.FAKE_NO_CITATIONS ? '{"items": []}' : fx.VERIFY_JSON;
   // With web search on, cite a web page the way the CLI does: as a markdown link.

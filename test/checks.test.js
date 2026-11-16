@@ -1,5 +1,5 @@
 'use strict';
-// The AI score page: document text extraction, the AI-writing check and the similarity check.
+// The Writing desk page: document text extraction, the AI-writing check and the similarity check.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
