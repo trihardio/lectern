@@ -223,6 +223,7 @@
       const id = st.tool;
       const t = st[id];
       t.phase = 'running'; t.steps = {}; t.notices = []; t.error = ''; t.result = null; t.pick = null; t.source = null; t.tab = 'flags';
+      if (t.before && t.text !== t.beforeText) t.before = null; // the comparison only holds for the text that was quoted and cited
       t.abort = new AbortController();
       draw();
       try {
@@ -305,11 +306,31 @@
         h('button', { type: 'button', class: 'btn', onclick: () => { st[st.tool] = fresh(); draw(); } }, 'New check'),
         h('button', { type: 'button', class: 'btn', onclick: () => copyReport(st.tool, r) }, 'Copy report'),
         h('button', { type: 'button', class: 'btn', onclick: (e) => exportPdf(st.tool, t, r, e.currentTarget) }, 'Export PDF'),
+        st.tool === 'sim' && r.spans.length > 0 && h('button', { type: 'button', class: 'btn', onclick: (e) => quoteAndCite(t, r, e.currentTarget) }, 'Quote and cite matches'),
         h('button', { type: 'button', class: 'btn', onclick: () => transfer('rewrite', r.text, t.file) }, 'Rewrite this text'),
         h('button', { type: 'button', class: 'chk-link chk-cross', onclick: () => { if (st[other].phase === 'running' || st[other].extracting) { st.tool = other; draw(); return; } st[other] = { ...fresh(), text: r.text, file: t.file, options: st[other].options }; st.tool = other; draw(); } },
           st.tool === 'ai' ? 'Check this text for similarity' : 'Check this text for AI writing'));
       const page = st.tool === 'ai' ? aiReport(t, r) : simReport(t, r);
       return h('div', { class: 'chk-report-wrap' }, bar, page);
+    }
+
+    /**
+     * Put each exact match in quotation marks and cite every matched source (author and year from the source record),
+     * then check the new text again so the change is measured, not assumed. Nothing is reworded.
+     */
+    async function quoteAndCite(t, r, btn) {
+      if (btn) btn.disabled = true;
+      try {
+        const out = await api('POST', '/api/checks/cite', { text: r.text, result: r });
+        const before = { score: r.score, quoted: out.quoted, cited: out.cited, references: out.references.length };
+        st.sim = { ...fresh(), text: out.text, file: t.file, options: { ...t.options, quotes: true }, before, beforeText: out.text };
+        st.tool = 'sim';
+        toast(`${out.quoted} passage${out.quoted === 1 ? '' : 's'} quoted, ${out.cited} citation${out.cited === 1 ? '' : 's'} added. Checking again…`);
+        start();
+      } catch (e) {
+        toast(e.message || 'Could not add the quotation marks and citations');
+        if (btn) btn.disabled = false;
+      }
     }
 
     function transfer(id, text, file) {
@@ -330,6 +351,9 @@
           h('button', { type: 'button', class: 'btn', onclick: () => transfer('ai', r.text) }, 'Review writing patterns'),
           h('button', { type: 'button', class: 'btn', onclick: () => transfer('sim', r.text) }, 'Check similarity')),
         h('p', { class: 'chk-limits' }, TOOLS.rewrite.limits),
+        r.check && (r.check.ok
+          ? h('p', { class: 'chk-check ok', role: 'status' }, h('b', null, 'Checked. '), `Every number, name and acronym from the original is still there, nothing new was added${r.protectedCount ? `, and all ${r.protectedCount} quotations and citations are unchanged` : ''}.${r.attempts > 1 ? ' (The first attempt changed a fact, so it was redone.)' : ''}`)
+          : h('p', { class: 'chk-check bad', role: 'alert' }, h('b', null, 'Check the rewrite. '), r.check.missing.length ? `It dropped: ${r.check.missing.join(', ')}. ` : '', r.check.added.length ? `It added: ${r.check.added.join(', ')}. ` : '', 'This happened twice, so it is shown for you to fix by hand.')),
         h('p', { class: 'chk-note' }, 'Compare the original and rewrite, especially facts, qualifications, quotations and citations. Scores are not measured by rewriting; run the checks to see their results.'),
         h('div', { class: 'chk-rewrite-grid' },
           h('div', { class: 'chk-rewrite-panel' }, h('h2', null, 'Original'), h('div', { class: 'chk-rewrite-original' }, t.text)),
@@ -447,6 +471,21 @@
         slip);
     }
 
+    /** The trained style model: a separate reading, with its tested accuracy and weak spots, never part of the score. */
+    function styleLine(sr) {
+      return h('p', { class: 'chk-style' },
+        h('span', { class: 'chk-from' }, 'Style model'),
+        h('span', null, sr.flagged ? 'Its writing style resembles AI text in the public test sets' : 'Its writing style does not stand out as AI-like in the public test sets',
+          ` (${Math.round(sr.probability * 100)} of 100; flags at ${Math.round(sr.threshold * 100)}). A second reading, not part of the score.`));
+    }
+    function styleTable(sr) {
+      const t = sr.tested;
+      return h('div', { class: 'chk-style-tested' },
+        h('h3', { class: 'chk-h3' }, `Style model (version ${sr.version}), tested before use`),
+        h('p', { class: 'chk-note' }, `A logistic regression over 30 measurable style features, trained on public labelled human and AI texts (HC3, RAID, MAGE, DACTYL). On a fresh test set of 2024–25 models (${t.set}) it separated human and AI text with AUROC ${t.auroc}, flagged ${t.falsePositive} of human texts and caught ${t.detection} of AI texts.`),
+        h('p', { class: 'chk-note' }, `Known weak spots: it wrongly flags ${t.nonNativeFalsePositive}, against ${t.nativeStudentFalsePositive} for native student writing, and it barely separates student essays (AUROC ${t.studentEssayAuroc}). Treat it as a pointer to read the text, never as evidence about who wrote it.`));
+    }
+
     function aiScore(r) {
       const b = r.bands;
       const status = r.status === 'unavailable'
@@ -478,6 +517,7 @@
           b.notReviewed > 0 && h('li', null, h('i', { class: 'notReviewed' }), 'Not reviewed', h('b', null, `${b.notReviewed}%`))),
         r.lengthCategory === 'brief' && h('p', { class: 'chk-caution' }, 'Brief text (under 300 eligible words): the totals describe little writing, so read the sentences themselves.'),
         h('p', { class: 'chk-readby' }, modelLine(r)),
+        r.style && styleLine(r.style),
         r.summary && h('p', { class: 'chk-summary' }, h('span', { class: 'chk-from' }, 'Model'), r.summary),
         r.notes.filter((n) => !/^The model reviewed/.test(n)).map((n) => h('p', { class: 'chk-note' }, n)),
         h('ul', { class: 'chk-limits-list', 'aria-label': 'Limits of this review' }, r.limits.map((x) => h('li', null, x))));
@@ -570,6 +610,7 @@
             row('Stock phrases', `${g.phrasesPer1000}`, 'Per 1,000 words, such as “plays a crucial role”.'),
             row('Signpost openers', `${Math.round(g.signpostShare * 100)}%`, 'Sentences opening with Furthermore, Moreover, In conclusion and similar.'),
             row('Measured index', `${g.docSignal}/100`, 'A fixed, uncalibrated summary of the rows above. Shown for transparency only.'))),
+        r.style && styleTable(r.style),
         h('p', { class: 'chk-note' }, 'Lectern cannot measure perplexity (how predictable each word is to a model), which dedicated detectors use; the models on your plan do not expose it.'),
         h('ul', { class: 'chk-limits-list' }, r.limits.map((x) => h('li', null, x))));
     }
@@ -617,6 +658,8 @@
         h('ul', { class: 'chk-band-key' },
           h('li', null, h('i', { class: 'exact' }), 'Same wording', h('b', null, `${share(r.exactWords)}%`)),
           h('li', null, h('i', { class: 'para' }), 'Close paraphrase', h('b', null, `${share(r.paraphraseWords)}%`))),
+        cur().before && h('p', { class: 'chk-check ok', role: 'status' }, h('b', null, 'Quoted and cited. '),
+          `Before: ${cur().before.score == null ? 'no score' : `${cur().before.score}%`}. ${plural(cur().before.quoted, 'exact passage is', 'exact passages are')} now in quotation marks and left out of the score; ${plural(cur().before.cited, 'paraphrased or already-quoted passage', 'paraphrased or already-quoted passages')} now carr${cur().before.cited === 1 ? 'ies' : 'y'} a citation; ${plural(cur().before.references, 'source was', 'sources were')} added to the reference list. Check each citation against the source before you submit.`),
         r.notes.map((n) => h('p', { class: 'chk-note' }, n)),
         h('p', { class: 'chk-note' }, 'A match is not plagiarism by itself: quoted and properly cited text is fine. Check each match against your citations.'));
     }
@@ -674,7 +717,9 @@
         out += r.score == null ? `No score. ${r.scoreWithheld}\n` : `${r.score}% of reviewed words are in sentences the model rated 65+ for strong AI-like writing patterns\n`;
         out += `Reviewed ${r.reviewedWords} of ${r.eligibleWords} eligible words (${Math.round(r.coverage * 100)}%); status: ${r.status}\n`;
         out += `Of eligible words: strong patterns ${r.bands.strong}% · some patterns ${r.bands.some}% · few patterns ${r.bands.few}% · not reviewed ${r.bands.notReviewed}%\n`;
-        out += `${modelLine(r)}\nChecked ${p.finishedAt}; scoring rules version ${p.scoring.version}\n\n`;
+        out += `${modelLine(r)}\nChecked ${p.finishedAt}; scoring rules version ${p.scoring.version}\n`;
+        if (r.style) out += `Style model (second reading, not in the score): ${Math.round(r.style.probability * 100)}/100, flags at ${Math.round(r.style.threshold * 100)}; non-native writers are wrongly flagged ${r.style.tested.nonNativeFalsePositive}\n`;
+        out += '\n';
         for (const s of r.sentences.filter((x) => x.eligible && x.review === 'model' && x.band !== 'few')) out += `[model rating ${s.rating}/100, ${s.band} patterns] ${r.text.slice(s.start, s.end)}\n  ${s.why}\n`;
         const un = r.sentences.filter((x) => x.eligible && x.review !== 'model');
         if (un.length) out += `\nNot reviewed (${un.length} sentences, not counted either way)\n` + un.slice(0, 50).map((s) => `- ${r.text.slice(s.start, s.end).slice(0, 120)} (${s.unreviewedReason})`).join('\n') + '\n';
@@ -809,6 +854,7 @@
       }
     }
 
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
     const clipText = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
     return { view, draw };

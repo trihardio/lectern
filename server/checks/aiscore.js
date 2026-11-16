@@ -26,6 +26,7 @@ const llm = require('../llm');
 const Prompts = require('../prompts');
 const { extractJson } = require('../util');
 const T = require('./text');
+const { styleReading } = require('./style');
 
 // ---- words that became far more frequent in writing after LLMs (Kobak et al. 2025, Figure S6; Liang et al. 2024)
 const STRONG = new Set(`delve delves delved delving intricate intricately intricacies meticulous meticulously pivotal showcase showcases showcased
@@ -433,6 +434,7 @@ async function runAiCheck({ text: input, config, signal, emit = () => {}, engine
     lengthCategory,
     sentences, issues, rejectedSuggestions,
     readings: m.readings,
+    style: styleReading(text), // second reading from the trained style model; never part of the score
     summary: summaries.filter(Boolean).join(' ').slice(0, 600),
     excluded: m.excluded,
     notes,

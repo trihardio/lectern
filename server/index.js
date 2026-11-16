@@ -20,6 +20,7 @@ const { extractText } = require('./checks/extract');
 const { runAiCheck } = require('./checks/aiscore');
 const { runSimilarityCheck } = require('./checks/similarity');
 const { runRewrite } = require('./checks/rewrite');
+const { quoteAndCite } = require('./checks/citefix');
 
 const ROOT = path.join(__dirname, '..');
 const STATIC = {
@@ -168,6 +169,13 @@ function createApp({ dataDir, voice, pdf } = {}) {
       try { return await pdf.save({ name: `${base}.pdf` }); } catch (e) { return { ok: false, error: `The PDF could not be saved: ${e.message}` }; }
     },
 
+    // AI score page: put matched passages in quotation marks and cite their sources (from the similarity result).
+    'POST /api/checks/cite': async (body) => {
+      const r = body.result;
+      if (!r || typeof r.text !== 'string' || !Array.isArray(r.spans) || !Array.isArray(r.sources)) throw Object.assign(new Error('Run the similarity check first.'), { status: 400 });
+      return quoteAndCite(String(body.text || ''), r);
+    },
+
     // AI score page: plain text from a dropped document ({ name, data: base64 }). Nothing is stored.
     'POST /api/checks/extract': async (body) => {
       const data = Buffer.from(String(body.data || ''), 'base64');
@@ -294,7 +302,7 @@ function createApp({ dataDir, voice, pdf } = {}) {
 
       const route = routes[`${req.method} ${url.pathname}`];
       if (!route) return json(res, 404, { error: 'Not found' });
-      const body = req.method === 'GET' || req.method === 'DELETE' ? {} : await readBody(req, url.pathname === '/api/checks/extract' ? 17 * 1024 * 1024 : undefined);
+      const body = req.method === 'GET' || req.method === 'DELETE' ? {} : await readBody(req, url.pathname === '/api/checks/extract' ? 17 * 1024 * 1024 : url.pathname === '/api/checks/cite' ? 8 * 1024 * 1024 : undefined);
       return json(res, 200, await route(body, url));
     } catch (e) {
       if (res.headersSent) { try { res.end(); } catch { /* socket already closed */ } return; }

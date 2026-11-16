@@ -67,3 +67,60 @@ stays `false`.
    re-derived on the development split with the corrected harness. The first run is kept in
    `bench/results/superseded/` and both are reported. Because the holdout had been seen once, the corrected
    holdout figures are a second look, not a pristine test: the claim rule cannot be passed on them alone.
+
+## Version 2: trained style model (frozen 2026-11-16T17:42:48Z, before any holdout score was computed)
+
+**System under test.** A logistic-regression model over 30 interpretable style features (sentence length and its
+variation, word length, vocabulary richness, punctuation rates, pronouns, contractions, digits and names, the
+Kobak et al. excess-word rates, stock phrases, signposts, paragraph variation, -ly and -tion rates, repeated
+three-word sequences, sentence-start variety, lower-case sentence starts). Text is normalised as in the app, and
+tokenizer spacing artefacts ("word ." and "do n't") are undone first so the model learns writing, not corpus
+formatting. Trained on the v1 development split only (HC3 + RAID; class-balanced weights; L2 = 1, chosen by 5-fold
+cross-validation by group, AUROC 0.939 on the folds). Frozen files and SHA-256: model-v2.json and style.js
+b8f66c57c68845068fc7664ed1e781fde7825a3854d0e6b5aa11f194025de397 f41137d0d58e6805edf5e7f2a2878566ee29f49eb41dd53793f21fef407506bd 
+
+**Decision rule.** Flag when the model's probability is at or above 0.6834: the lowest value that flags at most 5% of
+development human texts. Not tuned on any holdout.
+
+**Holdouts.**
+1. *Primary, never used by any Lectern system:* MAGE (yaful/MAGE, Apache-2.0), test split. Seeded page sample across
+   the whole split, 80-1,200 words, at most 60 documents per source name, label 1 = human, 0 = machine (checked
+   against the source names). Exact duplicates of any development text are removed.
+2. *Secondary:* the v1 holdout (HC3, RAID, Liang et al.). It has been looked at twice for the v1 measured index, so
+   it is not pristine, but no v2 decision was made on it. Reported separately, with the non-native (TOEFL) writer
+   group and the GPT-4-polished essays shown apart.
+
+**Claim rule.** Unchanged from version 1. In addition, the v2 model can replace the v1 measured index inside the
+app only if, on MAGE, its AUROC is higher than v1's measured index and its false positive rate's upper 95% bound
+is at most 10%. Neither outcome changes DETECTOR_VALIDATED unless the full claim rule passes.
+
+**Known limits.** MAGE generators are 2022-2023 models (GPT-3/3.5 family, LLaMA, OPT, GLM, FLAN-T5, BLOOM and
+others); today's models may differ. MAGE mixes domains (news, Reddit, stories, reviews, science, QA); it is not
+student coursework.
+
+### Version 2 result (recorded 2026-11-16T17:46:37Z)
+MAGE (primary): v2 AUROC 0.541, false positives 28.8% (25.1-32.9), detection 33.4%; v1 AUROC 0.563, false positives
+6.8%, detection 8.9%. The v1 holdout (secondary): v2 AUROC 0.927 against v1 0.677. **The replacement rule fails**: a
+model trained on HC3 + RAID learned those datasets, not AI writing in general. v2 is not used in the app.
+
+## Version 3: same features, more varied training data (frozen 2026-11-16T17:46:37Z, before any DACTYL test score)
+**Training data:** v1 development split (HC3, RAID) + the v2 MAGE sample (now seen, so it moves to training) +
+a seeded sample of DACTYL's *train* split (ShantanuT01/DACTYL, MIT; 2024-25 generators including GPT-4o, GPT-4o-mini,
+Claude 3.5 Haiku and Sonnet, Llama 3, Gemini, DeepSeek). Same features, class-balanced, each source weighted equally, L2
+chosen by 5-fold cross-validation by group. Threshold: the lowest value that flags at most 5% of training human texts.
+**Holdout (primary, fresh):** a seeded sample of DACTYL's *test* split, 80-1,200 words, at most 40 per domain and
+generator, exact duplicates of any training text removed. Nothing else is scored on it before the result is written.
+**Rule:** the v3 model may replace the v1 index in the app only if, on the DACTYL test sample, its AUROC is above v1's
+and its false positive rate's upper 95% bound is at most 10%. DETECTOR_VALIDATED stays false unless the full
+v1 claim rule also passes.
+
+### Version 3 result (recorded 2026-11-17)
+DACTYL test sample (1,095 documents: 200 human, 895 AI from 12 generators): v3 AUROC 0.883, false positives 4.5%
+(2.4-8.3), detection 70.1% (67.0-73.0); v1 AUROC 0.798, false positives 8.5%, detection 50.9%. **The replacement rule
+passes.** The full claim rule does not (detection's lower bound is below 80%), so DETECTOR_VALIDATED stays false.
+Weak spots measured before use: student essays (AUROC 0.597), reviews, small fine-tuned Llama models; and on the
+Liang et al. essays (never used in training) v3 flags 13.3% (7.8-21.9) of non-native writers' TOEFL essays against
+3.3% for v1, while it flags fewer native student essays (6.5% against 18.6%). Decision: v3 is shown in the app as a
+separate "style model" reading with these numbers next to it, and it is not part of the headline score.
+Scripts: bench/style/ (fetch-mage, fetch-dactyl, train-v2, eval-v2, train-v3, eval-v3, fair-v3); data in
+bench/data/style (not committed); the shipped weights are server/checks/style-model.json.

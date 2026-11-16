@@ -146,7 +146,7 @@ function locate(text, quote, near = 0) {
 function exclusions(text, { quotes = true, references = true } = {}) {
   const out = [];
   if (quotes) {
-    for (const m of text.matchAll(/"[^"\n]{12,600}"|“[^”\n]{12,600}”/g)) out.push({ start: m.index, end: m.index + m[0].length, why: 'quote' });
+    for (const m of text.matchAll(/"[^"\n]{12,4000}"|“[^”\n]{12,4000}”/g)) out.push({ start: m.index, end: m.index + m[0].length, why: 'quote' });
   }
   if (references) {
     const re = /(?:^|\n)\s*(?:\d+\.?\s*)?(references|reference list|bibliography|works cited|literature cited|sources)\s*:?\s*(?=\n)/gi;

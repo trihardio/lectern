@@ -1,0 +1,54 @@
+[DACTYL test, all] human 200, ai 895
+   v1: FPR 8.5% (5.4–13.2) | detect 50.9% (47.7–54.2) | AUROC 0.798
+   v3: FPR 4.5% (2.4–8.3) | detect 70.1% (67.0–73.0) | AUROC 0.883
+[model DeepSeek-V3] human 200, ai 66
+   v1: FPR 8.5% (5.4–13.2) | detect 60.6% (48.5–71.5) | AUROC 0.880
+   v3: FPR 4.5% (2.4–8.3) | detect 86.4% (76.1–92.7) | AUROC 0.952
+[model ShantanuT01/fine-tuned-Llama-3.2-1B-Instruct-apollo-mini-student_essays-testing] human 200, ai 40
+   v1: FPR 8.5% (5.4–13.2) | detect 17.5% (8.7–31.9) | AUROC 0.691
+   v3: FPR 4.5% (2.4–8.3) | detect 10.0% (4.0–23.1) | AUROC 0.676
+[model claude-3-5-haiku-20241022] human 200, ai 80
+   v1: FPR 8.5% (5.4–13.2) | detect 46.3% (35.7–57.1) | AUROC 0.837
+   v3: FPR 4.5% (2.4–8.3) | detect 93.8% (86.2–97.3) | AUROC 0.982
+[model claude-3-5-sonnet-20241022] human 200, ai 40
+   v1: FPR 8.5% (5.4–13.2) | detect 65.0% (49.5–77.9) | AUROC 0.833
+   v3: FPR 4.5% (2.4–8.3) | detect 70.0% (54.6–81.9) | AUROC 0.920
+[model gemini-1.5-flash] human 200, ai 114
+   v1: FPR 8.5% (5.4–13.2) | detect 46.5% (37.6–55.6) | AUROC 0.788
+   v3: FPR 4.5% (2.4–8.3) | detect 73.7% (64.9–80.9) | AUROC 0.932
+[model gemini-1.5-pro] human 200, ai 28
+   v1: FPR 8.5% (5.4–13.2) | detect 28.6% (15.3–47.1) | AUROC 0.671
+   v3: FPR 4.5% (2.4–8.3) | detect 28.6% (15.3–47.1) | AUROC 0.876
+[model gpt-4o-mini] human 200, ai 120
+   v1: FPR 8.5% (5.4–13.2) | detect 75.0% (66.6–81.9) | AUROC 0.914
+   v3: FPR 4.5% (2.4–8.3) | detect 92.5% (86.4–96.0) | AUROC 0.977
+[model llama-3.2-90b] human 200, ai 80
+   v1: FPR 8.5% (5.4–13.2) | detect 18.8% (11.7–28.7) | AUROC 0.569
+   v3: FPR 4.5% (2.4–8.3) | detect 27.5% (18.9–38.1) | AUROC 0.635
+[model llama-3.3-70b] human 200, ai 121
+   v1: FPR 8.5% (5.4–13.2) | detect 52.9% (44.0–61.6) | AUROC 0.817
+   v3: FPR 4.5% (2.4–8.3) | detect 80.2% (72.2–86.3) | AUROC 0.947
+[model meta-llama/Llama-3.2-1B-Instruct] human 200, ai 50
+   v1: FPR 8.5% (5.4–13.2) | detect 12.0% (5.6–23.8) | AUROC 0.488
+   v3: FPR 4.5% (2.4–8.3) | detect 6.0% (2.1–16.2) | AUROC 0.413
+[model mistral-large-latest] human 200, ai 98
+   v1: FPR 8.5% (5.4–13.2) | detect 69.4% (59.7–77.6) | AUROC 0.901
+   v3: FPR 4.5% (2.4–8.3) | detect 89.8% (82.2–94.4) | AUROC 0.974
+[model mistral-small-latest] human 200, ai 58
+   v1: FPR 8.5% (5.4–13.2) | detect 72.4% (59.8–82.2) | AUROC 0.907
+   v3: FPR 4.5% (2.4–8.3) | detect 86.2% (75.1–92.8) | AUROC 0.959
+[domain RedditWritingPrompts] human 40, ai 196
+   v1: FPR 0.0% (0.0–8.8) | detect 34.2% (27.9–41.1) | AUROC 0.870
+   v3: FPR 5.0% (1.4–16.5) | detect 84.7% (79.0–89.1) | AUROC 0.957
+[domain abstracts] human 40, ai 342
+   v1: FPR 10.0% (4.0–23.1) | detect 66.4% (61.2–71.2) | AUROC 0.828
+   v3: FPR 7.5% (2.6–19.9) | detect 71.1% (66.0–75.6) | AUROC 0.904
+[domain news] human 40, ai 266
+   v1: FPR 5.0% (1.4–16.5) | detect 56.8% (50.8–62.6) | AUROC 0.848
+   v3: FPR 0.0% (0.0–8.8) | detect 79.3% (74.1–83.8) | AUROC 0.888
+[domain reviews] human 40, ai 41
+   v1: FPR 7.5% (2.6–19.9) | detect 0.0% (0.0–8.6) | AUROC 0.594
+   v3: FPR 7.5% (2.6–19.9) | detect 2.4% (0.4–12.6) | AUROC 0.565
+[domain student_essays] human 40, ai 50
+   v1: FPR 20.0% (10.5–34.8) | detect 22.0% (12.8–35.2) | AUROC 0.486
+   v3: FPR 2.5% (0.4–12.9) | detect 12.0% (5.6–23.8) | AUROC 0.597

@@ -14,7 +14,7 @@ It runs on your Mac or Windows PC. Your conversations and saved papers stay on y
 
 ## Install on a Mac
 
-1. Open the [latest release](../../releases/latest) and download **Lectern-0.1.2.dmg**.
+1. Open the [latest release](../../releases/latest) and download **Lectern-0.1.21.dmg**.
 2. Open the downloaded file and drag **Lectern** onto **Applications**.
 3. Open Lectern from Applications. The first time, macOS says it cannot check the app for
    malicious software. Click **Done**, then open **System Settings > Privacy & Security**, scroll
@@ -25,7 +25,7 @@ It runs on your Mac or Windows PC. Your conversations and saved papers stay on y
 
 ## Install on Windows
 
-1. From the [latest release](../../releases/latest), download **Lectern-0.1.2-windows-x64.zip**.
+1. From the [latest release](../../releases/latest), download **Lectern-0.1.21-windows-x64.zip**.
 2. Right-click the file, choose **Extract All**, and put the **Lectern** folder somewhere that suits you
    (for example your Documents folder).
 3. Open the folder and double-click **Lectern.exe**. The first time, Windows SmartScreen may say it
@@ -75,6 +75,21 @@ Markdown or text file, up to 12 MB. Scanned PDFs need OCR first. Checks cover at
 20,000 words and report when text was shortened. Documents are not saved by Lectern. Model review
 sends text to your selected provider, and similarity searches send distinctive passages to the
 selected databases and web search. Neither tool has access to Turnitin's private submission index.
+
+**Quote and cite matches** on a similarity report puts every passage that matches a source word for word in
+quotation marks, adds an author-date citation built from the matched source's own record, cites close paraphrases at
+the end of their sentence, adds the sources to your reference list, and checks the text again. Your own words are not
+changed. Check each citation against the source before you submit.
+
+**Rewrite** checks its own answer: every number, name, acronym, quotation and citation in your text must still be
+there, and nothing new may be added. If the first attempt changes a fact, it is redone once; if the second still
+does, Lectern shows exactly what changed instead of hiding it. Rewriting is for clearer writing. It is not a way to
+hide AI-written or copied text, and it does not promise a lower score.
+
+The AI writing report also shows a **style model**: a second reading from a small model trained on public labelled
+human and AI texts and tested on a fresh set of 2024-25 models (AUROC 0.88). It is not part of the score, and the
+report states where it is weak, including that it wrongly flags more essays by non-native English writers.
+Details: `bench/results/style-v2-v3.md`.
 
 **Export PDF** on a finished AI writing or similarity report saves the whole report as a PDF: the score, your
 text with its highlights, every flagged sentence or matching source with its excerpts, and what was searched. In the

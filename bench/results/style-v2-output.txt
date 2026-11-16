@@ -1,0 +1,86 @@
+== MAGE (primary, fresh)
+  [all] human 517, ai 2260
+    v1: FPR 6.8% (4.9–9.3) | detect 8.9% (7.8–10.2) | AUROC 0.563
+    v2: FPR 28.8% (25.1–32.9) | detect 33.4% (31.4–35.3) | AUROC 0.541
+  [domain cmv] human 60, ai 209
+    v1: FPR 1.7% (0.3–8.9) | detect 6.7% (4.0–10.9) | AUROC 0.555
+    v2: FPR 13.3% (6.9–24.2) | detect 18.7% (14.0–24.5) | AUROC 0.546
+  [domain eli5] human 60, ai 196
+    v1: FPR 1.7% (0.3–8.9) | detect 1.0% (0.3–3.6) | AUROC 0.614
+    v2: FPR 8.3% (3.6–18.1) | detect 35.2% (28.9–42.1) | AUROC 0.733
+  [domain hswag] human 0, ai 100
+    v1: FPR – | detect 11.0% (6.3–18.6) | AUROC –
+    v2: FPR – | detect 18.0% (11.7–26.7) | AUROC –
+  [domain imdb] human 40, ai 0
+    v1: FPR 0.0% (0.0–8.8) | detect – | AUROC –
+    v2: FPR 15.0% (7.1–29.1) | detect – | AUROC –
+  [domain pubmed] human 57, ai 60
+    v1: FPR 24.6% (15.2–37.1) | detect 28.3% (18.5–40.8) | AUROC 0.580
+    v2: FPR 78.9% (66.7–87.5) | detect 93.3% (84.1–97.4) | AUROC 0.537
+  [domain roct] human 0, ai 174
+    v1: FPR – | detect 0.6% (0.1–3.2) | AUROC –
+    v2: FPR – | detect 24.7% (18.9–31.6) | AUROC –
+  [domain sci] human 60, ai 186
+    v1: FPR 15.0% (8.1–26.1) | detect 18.8% (13.9–25.0) | AUROC 0.514
+    v2: FPR 81.7% (70.1–89.4) | detect 79.6% (73.2–84.7) | AUROC 0.511
+  [domain squad] human 60, ai 182
+    v1: FPR 5.0% (1.7–13.7) | detect 5.5% (3.0–9.8) | AUROC 0.536
+    v2: FPR 18.3% (10.6–29.9) | detect 40.7% (33.8–47.9) | AUROC 0.607
+  [domain tldr] human 60, ai 387
+    v1: FPR 5.0% (1.7–13.7) | detect 16.5% (13.2–20.6) | AUROC 0.694
+    v2: FPR 31.7% (21.3–44.2) | detect 37.7% (33.0–42.7) | AUROC 0.483
+  [domain wp] human 60, ai 451
+    v1: FPR 1.7% (0.3–8.9) | detect 6.9% (4.9–9.6) | AUROC 0.715
+    v2: FPR 6.7% (2.6–15.9) | detect 21.7% (18.2–25.8) | AUROC 0.735
+  [domain xsum] human 60, ai 254
+    v1: FPR 5.0% (1.7–13.7) | detect 6.3% (3.9–10.0) | AUROC 0.341
+    v2: FPR 3.3% (0.9–11.4) | detect 18.5% (14.2–23.7) | AUROC 0.587
+  [domain yelp] human 0, ai 61
+    v1: FPR – | detect 1.6% (0.3–8.7) | AUROC –
+    v2: FPR – | detect 26.2% (16.8–38.4) | AUROC –
+  [generator bloom] human 517, ai 77
+    v1: FPR 6.8% (4.9–9.3) | detect 5.2% (2.0–12.6) | AUROC 0.429
+    v2: FPR 28.8% (25.1–32.9) | detect 15.6% (9.1–25.3) | AUROC 0.449
+  [generator flan] human 517, ai 57
+    v1: FPR 6.8% (4.9–9.3) | detect 1.8% (0.3–9.3) | AUROC 0.506
+    v2: FPR 28.8% (25.1–32.9) | detect 64.9% (51.9–76.0) | AUROC 0.710
+  [generator glm130b] human 517, ai 128
+    v1: FPR 6.8% (4.9–9.3) | detect 6.3% (3.2–11.8) | AUROC 0.613
+    v2: FPR 28.8% (25.1–32.9) | detect 35.9% (28.1–44.5) | AUROC 0.598
+  [generator gpt] human 517, ai 10
+    v1: FPR 6.8% (4.9–9.3) | detect 0.0% (0.0–27.8) | AUROC 0.310
+    v2: FPR 28.8% (25.1–32.9) | detect 20.0% (5.7–51.0) | AUROC 0.409
+  [generator gpt-3.5-trubo] human 517, ai 7
+    v1: FPR 6.8% (4.9–9.3) | detect 85.7% (48.7–97.4) | AUROC 0.909
+    v2: FPR 28.8% (25.1–32.9) | detect 100.0% (64.6–100.0) | AUROC 0.925
+  [generator neox] human 517, ai 39
+    v1: FPR 6.8% (4.9–9.3) | detect 2.6% (0.5–13.2) | AUROC 0.480
+    v2: FPR 28.8% (25.1–32.9) | detect 38.5% (24.9–54.1) | AUROC 0.568
+  [generator opt] human 517, ai 761
+    v1: FPR 6.8% (4.9–9.3) | detect 8.7% (6.9–10.9) | AUROC 0.500
+    v2: FPR 28.8% (25.1–32.9) | detect 29.2% (26.1–32.5) | AUROC 0.521
+  [generator other] human 517, ai 562
+    v1: FPR 6.8% (4.9–9.3) | detect 5.0% (3.5–7.1) | AUROC 0.545
+    v2: FPR 28.8% (25.1–32.9) | detect 37.5% (33.6–41.6) | AUROC 0.545
+  [generator t0] human 517, ai 12
+    v1: FPR 6.8% (4.9–9.3) | detect 16.7% (4.7–44.8) | AUROC 0.666
+    v2: FPR 28.8% (25.1–32.9) | detect 33.3% (13.8–60.9) | AUROC 0.601
+  [generator text-davinci-002] human 517, ai 308
+    v1: FPR 6.8% (4.9–9.3) | detect 6.8% (4.5–10.2) | AUROC 0.594
+    v2: FPR 28.8% (25.1–32.9) | detect 33.1% (28.1–38.6) | AUROC 0.537
+  [generator text-davinci-003] human 517, ai 299
+    v1: FPR 6.8% (4.9–9.3) | detect 21.7% (17.4–26.8) | AUROC 0.760
+    v2: FPR 28.8% (25.1–32.9) | detect 32.1% (27.1–37.6) | AUROC 0.543
+== v1 holdout (secondary, seen before for v1 only)
+  [all] human 886, ai 2673, mixed 91
+    v1: FPR 7.8% (6.2–9.7) | detect 33.6% (31.9–35.4) | AUROC 0.677 | mixed flagged 65.9% (55.7–74.8)
+    v2: FPR 11.6% (9.7–13.9) | detect 82.6% (81.1–84.0) | AUROC 0.927 | mixed flagged 49.5% (39.4–59.5)
+  [source HC3] human 259, ai 476
+    v1: FPR 1.9% (0.8–4.4) | detect 11.8% (9.2–15.0) | AUROC 0.624
+    v2: FPR 5.4% (3.2–8.9) | detect 77.5% (73.6–81.0) | AUROC 0.953
+  [source Liang2023] human 305, ai 348, mixed 91
+    v1: FPR 14.1% (10.6–18.5) | detect 58.0% (52.8–63.1) | AUROC 0.798 | mixed flagged 65.9% (55.7–74.8)
+    v2: FPR 25.9% (21.3–31.1) | detect 92.8% (89.6–95.1) | AUROC 0.926 | mixed flagged 49.5% (39.4–59.5)
+  [source RAID] human 322, ai 1849
+    v1: FPR 6.5% (4.3–9.8) | detect 34.7% (32.5–36.9) | AUROC 0.649
+    v2: FPR 3.1% (1.7–5.6) | detect 81.9% (80.1–83.6) | AUROC 0.955

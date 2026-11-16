@@ -320,3 +320,72 @@ test('PDF export: the desktop hook gets a safe file name; without it the window 
   assert.equal(web.out.ok, false);
   assert.match(web.out.error, /Save as PDF/);
 });
+
+// ---------------------------------------------------------------- 2026-11-17: style model, rewrite check, quote and cite
+const { styleReading, MODEL: STYLE_MODEL } = require('../server/checks/style');
+const { preservation, runRewrite } = require('../server/checks/rewrite');
+const { quoteAndCite, citationFor } = require('../server/checks/citefix');
+
+test('style model: a second reading with its tested accuracy; stock AI prose reads higher than specific human prose', () => {
+  const ai = styleReading(AI_TEXT.repeat(2));
+  const human = styleReading(HUMAN_TEXT.repeat(2));
+  assert.ok(ai && human);
+  assert.ok(ai.probability > human.probability, `${ai.probability} vs ${human.probability}`);
+  assert.equal(ai.threshold, STYLE_MODEL.threshold);
+  assert.match(ai.tested.nonNativeFalsePositive, /TOEFL/);
+  assert.equal(styleReading('Too short to read.'), null);
+});
+
+test('rewrite check: lost or invented numbers, names and acronyms are caught', () => {
+  const o = 'In a 2015 trial at Ctrip, a Shanghai travel agency, staff were 13% more productive (Bloom et al., 2015). The OECD counted 1.5 million.';
+  assert.deepEqual(preservation(o, 'Staff at Ctrip, a Shanghai travel agency, were 13% more productive in a 2015 trial (Bloom et al., 2015). Later the OECD counted 1.5 million.'), { ok: true, missing: [], added: [] });
+  const bad = preservation(o, 'Staff at a travel agency were 15% more productive (Bloom et al., 2015), says Stanford. The OECD counted many.');
+  assert.equal(bad.ok, false);
+  assert.deepEqual(bad.missing.sort(), ['1.5', '13%', '2015', 'Ctrip', 'Shanghai'].sort());
+  assert.deepEqual(bad.added.sort(), ['15%', 'Stanford'].sort());
+});
+
+test('rewrite: a fact-changing first answer is redone once; the second answer is checked too', async () => {
+  const { config } = scratchConfig({ claude: CLAUDE, codex: NO_BIN });
+  const text = 'Remote work raised output by 13% at Ctrip in 2015, according to one trial (Bloom et al., 2015). Many firms followed.';
+  const replies = [
+    { text: JSON.stringify({ text: 'Working from home lifted output by 15% at a travel firm in 2015, one trial found LECTERNPROTECTED. Many firms followed.' }) },
+    { text: JSON.stringify({ text: 'One trial found that working from home lifted output by 13% at Ctrip in 2015 LECTERNPROTECTED. Many firms followed.' }) },
+  ];
+  const prompts = [];
+  const complete = async (o) => {
+    prompts.push(o.prompt);
+    const token = (o.prompt.match(/LECTERNPROTECTED[0-9a-f]+X0END/) || [])[0];
+    const r = replies[prompts.length - 1];
+    return { text: r.text.replace('LECTERNPROTECTED', token) };
+  };
+  const r = await runRewrite({ text, config, engine: 'claude-code', complete });
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1], /It dropped: 13%, Ctrip/);
+  assert.match(prompts[1], /It added, which is not allowed: 15%/);
+  assert.equal(r.check.ok, true);
+  assert.equal(r.attempts, 2);
+  assert.match(r.text, /\(Bloom et al\., 2015\)/);
+});
+
+test('quote and cite: exact matches are quoted, paraphrases cited, sources listed; the similarity score then drops', async () => {
+  mock.reset();
+  const { config, store } = scratchConfig({ claude: CLAUDE, codex: NO_BIN });
+  const copied = 'In a nine-month randomised trial at a 16,000-person services firm, call-centre employees assigned to work from home completed 13% more calls, driven by fewer breaks and sick days, and quit at half the rate.';
+  const text = `Working from home: a short essay. ${copied} My own view is different, because my cousin hated it and went back to the office after two weeks of video calls and cold coffee in her kitchen, and she says the quiet made her lonely.`;
+  const first = await Sim.runSimilarityCheck({ text, config, store, lookup: PUBLIC_DNS, options: { web: false } });
+  assert.ok(first.score >= 40, `before ${first.score}`);
+  const fixed = quoteAndCite(first.text, first);
+  assert.ok(fixed.quoted >= 1);
+  const src = first.sources[0];
+  const cite = citationFor(src).inText;
+  assert.ok(fixed.text.includes(`“`) && fixed.text.includes(`” ${cite}`), fixed.text);
+  assert.match(fixed.text, /\nReferences\n/);
+  assert.ok(fixed.text.includes(src.title));
+  // the writer's own words are untouched
+  assert.ok(fixed.text.includes('My own view is different, because my cousin hated it'));
+  assert.equal(fixed.text.replace(/[“”]/g, '').replace(/ \([^()]*\d{4}\)| \([^()]*n\.d\.\)/g, '').split('\nReferences')[0].trim(), text.trim());
+  const second = await Sim.runSimilarityCheck({ text: fixed.text, config, store, lookup: PUBLIC_DNS, options: { web: false, quotes: true } });
+  assert.ok(second.score < first.score, `after ${second.score} vs before ${first.score}`);
+  assert.throws(() => quoteAndCite(text + ' changed', first), /changed since it was checked/);
+});
