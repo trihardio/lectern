@@ -71,6 +71,53 @@ test('store: branch copies the conversation up to a question; old threads still 
   assert.deepEqual(questions(legacy), ['A', 'B']);
 });
 
+test('store: keeping a conversation in the library is a flag that changes nothing else', () => {
+  const store = new Store(tmp());
+  const a = store.saveTurn(null, turn('Q1'));
+  const b = store.saveTurn(null, turn('Q2'));
+  const before = store.getThread(a.id).updatedAt;
+  const saved = store.updateThread(a.id, { saved: true });
+  assert.equal(saved.saved, true);
+  assert.ok(saved.savedAt);
+  assert.equal(saved.updatedAt, before, 'saving does not make it "recent" again');
+  const list = Object.fromEntries(store.listThreads().map((t) => [t.id, t]));
+  assert.equal(list[a.id].saved, true);
+  assert.ok(list[a.id].savedAt);
+  assert.equal(list[b.id].saved, false);
+  assert.equal(list[b.id].savedAt, null);
+  assert.equal(store.renameThread(a.id, 'Renamed').saved, true, 'renaming keeps it saved');
+  assert.ok(!store.getThread(store.branchThread(a.id).id).saved, 'a copy is not saved');
+  store.updateThread(a.id, { saved: 'yes' });
+  assert.equal(store.getThread(a.id).saved, true, 'only a real true or false changes it');
+  const gone = store.updateThread(a.id, { saved: false });
+  assert.ok(!gone.saved && !gone.savedAt);
+});
+
+test('store: a single question can be kept in the library, and a copy of the chat does not carry that over', () => {
+  const store = new Store(tmp());
+  let t = store.saveTurn(null, { question: 'Does sleep help memory?', answer: '## Short answer\n\nSleep helps memory in most adult studies [1], especially for facts learned the same day.\n\nMore detail follows.', papers: [] });
+  const q1 = t.turns[0].id;
+  t = store.saveTurn(t.id, turn('Second question'));
+  const before = store.getThread(t.id).updatedAt;
+  const kept = store.updateTurn(t.id, q1, { saved: true });
+  assert.equal(kept.saved, true);
+  assert.ok(kept.savedAt);
+  assert.equal(store.getThread(t.id).updatedAt, before, 'does not change the recent order');
+  const row = store.listThreads().find((x) => x.id === t.id);
+  assert.equal(row.prompts.length, 1);
+  assert.equal(row.prompts[0].id, q1);
+  assert.equal(row.prompts[0].question, 'Does sleep help memory?');
+  assert.match(row.prompts[0].preview, /^Sleep helps memory in most adult studies/, 'the list shows the opening of the answer, without marks');
+  assert.ok(!/\[1\]|#/.test(row.prompts[0].preview));
+  assert.match(row.prompts[0].preview, /studies, especially/, 'no stray space where a citation mark was');
+  assert.equal(row.saved, false, 'a saved question does not make the whole chat saved');
+  assert.deepEqual(store.getThread(store.branchThread(t.id).id).turns.map((x) => !!x.saved), [false, false], 'a copy keeps nothing in the library');
+  assert.throws(() => store.updateTurn(t.id, 'nope', { saved: true }), /no longer exists/);
+  assert.equal(store.updateTurn('abcdef12', q1, { saved: true }), null, 'a conversation that is gone');
+  assert.equal(store.updateTurn(t.id, q1, { saved: false }).saved, false);
+  assert.equal(store.listThreads().find((x) => x.id === t.id).prompts.length, 0);
+});
+
 test('API: edit and retry add versions; switch, branch and delete routes work', async () => {
   mock.reset();
   const app = createApp({ dataDir: tmp() });
@@ -113,6 +160,13 @@ test('API: edit and retry add versions; switch, branch and delete routes work', 
     assert.equal((await call('PUT', '/api/thread', { id: a.threadId, leaf: 'ffffffffffff' })).status, 404);
     const copy = (await call('POST', '/api/thread/branch', { id: a.threadId, turnId: a.turnId })).json.thread;
     assert.equal(copy.turns.length, 1);
+    assert.equal((await call('PUT', '/api/thread', { id: a.threadId, saved: true })).json.thread.saved, true);
+    assert.equal((await call('GET', '/api/threads')).json.threads.filter((x) => x.saved).length, 1, 'only the saved one is listed as saved');
+    assert.equal((await call('PUT', '/api/thread', { id: a.threadId, saved: 'yes' })).json.thread.saved, true, 'a non-boolean is ignored');
+    assert.equal((await call('PUT', '/api/turn', { thread: a.threadId, id: a.turnId, saved: true })).json.turn.saved, true);
+    assert.equal((await call('GET', '/api/threads')).json.threads.find((x) => x.id === a.threadId).prompts.length, 1);
+    assert.equal((await call('PUT', '/api/turn', { thread: a.threadId, id: 'ffffffffffff', saved: true })).status, 404);
+    await call('PUT', '/api/turn', { thread: a.threadId, id: a.turnId, saved: false });
     t = (await call('DELETE', `/api/turn?thread=${a.threadId}&id=${a.turnId}`)).json.thread;
     assert.deepEqual(t.turns.map((x) => x.id), [a2.turnId], 'the first version and everything under it are gone');
     assert.equal((await call('GET', '/api/threads')).json.threads.length, 2);

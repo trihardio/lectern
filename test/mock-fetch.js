@@ -66,6 +66,10 @@ async function mockFetch(input, init = {}) {
       if (/DOI:"/.test(u.searchParams.get('query') || '')) return jsonResponse(fx.europepmcLite(u.searchParams.get('query')));
       return jsonResponse(fx.europepmc());
     case 'pmc-oa-opendata.s3.amazonaws.com': return bucket(u);
+    case 'example.edu': {
+      const r = fx.checkPage(u.pathname);
+      return new Response(r.body || '', { status: r.status, headers: { 'content-type': r.type || 'text/plain', ...(r.location ? { location: r.location } : {}) } });
+    }
     default:
       return jsonResponse({ error: { message: `unmocked host ${u.hostname}` } }, 599);
   }

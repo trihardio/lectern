@@ -7,7 +7,9 @@ app = defines.get('app')  # noqa: F821  (dmgbuild provides `defines`)
 background = defines.get('background')  # noqa: F821
 app_name = os.path.basename(app)
 
-format = 'UDZO'
+# LZMA-compressed image (macOS 10.15 or later; Lectern needs 13). About a quarter smaller than zlib (UDZO)
+# for the same app. compression_level only applies to zlib/bzip2 formats.
+format = 'ULMO'
 compression_level = 9
 filesystem = 'HFS+'
 files = [app]

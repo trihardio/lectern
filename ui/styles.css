@@ -4,7 +4,7 @@
    nothing else), and pointing at one sweeps a highlighter over the claim it supports, in the colour of
    what the paper found. Study designs keep herbarium folder colours. Type ships with the app
    (ui/fonts, SIL Open Font License): Literata to read, Atkinson Hyperlegible Next for controls,
-   Courier Prime only for label data (numbers, years, samples). The specimen components are in world.css. */
+   Atkinson Hyperlegible Mono only for label data (numbers, years, samples). The specimen components are in world.css. */
 
 :root {
   --desk: #EBEFEA;
@@ -49,7 +49,7 @@
   --hl-plain: rgba(247, 230, 74, .66);
   --serif: "Literata", Charter, "Iowan Old Style", Georgia, serif;
   --sans: "Atkinson Hyperlegible Next", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-  --mono: "Courier Prime", "Courier New", ui-monospace, monospace;
+  --mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --rail: 264px;
   --shelf: clamp(340px, 30vw, 430px);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);       /* arrives and settles */

@@ -186,7 +186,11 @@ const turnOf = async (s, done) => (await s.call('GET', `/api/thread?id=${done.th
 
 test('the window is told which tools and filters exist', async () => {
   let asked = 0;
-  const s = await start({ onDictate: () => { asked++; } });
+  const s = await start({ voice: {
+    start: async () => { asked++; return { ok: true, id: 'session', state: 'starting' }; },
+    status: (id) => ({ ok: true, id, state: 'listening', text: 'A spoken question' }),
+    stop: (id) => ({ ok: id === 'session' }),
+  } });
   try {
     const st = (await s.call('GET', '/api/state')).json;
     assert.deepEqual(st.modes.map((m) => m.id), ['answer', 'review', 'trail', 'claim', 'verify']);
@@ -194,13 +198,16 @@ test('the window is told which tools and filters exist', async () => {
     assert.equal(st.filterOptions.fields.length, 26);
     assert.equal(st.filterOptions.journalTiers[0].min, 0);
     assert.equal(st.dictation, true);
-    assert.deepEqual((await s.call('POST', '/api/dictate', {})).json, { ok: true });
+    assert.deepEqual((await s.call('POST', '/api/voice', { action: 'start', language: 'en-US' })).json, { ok: true, id: 'session', state: 'starting' });
+    assert.equal((await s.call('GET', '/api/voice?id=session')).json.text, 'A spoken question');
+    assert.equal((await s.call('POST', '/api/voice', { action: 'stop', id: 'session' })).json.ok, true);
+    assert.equal((await s.call('POST', '/api/voice', { action: 'invalid' })).json.ok, false);
     assert.equal(asked, 1);
   } finally { await s.stop(); }
   const plain = await start();
   try {
     assert.equal((await plain.call('GET', '/api/state')).json.dictation, false);
-    assert.equal((await plain.call('POST', '/api/dictate', {})).json.ok, false);
+    assert.equal((await plain.call('POST', '/api/voice', { action: 'start' })).json.ok, false);
   } finally { await plain.stop(); }
 });
 

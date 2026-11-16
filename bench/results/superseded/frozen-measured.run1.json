@@ -1,0 +1,14 @@
+{
+ "threshold": 28.000000001,
+ "chosenOn": "dev",
+ "targetDevFpr": 0.05,
+ "frozenAt": "2026-11-15T09:07:19.636Z",
+ "config": {
+  "server/checks/aiscore.js": "9733e82cd6b476f76bc71a84ea4199676d4dd318f37a0f6a2cf183e7881b7396",
+  "server/checks/text.js": "9978db5f14a60dfd68d4ad1fb70818713cb80d955725a400db8c8eb542835c1a",
+  "server/prompts.js": "5573c4e9c56a793200b183b0a3df9201a072dc8bf1b7741342904cf1e5c6e1b4",
+  "bench/metrics.js": "01759198eccf362f18a6e8f66341a62cb34ded61adca2c361772c13210822d1a",
+  "bench/run.js": "50093edef1bb60a0721521ece30fd398fefdf60b9077059e889336b2aabde99a",
+  "bench/split.js": "7beab6824ae87c1801897e619ac18aef74af25546a76c0e666e115da9632ae69"
+ }
+}

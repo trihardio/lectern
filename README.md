@@ -14,7 +14,7 @@ It runs on your Mac or Windows PC. Your conversations and saved papers stay on y
 
 ## Install on a Mac
 
-1. Open the [latest release](../../releases/latest) and download **Lectern-0.1.1.dmg**.
+1. Open the [latest release](../../releases/latest) and download **Lectern-0.1.2.dmg**.
 2. Open the downloaded file and drag **Lectern** onto **Applications**.
 3. Open Lectern from Applications. The first time, macOS says it cannot check the app for
    malicious software. Click **Done**, then open **System Settings > Privacy & Security**, scroll
@@ -25,14 +25,14 @@ It runs on your Mac or Windows PC. Your conversations and saved papers stay on y
 
 ## Install on Windows
 
-1. From the [latest release](../../releases/latest), download **Lectern-0.1.1-windows-x64.zip**.
+1. From the [latest release](../../releases/latest), download **Lectern-0.1.2-windows-x64.zip**.
 2. Right-click the file, choose **Extract All**, and put the **Lectern** folder somewhere that suits you
    (for example your Documents folder).
 3. Open the folder and double-click **Lectern.exe**. The first time, Windows SmartScreen may say it
    protected your PC: click **More info**, then **Run anyway**. You only do this once.
 
    This happens because Lectern is a free app without a paid code-signing certificate. The Windows build
-   is new in 0.1.1 and was built on a Mac; please report anything that does not work.
+   is built on a Mac and has not yet been tested on a Windows PC; please report anything that does not work.
 4. Install **Claude Code** (`irm https://claude.ai/install.ps1 | iex` in PowerShell, then run `claude` once to
    sign in) or **Codex** (`npm install -g @openai/codex`, then `codex login`).
 5. For voice input on Windows, click in the question box and press **Windows key + H**.
@@ -47,6 +47,39 @@ It runs on your Mac or Windows PC. Your conversations and saved papers stay on y
 
 Then type a question, for example *Does remote work improve employee productivity?*, and press Enter.
 
+## Voice input
+
+In the Mac app, click the mic beside the question box. On first use, allow **Lectern Voice**
+to access Microphone and Speech Recognition. If access was denied, enable it in System Settings →
+Privacy & Security. The sound bars appear only after the microphone starts. Click again or press
+Escape to stop. Speech is inserted at the cursor; selected text is replaced. Editing, sending, or
+leaving the composer stops voice input.
+
+Recognition uses Apple's Speech framework, on this Mac when the language supports it and Apple's
+service otherwise. Audio is not saved, and voice input does not consume Claude or ChatGPT credits.
+Sessions end after two minutes. Browser mode uses the browser's speech service; Windows uses Win+H.
+Development builds need Apple's Command Line Tools to compile the small native helper on first use.
+Packaged Mac builds include it and do not need a compiler.
+
+## Writing checks
+
+Open **AI score** in the sidebar for three separate tools. **AI writing** highlights writing patterns
+and gives sentence-level reasons and writing suggestions. Its experimental score is not a validated
+probability of AI authorship. Select a connected review model above the text box; the initial
+selection is GPT-6.1 Sol, and the choice is remembered. **Plagiarism / similarity** compares passages against paper abstracts,
+your saved Library and readable public web pages, then shows source links and matching excerpts.
+A similarity match needs citation review; it is not itself a finding of plagiarism. **Rewrite** rephrases a passage of up to 12,000 characters for clarity and natural expression. Compare it with the original, verify its facts and citations, and keep attribution for borrowed ideas. Rewriting does not guarantee a lower score. You can send the editable rewrite to either check.
+
+Paste text or upload/drop a PDF with a text layer, Word (.docx), OpenDocument (.odt), RTF, HTML,
+Markdown or text file, up to 12 MB. Scanned PDFs need OCR first. Checks cover at most the first
+20,000 words and report when text was shortened. Documents are not saved by Lectern. Model review
+sends text to your selected provider, and similarity searches send distinctive passages to the
+selected databases and web search. Neither tool has access to Turnitin's private submission index.
+
+**Export PDF** on a finished AI writing or similarity report saves the whole report as a PDF: the score, your
+text with its highlights, every flagged sentence or matching source with its excerpts, and what was searched. In the
+desktop app it asks where to save the file; in a browser it opens the print dialog, where you choose Save as PDF.
+
 ## Good to know
 
 - The two rings beside the model name show **Claude** and **GPT / Codex** plan usage. The larger
@@ -59,7 +92,7 @@ Then type a question, for example *Does remote work improve employee productivit
 - Reference details come from the databases, which contain mistakes. Check author names and page
   numbers before you submit.
 - **Cite** on any paper gives APA 7, Harvard, MLA 9, AGLC4, BibTeX or RIS. **Library** keeps the
-  papers you save; export them to Zotero, Mendeley or EndNote.
+  papers you save, the chats you save (press **Save chat** at the top of a conversation, or the bookmark in the sidebar) and single questions (hover a question and press **Save**); export papers to Zotero, Mendeley or EndNote.
 - Follow your course's rules on using AI tools.
 
 ## If something goes wrong

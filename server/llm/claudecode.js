@@ -53,6 +53,8 @@ function makeLineHandler(onEvent, state) {
       for (const b of msg.message.content || []) {
         if (b.type === 'text' && b.text) { state.text += b.text; onEvent({ type: 'delta', text: b.text }); }
       }
+    } else if (msg.type === 'system' && msg.subtype === 'init' && typeof msg.model === 'string') {
+      state.model = msg.model; // the model Claude Code says it is using: the provider's own word, not our request
     } else if (msg.type === 'system' && msg.subtype === 'api_retry') {
       onEvent({ type: 'status', text: `Claude is busy, retrying (attempt ${msg.attempt})` });
     } else if (msg.type === 'result') {
@@ -79,7 +81,7 @@ async function complete(opts) {
 
   let args = buildArgs(opts);
   for (let attempt = 0; attempt < 4; attempt++) {
-    const state = { text: '', streamed: false, result: null };
+    const state = { text: '', streamed: false, result: null, model: null };
     const { code, stderr } = await runCli({
       bin, args, input: opts.prompt, signal,
       dropEnv: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'], // use the signed-in plan, not a stray API key
@@ -87,7 +89,11 @@ async function complete(opts) {
     });
 
     const flag = !state.result && !state.text ? unknownFlag(stderr) : null;
-    if (flag && args.includes(flag)) { args = withoutFlag(args, flag, VALUE_FLAGS.has(flag)); continue; }
+    if (flag && args.includes(flag)) {
+      // A check that must say which model read the text cannot quietly run on another one.
+      if (opts.strictModel && flag === '--model') throw Object.assign(new Error(`This version of Claude Code rejected the model option, so ${opts.model} could not be used. Nothing was read with a different model; update Claude Code or pick another model.`), { code: 'MODEL_REJECTED' });
+      args = withoutFlag(args, flag, VALUE_FLAGS.has(flag)); continue;
+    }
 
     if (state.result && state.result.is_error) throw new Error(explain(state.result, stderr, code));
     if (!state.result && code !== 0) throw new Error(explain(null, stderr, code));
@@ -95,8 +101,10 @@ async function complete(opts) {
     const text = state.text || (state.result && state.result.result) || '';
     if (!state.text && text) onEvent({ type: 'delta', text });
     const u = (state.result && state.result.usage) || {};
+    const used = state.model || (state.result && state.result.modelUsage ? Object.keys(state.result.modelUsage)[0] : null) || null;
     return {
       text,
+      model: used, // null when Claude Code did not say
       usage: {
         input: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0),
         output: u.output_tokens || 0,

@@ -33,16 +33,25 @@ process.stdin.on('end', () => {
   else if (/judge each/i.test(sys)) text = fx.insightsJson((input.match(/^\[\d+\] /gm) || []).length, input);
   else if (/exactly the word/i.test(sys)) text = 'ready';
   else if (/choose figures from research papers/i.test(sys)) text = process.env.FAKE_NO_FIGURES ? '{"figures": []}' : fx.figuresJson(input);
+  else if (/careful writing analyst/i.test(sys)) text = fx.aiReviewJson(input);
+  else if (/plagiarism check find web pages/i.test(sys)) text = fx.SOURCE_HUNT_JSON;
   else if (/claim-citation pairs/i.test(sys)) text = process.env.FAKE_NO_CITATIONS ? '{"items": []}' : fx.VERIFY_JSON;
   // With web search on, cite a web page the way the CLI does: as a markdown link.
   if (args.includes('WebSearch,WebFetch') && text === fx.ANSWER_TEXT) text += ' See [Sample report](https://example.org/report).';
 
+  // Browser checks of cancellation: FAKE_DELAY_MS makes the writing review slow (a plain blocking wait).
+  if (process.env.FAKE_DELAY_MS && /careful writing analyst/i.test(sys)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(process.env.FAKE_DELAY_MS));
   out({ type: 'system', subtype: 'init', model: args[args.indexOf('--model') + 1] || 'default', tools: [] });
   const partial = args.includes('--include-partial-messages');
   if (partial) {
     out({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } }, parent_tool_use_id: null });
     out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Considering the evidence.' } }, parent_tool_use_id: null });
-    for (const c of text.match(/[\s\S]{1,50}/g)) out({ type: 'stream_event', event: { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: c } }, parent_tool_use_id: null });
+    // Browser checks of streaming: FAKE_STREAM_MS pauses between pieces, so the window draws the answer as it arrives.
+    const pause = Number(process.env.FAKE_STREAM_MS) || 0;
+    for (const c of text.match(/[\s\S]{1,50}/g)) {
+      if (pause) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, pause);
+      out({ type: 'stream_event', event: { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: c } }, parent_tool_use_id: null });
+    }
   }
   out({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] }, parent_tool_use_id: null });
   out({ type: 'result', subtype: 'success', is_error: false, result: text, total_cost_usd: 0.01, usage: { input_tokens: 9000, output_tokens: 500 } });

@@ -426,6 +426,7 @@
     'claude-sonnet-5-5': 'Claude Sonnet 5.5', 'claude-haiku-5-5': 'Claude Haiku 5.5',
     opus: 'Opus (latest)', sonnet: 'Sonnet (latest)', haiku: 'Haiku (latest)', fable: 'Fable (latest)',
     'gpt-6-astra': 'GPT-6 Astra', 'gpt-6.1-sol': 'GPT-6.1 Sol', 'gpt-6.1-terra': 'GPT-6.1 Terra', 'gpt-6-luna': 'GPT-6 Luna',
+    'gpt-6-sol': 'GPT-6 Sol', 'gpt-5.6-sol': 'GPT-5.6 Sol', 'gpt-5.6-terra': 'GPT-5.6 Terra', 'gpt-5.6-luna': 'GPT-5.6 Luna',
   };
   const prettyModel = (id, engine) => MODEL_NAMES[id] || id || (engine === 'codex' ? 'Codex default' : 'Default');
   const EFFORT_LABEL = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra', max: 'Max' };
@@ -460,6 +461,7 @@
     referencesOpen: false,
     referenceTurn: null,
     libraryQuery: '',
+    libraryTab: 'papers', // 'papers' or 'chats'
     editing: null, // id of the question being edited in place
     renaming: null, // id of the conversation being renamed in the sidebar
   };
@@ -589,14 +591,51 @@
     return svg;
   }
 
+  // Pointing at a ring shows its numbers at once (the click still opens the full details).
+  const usageCard = h('div', { class: 'usage-card', role: 'tooltip', hidden: true });
+  let usageCardFor = null; // the provider id whose numbers are showing
+  function hideUsageCard() { usageCard.hidden = true; usageCardFor = null; }
+  function showUsageCard(button, id, label) {
+    const data = S.usage[id];
+    const time = (iso, long) => new Date(iso).toLocaleString([], long ? { weekday: 'short', hour: 'numeric', minute: '2-digit' } : { hour: 'numeric', minute: '2-digit' });
+    const row = (name, title, long) => {
+      const w = currentUsageWindow(id, name);
+      return h('div', { class: 'uc-row' },
+        h('span', { class: 'uc-name' }, title),
+        h('b', { class: 'uc-pct' }, w ? `${Math.round(w.usedPercent)}%` : 'n/a'),
+        h('span', { class: 'uc-bar', 'aria-hidden': 'true' }, h('i', { style: `width:${w ? Math.min(100, Math.max(0, w.usedPercent)) : 0}%` })),
+        h('small', null, w ? `${Math.round(100 - w.usedPercent)}% left${w.resetsAt ? ` · resets ${time(w.resetsAt, long)}` : ''}` : 'No reading yet'));
+    };
+    usageCard.className = `usage-card usage-${id}`;
+    fill(usageCard,
+      h('div', { class: 'uc-head' }, `${label}${id === 'codex' ? ' / Codex' : ''} plan usage`),
+      row('weekly', 'This week', true), row('fiveHour', 'Last 5 hours', false),
+      h('small', { class: 'uc-foot' }, data?.stale ? 'Last known reading. Click for details.' : 'Click for details.'));
+    if (!usageCard.isConnected) document.body.append(usageCard);
+    usageCard.hidden = false;
+    usageCardFor = id;
+    const r = button.getBoundingClientRect();
+    const w = usageCard.offsetWidth, hgt = usageCard.offsetHeight;
+    usageCard.style.left = `${Math.max(10, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 10))}px`;
+    usageCard.style.top = `${r.top - hgt - 10 < 8 ? r.bottom + 10 : r.top - hgt - 10}px`;
+  }
+  document.addEventListener('scroll', hideUsageCard, true);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideUsageCard(); });
+
   function renderUsageMeters() {
     return h('div', { class: 'usage-meters', role: 'group', 'aria-label': 'Plan usage' },
-      USAGE_PROVIDERS.map(([id, label]) => h('button', {
-        type: 'button', class: `usage-meter usage-${id}${S.usage[id]?.stale ? ' is-stale' : ''}`,
-        title: `${usageDescription(id, label)}. Click for details.`,
-        'aria-label': `${usageDescription(id, label)}. Show usage details`, 'aria-haspopup': 'dialog',
-        onclick: () => openUsage(id, label),
-      }, usageRing(id), h('span', { class: 'usage-label' }, label))));
+      USAGE_PROVIDERS.map(([id, label]) => {
+        const btn = h('button', {
+          type: 'button', class: `usage-meter usage-${id}${S.usage[id]?.stale ? ' is-stale' : ''}`,
+          'aria-label': `${usageDescription(id, label)}. Show usage details`, 'aria-haspopup': 'dialog',
+          onclick: () => { hideUsageCard(); openUsage(id, label); },
+          onmouseenter: () => showUsageCard(btn, id, label),
+          onmouseleave: hideUsageCard,
+          onfocus: () => showUsageCard(btn, id, label),
+          onblur: hideUsageCard,
+        }, usageRing(id), h('span', { class: 'usage-label' }, label));
+        return btn;
+      }));
   }
 
   async function refreshUsage() {
@@ -612,8 +651,11 @@
       const focused = old && [...old.children].indexOf(document.activeElement);
       if (old) {
         const next = renderUsageMeters();
+        const showing = usageCardFor; // a card being read stays up and shows the fresh numbers
         old.replaceWith(next);
         if (focused >= 0) next.children[focused]?.focus();
+        const at = USAGE_PROVIDERS.findIndex(([id]) => id === showing);
+        if (showing && at >= 0 && !usageCard.hidden) showUsageCard(next.children[at], showing, USAGE_PROVIDERS[at][1]);
       }
       if (redrawUsageDialog) redrawUsageDialog();
     })().finally(() => { usageRequest = null; });
@@ -683,10 +725,12 @@
 
     const rail = h('aside', { class: 'rail' },
       h('div', { class: 'wordmark' }, h('span', null, 'Lectern')),
-      h('button', { class: 'btn new', onclick: goHome }, 'New question'),
+      h('button', { class: 'btn new', onclick: newQuestion, title: `New question (${NEW_KEYS})`, 'aria-keyshortcuts': IS_MAC ? 'Meta+N' : 'Control+N' }, 'New question', h('kbd', { class: 'kbd', 'aria-hidden': 'true' }, NEW_KEYS)),
       h('nav', { class: 'rail-nav' },
-        h('button', { class: `rail-link${S.view === 'library' ? ' on' : ''}`, onclick: () => { stopDictation(); S.view = 'library'; render(); } },
-          'Library', h('span', { class: 'count' }, S.library.length || ''))),
+        h('button', { class: `rail-link${S.view === 'library' ? ' on' : ''}`, onclick: openLibrary, title: `Library (${mod('L')})`, 'aria-keyshortcuts': IS_MAC ? 'Meta+L' : 'Control+L' },
+          'Library', h('span', { class: 'rail-keys' }, h('span', { class: 'count' }, (S.library.length + S.threads.filter((x) => x.saved).length + S.threads.reduce((n, x) => n + (x.prompts || []).length, 0)) || ''), h('kbd', { class: 'kbd', 'aria-hidden': 'true' }, mod('L')))),
+        h('button', { class: `rail-link${S.view === 'score' ? ' on' : ''}`, onclick: openScore, title: `AI score (${mod('K')})`, 'aria-keyshortcuts': IS_MAC ? 'Meta+K' : 'Control+K' },
+          'AI score', h('span', { class: 'rail-keys' }, h('kbd', { class: 'kbd', 'aria-hidden': 'true' }, mod('K'))))),
       h('div', { class: 'rail-label' }, 'Recent'),
       h('ul', { class: 'history' },
         liveElsewhere && h('li', null,
@@ -698,7 +742,10 @@
             ? renameField(t)
             : [
               h('button', { class: 'history-item', title: t.title, onclick: () => openThread(t.id) }, t.title),
+              t.saved && h('span', { class: 'saved-mark', title: 'In your library', 'aria-hidden': 'true' }, icon('bookmark')),
               h('span', { class: 'history-acts' },
+                h('button', { class: `history-act save${t.saved ? ' on' : ''}`, title: t.saved ? 'Remove from library' : 'Save to library', 'aria-pressed': String(!!t.saved),
+                  'aria-label': `${t.saved ? 'Remove' : 'Save'} "${t.title}" ${t.saved ? 'from' : 'to'} the library`, onclick: () => setChatSaved(t.id, !t.saved) }, icon('bookmark')),
                 h('button', { class: 'history-act', title: 'Rename', 'aria-label': `Rename "${t.title}"`, onclick: () => { S.renaming = t.id; renderRailOnly(); } }, '✎'),
                 h('button', { class: 'history-act', title: 'Duplicate', 'aria-label': `Duplicate "${t.title}"`, onclick: () => duplicateThread(t) }, '⧉'),
                 h('button', { class: 'history-act del', title: 'Delete', 'aria-label': `Delete "${t.title}"`, onclick: () => deleteThread(t) }, '×')),
@@ -723,6 +770,13 @@
     stop: ['M7 7h10v10H7z'],
     plus: ['M12 5v14', 'M5 12h14'],
     check: ['M5 12.5 10 17.5 19 7'],
+    eye: ['M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z', 'M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z'],
+    eyeoff: ['M3 3l18 18', 'M10.6 6.2A9.6 9.6 0 0 1 12 6c6.4 0 10 6 10 6a17 17 0 0 1-3.2 3.9', 'M6.5 7.6C3.9 9.2 2 12 2 12s3.6 6 10 6c1.4 0 2.7-.3 3.8-.8', 'M9.9 9.9a2.5 2.5 0 0 0 3.2 3.2'],
+    wave: ['M4 10v4', 'M8 7v10', 'M12 4v16', 'M16 7v10', 'M20 10v4'],
+    bookmark: ['M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z'],
+    chev: ['M7 10l5 5 5-5'],
+    list: ['M9 6h11', 'M9 12h11', 'M9 18h11', 'M4.5 6h.01', 'M4.5 12h.01', 'M4.5 18h.01'],
+    trash: ['M4 7h16', 'M9 7V4.5h6V7', 'M6.5 7l1 12.5h9l1-12.5', 'M10 11v5', 'M14 11v5'],
     right: ['M9 6l6 6-6 6'],
     left: ['M15 6l-6 6 6 6'],
     globe: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M3 12h18', 'M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z'],
@@ -773,8 +827,12 @@
 
     const ta = h('textarea', {
       class: 'ask', rows: '1', placeholder, 'aria-label': placeholder, maxlength: mode.maxInput,
-      oninput: (e) => { if (e.isTrusted) stopDictation(); c.draft = e.target.value; grow(e.target); sendBtn.disabled = !e.target.value.trim() && !running; },
+      oninput: (e) => {
+        if (e.isTrusted && voiceOn()) stopDictation();
+        c.draft = e.target.value; grow(e.target); sendBtn.disabled = !e.target.value.trim() && !running;
+      },
       onkeydown: (e) => {
+        if (voiceOn() && !['Shift', 'Meta', 'Control', 'Alt', 'CapsLock', 'Fn'].includes(e.key)) stopDictation();
         if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); }
       },
     });
@@ -791,10 +849,12 @@
       : h('button', { type: 'submit', class: 'send', 'aria-label': 'Ask', title: 'Ask (Enter)', disabled: !c.draft.trim() || null }, icon('send'));
 
     const micBtn = h('button', {
-      type: 'button', class: `mic${listening ? ' on' : ''}`, 'aria-pressed': String(!!listening),
-      'aria-label': listening ? 'Stop voice input' : 'Speak your question', title: S.app.dictation ? 'Dictate (uses macOS Dictation)' : 'Speak your question',
+      type: 'button', class: `mic${voiceActive() ? ' on' : ''}`, 'aria-pressed': String(voiceOn()),
+      'aria-busy': String(voiceOn() && !voiceActive()), 'aria-label': voiceLabel(), title: voiceLabel(),
+      onmousedown: (e) => e.preventDefault(),
       onclick: () => toggleDictation(),
-    }, icon('mic'));
+    }, icon(voiceActive() ? 'wave' : 'mic'));
+    micBtn._shown = voiceActive(); // a rebuilt button already shows the right symbol, so it does not pop again
 
     const form = h('form', { class: 'composer', onsubmit: (e) => { e.preventDefault(); submit(); } },
       h('div', { class: 'composer-main' }, ta, micBtn, sendBtn));
@@ -926,57 +986,139 @@
   }
 
   // ---- voice input
-  // In the desktop app the server asks macOS to start Dictation in the focused box (the browser
-  // engine inside Electron has no speech service of its own). In a browser, the browser's own
-  // speech recognition is used where it exists (Chrome, Edge, Safari).
-  let listening = null;
-  function stopDictation() {
-    if (!listening) return;
-    const rec = listening;
-    listening = null;
-    rec.abort();
+  // A session owns its original textarea. Late callbacks cannot overwrite another draft.
+  // Native recognition reports actual startup, transcripts, permission failures and end.
+  let voiceSession = null;
+  const voiceStartHint = 'Starting voice input… Allow Lectern Voice if macOS asks for microphone or speech recognition access.';
+  const voiceOn = () => !!voiceSession;
+  const voiceActive = () => voiceSession?.state === 'listening';
+  const voiceLabel = () => !voiceOn() ? 'Speak your question' : voiceActive() ? 'Stop voice input' : 'Cancel voice input startup';
+  const askBox = () => $('.dock .ask') || $('.ask');
+
+  function paintMic() {
+    const on = voiceActive();
+    if ((on || !voiceOn()) && $('#toast')?.textContent === voiceStartHint) $('#toast').classList.remove('show');
     document.querySelectorAll('.mic').forEach((b) => {
-      b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', 'Speak your question');
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(voiceOn()));
+      b.setAttribute('aria-busy', String(voiceOn() && !on));
+      b.setAttribute('aria-label', voiceLabel());
+      b.title = voiceLabel();
+      if (b._shown !== on) {
+        if (b._shown !== undefined) Motion.play(b, 'mic-pop', 320);
+        b._shown = on;
+        fill(b, icon(on ? 'wave' : 'mic'));
+      }
     });
   }
-  function toggleDictation() {
-    const box = () => $('.dock .ask') || $('.ask');
-    if (S.app.dictation) {
-      box()?.focus();
-      api('POST', '/api/dictate', {})
-        .then((r) => { if (!r.ok) toast(r.error || 'Dictation did not start. Turn it on in System Settings, Keyboard, Dictation.'); })
-        .catch((e) => toast(e.message));
-      return;
+  function stopDictation() {
+    const session = voiceSession;
+    voiceSession = null;
+    if (session) {
+      clearTimeout(session.timer);
+      try { session.rec?.abort(); } catch { /* Already ended. */ }
+      if (session.id) api('POST', '/api/voice', { action: 'stop', id: session.id }).catch(() => {});
     }
-    if (listening) { stopDictation(); return; }
+    paintMic();
+  }
+  function voiceText(session, text) {
+    if (voiceSession !== session) return;
+    if (!session.box.isConnected) { stopDictation(); return; }
+    const value = (session.before + text + session.after).slice(0, modeInfo(S.compose.mode).maxInput);
+    session.box.value = value;
+    session.box.dispatchEvent(new Event('input'));
+  }
+  async function pollVoice(session) {
+    if (voiceSession !== session) return;
+    try {
+      const result = await api('GET', `/api/voice?id=${encodeURIComponent(session.id)}`);
+      if (voiceSession !== session) return;
+      // An empty startup response must not delete the selected text.
+      if (result.text) voiceText(session, result.text);
+      if (!result.ok || result.state === 'error') throw new Error(result.error || 'Voice input stopped. Try again.');
+      if (result.state === 'stopped') { stopDictation(); return; }
+      session.state = result.state;
+      paintMic();
+      session.timer = setTimeout(() => pollVoice(session), 200);
+    } catch (e) {
+      if (voiceSession !== session) return;
+      stopDictation(); toast(e.message);
+    }
+  }
+  async function toggleDictation() {
+    if (voiceOn()) { stopDictation(); return; }
+    const box = askBox();
+    if (!box) return;
+    box.focus();
     if (/Electron/i.test(navigator.userAgent) && /Windows/i.test(navigator.userAgent)) {
-      box()?.focus();
       toast('Press Windows key + H to dictate into the box.');
       return;
     }
     const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Speech) { toast('This browser has no voice input. On a Mac, click in the box and press the Dictation key.'); return; }
-    const before = S.compose.draft ? `${S.compose.draft.trimEnd()} ` : '';
-    const rec = new Speech();
-    rec.lang = navigator.language || 'en-US';
-    rec.interimResults = true;
-    rec.continuous = true;
-    const mark = (on) => document.querySelectorAll('.mic').forEach((b) => { b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.setAttribute('aria-label', on ? 'Stop voice input' : 'Speak your question'); });
-    rec.onresult = (e) => {
-      if (listening !== rec) return;
-      let said = '';
-      for (const r of e.results) said += r[0].transcript;
-      S.compose.draft = (before + said).slice(0, modeInfo(S.compose.mode).maxInput);
-      const ta = box();
-      if (ta) { ta.value = S.compose.draft; ta.dispatchEvent(new Event('input')); }
+    if (!S.app.dictation && (!Speech || /Electron/i.test(navigator.userAgent))) {
+      toast('Voice input is unavailable here. Use your system’s dictation shortcut or open Lectern in a browser with speech recognition.');
+      return;
+    }
+    const start = box.selectionStart ?? box.value.length;
+    const end = box.selectionEnd ?? start;
+    const prefix = box.value.slice(0, start);
+    const suffix = box.value.slice(end);
+    const session = voiceSession = {
+      box, state: 'starting',
+      before: prefix + (prefix && !/\s$/.test(prefix) ? ' ' : ''),
+      after: (suffix && !/^\s/.test(suffix) ? ' ' : '') + suffix,
     };
-    rec.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') toast('The microphone was refused. Allow it for this page in the browser\'s site settings.');
-      else if (e.error !== 'aborted' && e.error !== 'no-speech') toast(`Voice input stopped (${e.error}).`);
-    };
-    rec.onend = () => { if (listening === rec) { listening = null; mark(false); } };
-    try { rec.start(); listening = rec; mark(true); } catch (e) { toast(`Voice input could not start: ${e.message}`); }
+    paintMic();
+    if (S.app.dictation) {
+      toast(voiceStartHint);
+      try {
+        const result = await api('POST', '/api/voice', { action: 'start', language: navigator.language || 'en-US' });
+        session.id = result.id;
+        if (voiceSession !== session) {
+          if (result.id) await api('POST', '/api/voice', { action: 'stop', id: result.id });
+          return;
+        }
+        if (!result.ok || !result.id) throw new Error(result.error || 'Voice input could not start.');
+        pollVoice(session);
+      } catch (e) {
+        if (voiceSession === session) { stopDictation(); toast(e.message); }
+      }
+      return;
+    }
+    try {
+      const rec = session.rec = new Speech();
+      rec.lang = navigator.language || 'en-US';
+      rec.interimResults = true;
+      rec.continuous = true;
+      rec.onstart = () => {
+        if (voiceSession !== session) { try { rec.abort(); } catch {} return; }
+        session.state = 'listening'; paintMic();
+      };
+      rec.onresult = (e) => {
+        if (voiceSession !== session) return;
+        const text = Array.from(e.results, (r) => r[0].transcript.trim()).join(' ');
+        voiceText(session, text);
+      };
+      rec.onerror = (e) => {
+        if (voiceSession !== session) return;
+        const why = {
+          'not-allowed': 'Allow microphone access for this page in your browser’s site settings.',
+          'service-not-allowed': 'Speech recognition is blocked by this browser. Check its settings or use the Mac app.',
+          'audio-capture': 'No microphone was found. Check your sound input settings.',
+          network: 'The speech service could not connect. Check your internet connection or use the Mac app.',
+          'no-speech': 'No speech was heard. Check your microphone and try again.',
+        }[e.error];
+        stopDictation();
+        if (e.error !== 'aborted') toast(why || `Voice input stopped (${e.error}).`);
+      };
+      rec.onend = () => { if (voiceSession === session) { voiceSession = null; paintMic(); } };
+      rec.start();
+    } catch (e) {
+      stopDictation(); toast(`Voice input could not start: ${e.message}`);
+    }
   }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && voiceOn()) stopDictation(); });
+  window.addEventListener('pagehide', stopDictation);
 
   // ---- filters
   function openFilters() {
@@ -1223,8 +1365,9 @@
     const toolbar = h('div', { class: 'reference-toolbar', hidden: !st.toolsOpen },
       h('input', { class: 'input', type: 'search', placeholder: 'Filter references', 'aria-label': 'Filter references', value: st.query || '', oninput: (e) => { st.query = e.target.value; draw(); } }),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.citedOnly, onchange: (e) => { st.citedOnly = e.target.checked; draw(); } }), 'Cited only'),
-      h('select', { class: 'select', 'aria-label': 'Sort papers', onchange: (e) => { st.sort = e.target.value; draw(); } },
-        [['relevance', 'Most relevant'], ['cited', 'Most cited'], ['newest', 'Newest']].map(([v, t]) => h('option', { value: v, selected: st.sort === v }, t))));
+      picker({ label: 'Sort papers', cls: 'sort', value: st.sort,
+        options: [['relevance', 'Most relevant'], ['cited', 'Most cited'], ['newest', 'Newest']].map(([value, label]) => ({ value, label })),
+        onChange: (v) => { st.sort = v; draw(); } }));
     const filterBtn = h('button', { class: 'btn quiet small', type: 'button', 'aria-expanded': String(!!st.toolsOpen), onclick: () => {
       st.toolsOpen = !st.toolsOpen; toolbar.hidden = !st.toolsOpen; filterBtn.setAttribute('aria-expanded', String(st.toolsOpen));
       if (st.toolsOpen) toolbar.querySelector('input').focus();
@@ -1278,9 +1421,9 @@
     fill(panel,
       h('div', { class: 'references-panel-head' }, h('h2', { id: 'references-heading' }, 'References'),
         h('button', { type: 'button', class: 'btn quiet small', 'aria-label': 'Close references', onclick: closeReferences }, icon('close'))),
-      turns.length > 1 && h('select', { class: 'select reference-turn', 'aria-label': 'References for question', onchange: (e) => {
-        S.referenceTurn = turns[Number(e.target.value)]; refreshReferences();
-      } }, turns.map((t, i) => h('option', { value: i, selected: t === turn }, `${i + 1}. ${t.question}`))),
+      turns.length > 1 && picker({ label: 'References for question', cls: 'reference-turn',
+        value: turns.indexOf(turn), options: turns.map((t, i) => ({ value: i, tag: String(i + 1).padStart(2, '0'), label: t.question })),
+        onChange: (v) => { S.referenceTurn = turns[Number(v)]; refreshReferences(); } }),
       turn && h('p', { class: 'reference-question', title: turn.question }, turn.question),
       turn ? buildShelf(turn) : h('p', { class: 'shelf-empty' }, 'References will appear as papers are found.'));
     panel._turn = turn;
@@ -1325,10 +1468,23 @@
     }
   }
 
+  /**
+   * Light a paper, or clear it. Clearing waits a moment and is cancelled by the next lighting, so moving the
+   * pointer or the keyboard focus from a stamp to its row in References (or back) never blinks the highlight off
+   * and on again. Lighting is immediate and harmless to repeat.
+   */
+  let clearTimer = 0;
+  function lightPaper(turn, n) {
+    clearTimeout(clearTimer);
+    if (n == null) clearTimer = setTimeout(() => highlightPaper(turn, null), 40); // just long enough to bridge stamp -> row
+    else highlightPaper(turn, n);
+  }
+
   function focusPaper(turn, n) {
     const st = shelfState(turn);
+    const unchanged = S.referencesOpen && $('#references-panel')?._turn === turn && !st.paperNs && !st.query && !st.citedOnly;
     st.paperNs = null; st.query = ''; st.citedOnly = false;
-    openReferences(turn);
+    if (!unchanged) openReferences(turn); // already showing this paper list: just go to the row, no redraw
     const row = $(`#references-panel .paper[data-n="${n}"]`);
     if (!row) return;
     const list = row.closest('.papers');
@@ -1572,6 +1728,69 @@
     if (notes.length) { el.classList.add('has-margin'); el.append(...notes); }
   }
 
+  /**
+   * A small arrow at the right of a heading that hides or shows what belongs under it. Everything starts
+   * open. Which ones the reader closed is kept for this conversation, so a redraw (streaming, a new
+   * version) does not reopen them. `content()` lists the elements under the heading, `notes` is the
+   * margin of the answer, whose labels sit level with their paragraphs and must hide with them.
+   */
+  const FOLDED = new Set();
+  function addFold(turn, heading, key, content, notes) {
+    const full = `${turn.id || 'live'}|${key}`;
+    const label = heading.textContent.trim();
+    const btn = h('button', { type: 'button', class: 'fold', 'aria-label': `Hide ${label}`, title: 'Hide' }, icon('chev'));
+    const apply = (folded) => {
+      btn.setAttribute('aria-expanded', String(!folded));
+      btn.setAttribute('aria-label', `${folded ? 'Show' : 'Hide'} ${label}`);
+      btn.title = folded ? 'Show' : 'Hide';
+      for (const el of content()) {
+        el.hidden = folded;
+        if (notes && el.style.gridRow) notes.filter((n) => n.style.gridRow === el.style.gridRow).forEach((n) => { n.hidden = folded; });
+      }
+    };
+    btn.addEventListener('click', () => {
+      const folded = !FOLDED.has(full);
+      if (folded) FOLDED.add(full); else FOLDED.delete(full);
+      apply(folded);
+    });
+    heading.append(btn);
+    apply(FOLDED.has(full));
+  }
+
+  /** The headings of the answer text (and what sits under each, up to the next heading). */
+  function foldAnswer(turn, el) {
+    const seen = new Map();
+    const notes = [...el.querySelectorAll(':scope > .margin-note')];
+    for (const hd of el.querySelectorAll(':scope > h2, :scope > h3, :scope > h4')) {
+      const level = Number(hd.tagName[1]);
+      const base = hd.textContent.trim().toLowerCase().slice(0, 60);
+      const n = (seen.get(base) || 0) + 1; seen.set(base, n);
+      addFold(turn, hd, `a:${base}:${n}`, () => {
+        const out = [];
+        for (let x = hd.nextElementSibling; x && !(/^H[2-4]$/.test(x.tagName) && Number(x.tagName[1]) <= level); x = x.nextElementSibling) {
+          if (!x.classList.contains('margin-note')) out.push(x);
+        }
+        return out;
+      }, notes);
+    }
+  }
+
+  /** The evidence views: the comparison, each chart, the coverage map. */
+  function foldEvidence(turn, el) {
+    for (const box of el.querySelectorAll('.evidence-heading')) {
+      const kind = box.closest('[data-evidence-section]')?.dataset.evidenceSection || 'evidence';
+      addFold(turn, box.querySelector('h3'), `e:${kind}`, () => {
+        const out = box.querySelector('p') ? [box.querySelector('p')] : [];
+        for (let x = box.nextElementSibling; x; x = x.nextElementSibling) out.push(x);
+        return out;
+      });
+    }
+    el.querySelectorAll('.evidence-chart').forEach((fig, i) => {
+      const cap = fig.querySelector('figcaption');
+      addFold(turn, cap, `e:chart:${i}`, () => [...fig.children].filter((c) => c !== cap));
+    });
+  }
+
   function buildAnswer(turn) {
     const el = h('div', { class: 'answer answer-body', 'data-evidence-section': 'synthesis', tabindex: '-1', html: answerParts(turn).body.html });
     markClaims(el);
@@ -1588,6 +1807,7 @@
       });
       addMargin(turn, el);
     }
+    foldAnswer(turn, el);
     return el;
   }
 
@@ -1608,6 +1828,7 @@
       },
     });
     // the comparison, charts and map rise in when the readings of the abstracts first arrive
+    foldEvidence(turn, el);
     const a = Motion.age(turn, 'evidence', window.LecternEvidenceUI.plan(turn).readings.length > 0);
     return a == null ? el : Motion.enter(el, 0, a);
   }
@@ -1625,6 +1846,7 @@
     return h('nav', { class: 'answer-nav', 'aria-label': 'Explore this answer' }, items.map(([key, label]) =>
       h('button', { type: 'button', onclick: (e) => {
         const section = e.currentTarget.closest('.turn').querySelector(`[data-evidence-section="${key}"]`);
+        section?.querySelectorAll('.fold[aria-expanded="false"]').forEach((b) => b.click()); // a closed section opens when you jump to it
         if (section) { section.scrollIntoView({ block: 'start', behavior: 'smooth' }); section.focus({ preventScroll: true }); }
       } }, label)));
   }
@@ -1768,11 +1990,14 @@
         },
       }, 'Show all'),
       saved && h('div', { class: 'prompt-bar' },
+        turn.saved && h('span', { class: 'prompt-saved', title: 'This question is in your library' }, icon('bookmark'), 'Saved'),
         vers.length > 1 && h('span', { class: 'versions', role: 'group', 'aria-label': 'Versions of this question' },
           h('button', { class: 'icon-btn', 'aria-label': 'Previous version', disabled: i === 0 || null, onclick: () => showVersion(vers[i - 1]) }, '‹'),
           h('span', { 'aria-live': 'polite' }, `${i + 1} / ${vers.length}`),
           h('button', { class: 'icon-btn', 'aria-label': 'Next version', disabled: i === vers.length - 1 || null, onclick: () => showVersion(vers[i + 1]) }, '›')),
         h('span', { class: 'prompt-actions' },
+          h('button', { class: `icon-btn save-prompt${turn.saved ? ' on' : ''}`, 'aria-pressed': String(!!turn.saved), title: turn.saved ? 'Remove this question from your library' : 'Keep this question and its answer in your library',
+            onclick: () => setPromptSaved(t.id, turn.id, !turn.saved) }, turn.saved ? 'Unsave' : 'Save'),
           h('button', { class: 'icon-btn', disabled: busy || null, title: 'Edit this question and ask again. The current answer is kept as an earlier version.', onclick: () => { S.editing = turn.id; render(); } }, 'Edit'),
           h('button', { class: 'icon-btn', onclick: () => copyRich({ text: turn.question }, 'Question copied') }, 'Copy'),
           h('button', { class: 'icon-btn', disabled: busy || null, title: 'Start a new conversation with everything up to here', onclick: () => branchFrom(turn) }, 'New chat from here'),
@@ -1824,8 +2049,7 @@
     view.el._turn = turn;
     const citeChip = (e) => e.target.closest('button.cite[data-n]');
     const specimen = (e) => e.target.closest('button.specimen[data-n]');
-    let pointed = null; // the paper whose claims are lit, so moving within one stamp does not re-sweep
-    const point = (n) => { if (n !== pointed) { pointed = n; highlightPaper(turn, n); } };
+    const point = (n) => lightPaper(turn, n);
     view.el.addEventListener('click', (e) => {
       const chip = citeChip(e) || specimen(e);
       if (chip) focusPaper(turn, Number(chip.dataset.n));
@@ -1879,13 +2103,26 @@
     const views = turns.map(buildTurn);
     if (showLive) { S.liveView = buildTurn(S.live); views.push(S.liveView); } else S.liveView = null;
     const panel = h('aside', { id: 'references-panel', class: 'references-panel', hidden: !S.referencesOpen, 'aria-labelledby': 'references-heading' });
-    panel.addEventListener('mouseover', (e) => highlightPaper(S.referenceTurn, e.target.closest('.paper[data-n]')?.dataset.n));
-    panel.addEventListener('mouseleave', () => highlightPaper(S.referenceTurn, null));
-    panel.addEventListener('focusin', (e) => highlightPaper(S.referenceTurn, e.target.closest('.paper[data-n]')?.dataset.n));
-    panel.addEventListener('focusout', () => highlightPaper(S.referenceTurn, null));
+    panel.addEventListener('mouseover', (e) => lightPaper(S.referenceTurn, e.target.closest('.paper[data-n]')?.dataset.n));
+    panel.addEventListener('mouseleave', () => lightPaper(S.referenceTurn, null));
+    panel.addEventListener('focusin', (e) => lightPaper(S.referenceTurn, e.target.closest('.paper[data-n]')?.dataset.n));
+    panel.addEventListener('focusout', () => lightPaper(S.referenceTurn, null));
+    // With more than one question on the page, a button jumps to any of them.
+    const jump = views.length > 1 ? picker({
+      label: 'Jump to a question', cls: 'jump', always: true, value: views.length - 1,
+      options: views.map((v, i) => ({ value: i, tag: String(i + 1).padStart(2, '0'), label: v.turn.question })),
+      face: (o) => [icon('list'), h('span', { class: 'picker-value' }, 'Questions'), h('span', { class: 'picker-tag' }, `${Number(o.value) + 1}/${views.length}`)],
+      onChange: (i) => {
+        stopStick(); // do not let "stay at the end" pull the page back
+        const el = document.querySelectorAll('.thread > .turn')[Number(i)];
+        if (el) el.scrollIntoView({ block: 'start', behavior: Motion.calm() ? 'instant' : 'smooth' });
+      },
+    }) : null;
     return h('section', { class: 'thread-workspace' },
       h('header', { class: 'thread-topbar' },
         h('span', { class: 'thread-title', title: t.title }, t.title),
+        saveChatButton(t),
+        jump,
         h('button', { type: 'button', class: 'btn references-toggle', 'aria-controls': 'references-panel', 'aria-expanded': String(S.referencesOpen), onclick: () => {
           if (S.referencesOpen) closeReferences(); else openReferences(null, true);
         } }, icon('review'), 'References')),
@@ -1897,23 +2134,155 @@
   }
 
   // ------------------------------------------------------------------ library
+  // ---- keeping a conversation in the library
+  async function setChatSaved(id, saved) {
+    try {
+      const res = await api('PUT', '/api/thread', { id, saved });
+      const row = S.threads.find((x) => x.id === id);
+      if (row) { row.saved = !!res.thread.saved; row.savedAt = res.thread.savedAt || null; }
+      if (S.thread && S.thread.id === id) { S.thread.saved = !!res.thread.saved; S.thread.savedAt = res.thread.savedAt || null; }
+      renderRailOnly();
+      const btn = $('.save-chat');
+      if (btn && S.thread) btn.replaceWith(saveChatButton(S.thread)); // only the button changes: the page is not rebuilt
+      if (S.view === 'library') render();
+      toast(saved ? 'Chat saved to your library' : 'Chat removed from your library');
+    } catch (e) { toast(e.message); }
+  }
+  /** Keep one question and its answer in the library (or take it out). Works from the chat or from the Library list. */
+  async function setPromptSaved(threadId, turnId, saved) {
+    try {
+      const res = await api('PUT', '/api/turn', { thread: threadId, id: turnId, saved });
+      const turn = S.thread && S.thread.id === threadId ? S.thread.turns.find((x) => x.id === turnId) : null;
+      if (turn) { turn.saved = !!res.turn.saved; turn.savedAt = res.turn.savedAt || null; }
+      await refreshThreads();
+      renderRailOnly();
+      const art = turn ? [...document.querySelectorAll('.turn')].find((el) => el._turn === turn) : null;
+      if (art) art.querySelector('.prompt')?.replaceWith(buildPrompt(turn)); // only this question's bar changes
+      if (S.view === 'library') render();
+      toast(saved ? 'Question saved to your library' : 'Question removed from your library');
+    } catch (e) { toast(e.message); }
+  }
+
+  /** Open a chat at one saved question: its branch is shown and the page scrolls to it. */
+  async function openPrompt(threadId, turnId) {
+    stopDictation();
+    try {
+      const t = S.live && S.live.thread.id === threadId ? S.live.thread : await api('GET', `/api/thread?id=${encodeURIComponent(threadId)}`);
+      if (!t.turns.some((x) => x.id === turnId)) throw new Error('That question no longer exists.');
+      if (!pathTo(t, t.leaf).some((x) => x.id === turnId)) { // it is on another version: show that one
+        t.leaf = newestLeaf(t, turnId);
+        api('PUT', '/api/thread', { id: t.id, leaf: t.leaf }).catch(() => { /* the view still switches */ });
+      }
+      S.thread = t; S.view = 'thread'; S.editing = null;
+      render();
+      stopStick(); // do not let "land at the end" pull the page past the question
+      const i = pathTo(t, t.leaf).findIndex((x) => x.id === turnId);
+      requestAnimationFrame(() => document.querySelectorAll('.thread > .turn')[i]?.scrollIntoView({ block: 'start', behavior: 'instant' }));
+    } catch (e) { toast(e.message); }
+  }
+
+  function saveChatButton(t) {
+    const saved = !!t.saved;
+    return h('button', {
+      type: 'button', class: `btn save-chat${saved ? ' on' : ''}`, 'aria-pressed': String(saved), disabled: !t.id || null,
+      title: !t.id ? 'Available once the first answer is written' : (saved ? 'Remove this chat from your library' : 'Keep this chat in your library'),
+      onclick: () => setChatSaved(t.id, !saved),
+    }, icon('bookmark'), saved ? 'Saved' : 'Save chat');
+  }
+
+  /** The AI score page: the AI-writing and similarity checks (ui/checks.js keeps its own state). */
+  let checks = null;
+  function renderScore() {
+    if (!checks) checks = window.LecternChecks({ h, fill, api, toast, Motion, TOKEN, picker, state: S });
+    return checks.view();
+  }
+
   function renderLibrary() {
+    const chats = S.threads.filter((t) => t.saved).sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
+    const prompts = savedPrompts();
+    const tab = ['chats', 'prompts'].includes(S.libraryTab) ? S.libraryTab : 'papers';
+    const tabs = h('div', { class: 'lib-tabs', role: 'tablist', 'aria-label': 'Library' },
+      [['papers', 'Papers', S.library.length], ['chats', 'Chats', chats.length], ['prompts', 'Prompts', prompts.length]].map(([id, label, n]) => h('button', {
+        type: 'button', role: 'tab', class: `lib-tab${tab === id ? ' on' : ''}`, 'aria-selected': String(tab === id),
+        onclick: () => { S.libraryTab = id; S.libraryQuery = ''; render(); },
+      }, label, h('span', { class: 'lib-count' }, n))));
+    return h('section', { class: 'view library' }, h('h1', null, 'Library'), tabs, ...(tab === 'chats' ? libraryChats(chats) : tab === 'prompts' ? libraryPrompts(prompts) : libraryPapers()));
+  }
+
+  /** The search box shared by both tabs: filters as you type and keeps the cursor where it was. */
+  function librarySearch(placeholder) {
+    return h('input', {
+      class: 'input search', type: 'search', placeholder, value: S.libraryQuery, 'aria-label': placeholder,
+      oninput: (e) => { S.libraryQuery = e.target.value; const pos = e.target.selectionStart; render(); const el = $('.input.search'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } },
+    });
+  }
+
+  /** Every saved question across all chats, newest saved first. */
+  function savedPrompts() {
+    return S.threads.flatMap((t) => (t.prompts || []).map((p) => ({ ...p, threadId: t.id, chat: t.title })))
+      .sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
+  }
+
+  function libraryPrompts(prompts) {
+    const q = S.libraryQuery.trim().toLowerCase();
+    const shown = q ? prompts.filter((p) => `${p.question} ${p.preview} ${p.chat}`.toLowerCase().includes(q)) : prompts;
+    const when = (iso) => (iso ? new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '');
+    return [
+      h('p', { class: 'sub' }, prompts.length
+        ? `${prompts.length} saved question${prompts.length === 1 ? '' : 's'}. Open one to see its answer in its chat.`
+        : 'Single questions you save are kept here, with their answers.'),
+      prompts.length > 0 && h('div', { class: 'bar' }, librarySearch('Find in your saved questions')),
+      prompts.length === 0
+        ? h('p', { class: 'empty' }, 'No saved questions yet. Hover a question in a chat and press Save.')
+        : (shown.length
+          ? h('ol', { class: 'chats prompts' }, shown.map((p) => h('li', { class: 'chat' },
+            h('button', { type: 'button', class: 'chat-open', onclick: () => openPrompt(p.threadId, p.id) },
+              icon('bookmark'),
+              h('span', { class: 'chat-text' },
+                h('span', { class: 'chat-title wrap' }, p.question),
+                p.preview && h('span', { class: 'chat-preview' }, p.preview),
+                h('span', { class: 'chat-meta' }, `From ${p.chat}${p.savedAt ? ` · saved ${when(p.savedAt)}` : ''}`))),
+            h('button', { type: 'button', class: 'btn small chat-remove', 'aria-label': `Remove "${p.question}" from your library`, onclick: () => setPromptSaved(p.threadId, p.id, false) }, 'Remove'))))
+          : h('p', { class: 'empty' }, 'No saved question matches that search.')),
+    ];
+  }
+
+  function libraryChats(chats) {
+    const q = S.libraryQuery.trim().toLowerCase();
+    const shown = q ? chats.filter((c) => c.title.toLowerCase().includes(q)) : chats;
+    const when = (iso) => (iso ? new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '');
+    return [
+      h('p', { class: 'sub' }, chats.length
+        ? `${chats.length} saved chat${chats.length === 1 ? '' : 's'}. Open one to carry on where you left off.`
+        : 'Chats you save are kept here.'),
+      chats.length > 0 && h('div', { class: 'bar' }, librarySearch('Find in your saved chats')),
+      chats.length === 0
+        ? h('p', { class: 'empty' }, 'No saved chats yet. Open a conversation and press Save chat, or use the bookmark beside it in the sidebar.')
+        : (shown.length
+          ? h('ol', { class: 'chats' }, shown.map((c) => h('li', { class: 'chat' },
+            h('button', { type: 'button', class: 'chat-open', onclick: () => openThread(c.id) },
+              icon('bookmark'),
+              h('span', { class: 'chat-text' },
+                h('span', { class: 'chat-title' }, c.title),
+                h('span', { class: 'chat-meta' }, `${c.turns} question${c.turns === 1 ? '' : 's'}${c.savedAt ? ` · saved ${when(c.savedAt)}` : ''}`))),
+            h('button', { type: 'button', class: 'btn small chat-remove', 'aria-label': `Remove "${c.title}" from your library`, onclick: () => setChatSaved(c.id, false) }, 'Remove'))))
+          : h('p', { class: 'empty' }, 'No saved chat matches that search.')),
+    ];
+  }
+
+  function libraryPapers() {
     const q = S.libraryQuery.trim().toLowerCase();
     const shown = q
       ? S.library.filter((p) => `${p.title} ${p.venue} ${p.year} ${p.authors.map((a) => a.family).join(' ')}`.toLowerCase().includes(q))
       : S.library;
     const style = S.app.settings.citeStyle;
     const list = h('ol', { class: 'papers' }, shown.map((p) => paperRow(p, { turn: null, showNumber: false })));
-    return h('section', { class: 'view library' },
-      h('h1', null, 'Library'),
+    return [
       h('p', { class: 'sub' }, S.library.length
         ? `${S.library.length} saved paper${S.library.length === 1 ? '' : 's'}. Export them as a reference list, or into Zotero, Mendeley or EndNote.`
         : 'Papers you save are kept here, ready to export as a reference list.'),
       S.library.length > 0 && h('div', { class: 'bar' },
-        h('input', {
-          class: 'input search', type: 'search', placeholder: 'Find in your library', value: S.libraryQuery, 'aria-label': 'Find in your library',
-          oninput: (e) => { S.libraryQuery = e.target.value; const pos = e.target.selectionStart; render(); const el = $('.input.search'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } },
-        }),
+        librarySearch('Find in your library'),
         h('select', { class: 'select', 'aria-label': 'Reference style', onchange: async (e) => { await saveSettings({ citeStyle: e.target.value }); render(); } },
           Object.entries(Cite.STYLES).filter(([, s]) => s.list).map(([id, s]) => h('option', { value: id, selected: id === style }, s.label))),
         h('button', { class: 'btn', onclick: () => copyRich(Cite.formatList(shown, style), 'Reference list copied') }, 'Copy reference list'),
@@ -1921,8 +2290,10 @@
         h('button', { class: 'btn', onclick: () => download('lectern-library.ris', Cite.formatList(shown, 'ris').text, 'application/x-research-info-systems') }, 'Download .ris')),
       S.library.length === 0
         ? h('p', { class: 'empty' }, 'Nothing saved yet. Ask a question, then press Save on any paper you want to keep.')
-        : (shown.length ? list : h('p', { class: 'empty' }, 'No saved paper matches that search.')));
+        : (shown.length ? list : h('p', { class: 'empty' }, 'No saved paper matches that search.')),
+    ];
   }
+
 
   // ------------------------------------------------------------------ cite dialog
   function openDialog(title, body) {
@@ -1935,6 +2306,92 @@
       body);
     if (!d.open) d.showModal();
     return d;
+  }
+
+  /**
+   * Ask before something that cannot be undone. Replaces the system confirm box with a Lectern dialog.
+   * Resolves true only when the red button is pressed; Cancel, Escape and a click outside all resolve false.
+   * `name` is shown in quotes on its own line, so a long title never breaks the sentence.
+   */
+  function confirmDialog({ title, name, message, confirmLabel = 'Delete', cancelLabel = 'Cancel' }) {
+    return new Promise((resolve) => {
+      const d = h('dialog', { class: 'dialog confirm', 'aria-labelledby': 'confirm-title', 'aria-describedby': 'confirm-text' });
+      let answer = false;
+      const done = (value) => { answer = value; d.close(); };
+      Motion.animateDialog(d);
+      d.append(
+        h('div', { class: 'confirm-body' },
+          h('div', { class: 'confirm-mark', 'aria-hidden': 'true' }, icon('trash')),
+          h('div', { class: 'confirm-copy' },
+            h('h2', { id: 'confirm-title' }, title),
+            name && h('p', { class: 'confirm-name' }, name),
+            h('p', { id: 'confirm-text' }, message))),
+        h('div', { class: 'confirm-actions' },
+          h('button', { type: 'button', class: 'btn', autofocus: true, onclick: () => done(false) }, cancelLabel),
+          h('button', { type: 'button', class: 'btn danger', onclick: () => done(true) }, confirmLabel)));
+      d.addEventListener('mousedown', (e) => { if (e.target === d) done(false); }); // the dimmed area around the card
+      d.addEventListener('close', () => { d.remove(); resolve(answer); });
+      document.body.append(d);
+      d.showModal();
+      d.querySelector('[autofocus]').focus(); // Cancel first, so Enter never deletes by accident
+    });
+  }
+
+  /**
+   * A drop-down in Lectern's own style, used instead of the system's <select> menu.
+   * `options`: [{ value, label, tag? }]. Calls onChange(value) after the menu has closed.
+   * Keyboard: Enter, Space or Down open it; Up, Down, Home, End move; Enter picks; Escape closes.
+   */
+  function picker({ label, options, value, onChange, cls = '', face = null, always = false }) {
+    let current = value;
+    let menu = null;
+    const find = (v) => options.find((o) => String(o.value) === String(v)) || options[0];
+    const btn = h('button', { type: 'button', class: 'picker-btn', 'aria-haspopup': 'listbox', 'aria-expanded': 'false', 'aria-label': label });
+    const wrap = h('div', { class: `picker ${cls}` }, btn);
+    const paint = () => { const o = find(current); fill(btn, face ? face(o) : [o.tag && h('span', { class: 'picker-tag' }, o.tag), h('span', { class: 'picker-value' }, o.label)]); btn.title = face ? label : o.label; };
+    const onDocDown = (e) => { if (!wrap.contains(e.target)) close(false); };
+    function close(refocus) {
+      if (!menu) return;
+      const m = menu; menu = null;
+      document.removeEventListener('mousedown', onDocDown, true);
+      btn.setAttribute('aria-expanded', 'false');
+      m.classList.add('leaving');
+      setTimeout(() => m.remove(), 160);
+      if (refocus) btn.focus();
+    }
+    function pick(v) { close(true); if (always || String(v) !== String(current)) { current = v; paint(); onChange(v); } }
+    function open() {
+      if (menu) { close(true); return; }
+      menu = h('ul', { class: 'cmenu left picker-menu', role: 'listbox', tabindex: '-1', 'aria-label': label },
+        options.map((o) => {
+          const on = String(o.value) === String(current);
+          return h('li', { class: `picker-opt${on ? ' on' : ''}`, role: 'option', tabindex: '-1', 'aria-selected': String(on), 'data-value': o.value, onclick: () => pick(o.value) },
+            h('span', { class: 'picker-check' }, on && icon('check')),
+            o.tag && h('span', { class: 'picker-tag' }, o.tag),
+            h('span', { class: 'picker-text' }, o.label));
+        }));
+      menu.addEventListener('keydown', (e) => {
+        const items = [...menu.querySelectorAll('.picker-opt')];
+        const at = items.indexOf(document.activeElement);
+        const go = (i) => { e.preventDefault(); items[(i + items.length) % items.length].focus(); };
+        if (e.key === 'ArrowDown') go(at + 1);
+        else if (e.key === 'ArrowUp') go(at < 0 ? items.length - 1 : at - 1);
+        else if (e.key === 'Home') go(0);
+        else if (e.key === 'End') go(items.length - 1);
+        else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (at >= 0) pick(items[at].dataset.value); }
+        else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); }
+        else if (e.key === 'Tab') close(false);
+      });
+      wrap.append(menu);
+      btn.setAttribute('aria-expanded', 'true');
+      document.addEventListener('mousedown', onDocDown, true);
+      (menu.querySelector('.picker-opt.on') || menu.querySelector('.picker-opt')).focus();
+    }
+    btn.addEventListener('click', open);
+    btn.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown' && !menu) { e.preventDefault(); open(); } });
+    wrap._set = (v) => { current = v; paint(); }; // the page moved on its own: show where it is
+    paint();
+    return wrap;
   }
 
   function openCite(p) {
@@ -2073,15 +2530,29 @@
     };
     const keyField = (name, label, link) => {
       const k = S.app.settings.keys[name];
+      // A key you are typing can be shown (the eye). A key already saved stays on the server: the window only ever
+      // learns its last four characters, so that is what is shown for it.
+      const input = h('input', {
+        class: 'input', id: `key-${name}`, type: 'password', autocomplete: 'off', spellcheck: 'false', value: draft.keys[name] || '',
+        placeholder: k.set ? 'Paste a new key to replace it' : 'Paste key',
+        oninput: (e) => { if (e.target.value.trim()) draft.keys[name] = e.target.value.trim(); else delete draft.keys[name]; },
+      });
+      const eye = h('button', { type: 'button', class: 'key-toggle', 'aria-pressed': 'false', 'aria-label': `Show ${label}`, title: 'Show what you typed',
+        onclick: () => {
+          const show = input.type === 'password';
+          input.type = show ? 'text' : 'password';
+          eye.setAttribute('aria-pressed', String(show));
+          eye.setAttribute('aria-label', `${show ? 'Hide' : 'Show'} ${label}`);
+          eye.title = show ? 'Hide' : 'Show what you typed';
+          fill(eye, icon(show ? 'eyeoff' : 'eye'));
+        } }, icon('eye'));
       return h('div', { class: 'engine-row' },
         h('label', { for: `key-${name}` }, label),
-        h('input', {
-          class: 'input', id: `key-${name}`, type: 'password', autocomplete: 'off', spellcheck: 'false',
-          placeholder: k.set ? `Saved (${k.hint})${k.fromEnv ? ', from your shell environment' : ''}` : 'Paste key',
-          oninput: (e) => { if (e.target.value.trim()) draft.keys[name] = e.target.value.trim(); else delete draft.keys[name]; },
-        }),
-        link && h('a', { href: link, target: '_blank', rel: 'noopener noreferrer' }, 'Get a key'),
-        k.set && !k.fromEnv && h('button', { class: 'btn small quiet', onclick: async () => { await saveSettings({ keys: { [name]: '' } }); draw(); render(); } }, 'Remove'));
+        h('span', { class: 'key-field' }, input, eye,
+          k.set && h('small', { class: 'key-saved' }, 'Saved key ending ', h('code', null, k.hint), k.fromEnv ? ' (from your shell environment)' : '')),
+        h('span', { class: 'key-actions' },
+          link && !k.set && h('a', { href: link, target: '_blank', rel: 'noopener noreferrer' }, 'Get a key'),
+          k.set && !k.fromEnv && h('button', { type: 'button', class: 'btn small key-remove', onclick: async () => { await saveSettings({ keys: { [name]: '' } }); draw(); render(); } }, 'Remove')));
     };
     const modelField = (engine, which, label) => h('div', { class: 'engine-row' },
       h('label', { for: `${which}-${engine}` }, label),
@@ -2102,7 +2573,7 @@
         h('div', { class: 'engine-top' },
           h('strong', null, e.label),
           h('span', { class: `engine-state${e.ready ? ' ready' : ''}` }, e.ready ? 'Ready' : (e.found ? 'Not signed in' : 'Not installed')),
-          h('button', { class: `btn small${isDefault ? ' primary' : ''}`, disabled: isDefault || null, onclick: () => { draft.engine = e.id; draw(); } }, isDefault ? 'Default' : 'Make default')),
+          !isDefault && h('button', { class: 'btn small', onclick: () => { draft.engine = e.id; draw(); } }, 'Make default')), // the default carries its own DEFAULT tab
         h('p', { class: 'engine-detail' }, e.detail),
         h('p', null, blurb),
         modelField(e.id, 'models', 'Answer model'),
@@ -2132,15 +2603,15 @@
     function draw() {
       const scroll = body.parentElement ? body.parentElement.scrollTop : 0;
       fill(body,
-        h('h3', null, 'Model'),
+        h('h3', { class: 'set-h' }, 'Model'),
         h('p', { class: 'help' }, 'Connect at least one. The answer model writes the answer at the effort you pick; the helper model does the quick jobs (planning the search, reading each abstract).'),
         // the highlighted edge slides to whichever card is made the default
         Motion.slide(h('div', { class: 'engine-list' }, S.app.engines.map(engineBlock)), 'default-engine'),
 
-        h('h3', null, 'Paper databases'),
+        h('h3', { class: 'set-h' }, 'Paper databases'),
         h('p', { class: 'help' }, 'Lectern searches these and merges the results. Links and reference details always come from the databases, not from the model.'),
         h('div', { class: 'rows' },
-          h('div', { class: 'row' }, S.app.sources.map((src) => h('label', { class: 'check' },
+          h('div', { class: 'row sources' }, S.app.sources.map((src) => h('label', { class: 'check' },
             h('input', { type: 'checkbox', checked: draft.sources[src.name], onchange: (e) => { draft.sources[src.name] = e.target.checked; } }),
             src.label + (src.name === 'europepmc' ? ' (medicine and life sciences)' : '')))),
           keyField('openalex', 'OpenAlex key', 'https://openalex.org/settings/api'),
@@ -2150,40 +2621,42 @@
             h('input', { class: 'input', id: 'email', type: 'email', value: draft.email, placeholder: 'Optional. Crossref gives steadier service to identified requests', oninput: (e) => { draft.email = e.target.value.trim(); } }))),
         h('p', { class: 'help' }, 'OpenAlex is the broadest database and needs a free key (about a minute to get). Semantic Scholar works without one but is often busy; a free key fixes that.'),
 
-        h('h3', null, 'What you study'),
+        h('h3', { class: 'set-h' }, 'What you study'),
         h('p', { class: 'help' }, 'Answers are pitched at this level and framed for this field. The papers Lectern finds stay the same.'),
         h('div', { class: 'rows' },
           h('div', { class: 'row' }, h('label', { for: 'profileLevel' }, 'Level'),
-            h('select', { class: 'select', id: 'profileLevel', onchange: (e) => { draft.profile.level = e.target.value; } },
-              h('option', { value: '', selected: !draft.profile.level }, 'Not set'),
-              S.app.profileOptions.levels.map((l) => h('option', { value: l.id, selected: l.id === draft.profile.level }, l.label)))),
+            picker({ label: 'Level', value: draft.profile.level || '',
+              options: [{ value: '', label: 'Not set' }, ...S.app.profileOptions.levels.map((l) => ({ value: l.id, label: l.label }))],
+              onChange: (v) => { draft.profile.level = v; } })),
           h('div', { class: 'row' }, h('label', { for: 'profileField' }, 'Field or major'),
-            h('select', { class: 'select', id: 'profileField', onchange: (e) => { draft.profile.field = e.target.value; draw(); } },
-              h('option', { value: '', selected: !draft.profile.field }, 'Not set'),
-              S.app.profileOptions.fields.map((f) => h('option', { value: f.id, selected: f.id === draft.profile.field }, f.label))),
+            picker({ label: 'Field or major', value: draft.profile.field || '',
+              options: [{ value: '', label: 'Not set' }, ...S.app.profileOptions.fields.map((f) => ({ value: f.id, label: f.label }))],
+              onChange: (v) => { draft.profile.field = v; draw(); } }),
             draft.profile.field === 'other' && h('input', {
               class: 'input wide', 'aria-label': 'Your field', maxlength: '60', value: draft.profile.fieldOther, placeholder: 'Your field, for example: Architecture',
               oninput: (e) => { draft.profile.fieldOther = e.target.value; },
             }))),
 
-        h('h3', null, 'Answers'),
+        h('h3', { class: 'set-h' }, 'Answers'),
         h('div', { class: 'rows' },
           h('div', { class: 'row' }, h('label', { for: 'maxPapers' }, 'Papers per answer'),
             paperSlider(),
             h('span', { class: 'engine-state' }, 'More papers means a broader answer that costs more to write.')),
           h('div', { class: 'row' }, h('label', { for: 'citeStyle' }, 'Reference style'),
-            h('select', { class: 'select', id: 'citeStyle', onchange: (e) => { draft.citeStyle = e.target.value; } },
-              Object.entries(Cite.STYLES).filter(([, st]) => st.list).map(([id, st]) => h('option', { value: id, selected: id === draft.citeStyle }, st.label)))),
+            picker({ label: 'Reference style', value: draft.citeStyle,
+              options: Object.entries(Cite.STYLES).filter(([, st]) => st.list).map(([value, st]) => ({ value, label: st.label })),
+              onChange: (v) => { draft.citeStyle = v; } })),
           h('div', { class: 'row' }, h('label', { for: 'citeMarks' }, 'Citations in answers'),
-            h('select', { class: 'select', id: 'citeMarks', onchange: (e) => { draft.citeMarks = e.target.value; } },
-              [['author', 'Author and year'], ['number', 'Numbers']].map(([v, l]) => h('option', { value: v, selected: v === draft.citeMarks }, l))),
+            picker({ label: 'Citations in answers', value: draft.citeMarks,
+              options: [['author', 'Author and year'], ['number', 'Numbers']].map(([value, label]) => ({ value, label })),
+              onChange: (v) => { draft.citeMarks = v; } }),
             h('span', { class: 'engine-state' }, 'How each citation is marked inside the answer text.')),
           h('label', { class: 'check' },
             h('input', { type: 'checkbox', checked: draft.insights, onchange: (e) => { draft.insights = e.target.checked; } }),
             'Read each paper for its finding, design and stance (one extra helper call per question)')),
 
-        h('p', { class: 'help', style: 'margin-top:22px' }, `Settings, conversations and your library are stored on this Mac in ${S.app.dataDir}`),
-        h('div', { class: 'cite-foot' }, h('small'),
+        h('p', { class: 'help set-path' }, `Settings, conversations and your library are stored on this computer in ${S.app.dataDir}`),
+        h('div', { class: 'set-foot' },
           h('button', { class: 'btn', onclick: () => $('#dialog').close() }, 'Cancel'),
           h('button', {
             class: 'btn primary',
@@ -2313,6 +2786,25 @@
   }
 
   // ------------------------------------------------------------------ navigation
+  // Keyboard shortcuts, as in the ChatGPT app: Command (Mac) or Ctrl (Windows) with N, L or K.
+  const IS_MAC = /Mac/i.test(navigator.platform || navigator.userAgent);
+  const mod = (k) => (IS_MAC ? `\u2318${k}` : `Ctrl+${k}`);
+  const NEW_KEYS = mod('N');
+  function newQuestion() {
+    goHome();
+    requestAnimationFrame(() => $('.ask')?.focus());
+  }
+  function openLibrary() { stopDictation(); S.view = 'library'; render(); }
+  function openScore() { stopDictation(); S.view = 'score'; render(); }
+  const SHORTCUTS = { n: newQuestion, l: openLibrary, k: openScore };
+  document.addEventListener('keydown', (e) => {
+    const action = SHORTCUTS[String(e.key).toLowerCase()];
+    if (!action || e.shiftKey || e.altKey || !(IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey)) return;
+    if (document.querySelector('dialog[open]')) return; // a settings or confirm window is open: leave it alone
+    e.preventDefault();
+    action();
+  });
+
   function goHome() { stopDictation(); S.view = 'home'; S.thread = null; S.editing = null; render(); }
 
   async function openThread(id) {
@@ -2322,8 +2814,7 @@
       S.thread = await api('GET', `/api/thread?id=${encodeURIComponent(id)}`);
       S.view = 'thread';
       S.editing = null;
-      render();
-      $('.main').scrollTop = 0;
+      render(); // opening a conversation lands on its end (render does the scrolling)
     } catch (e) { toast(e.message); }
   }
 
@@ -2343,8 +2834,8 @@
   async function deleteTurn(turn) {
     const t = S.thread;
     const later = pathTo(t, t.leaf).indexOf(turn) < pathTo(t, t.leaf).length - 1;
-    const msg = `Delete this question and its answer?${later ? ' The questions asked after it are deleted too.' : ''} This cannot be undone.`;
-    if (!window.confirm(msg)) return;
+    const msg = `Its answer is deleted with it.${later ? ' The questions asked after it are deleted too.' : ''} This cannot be undone.`;
+    if (!(await confirmDialog({ title: 'Delete this question?', message: msg, confirmLabel: 'Delete' }))) return;
     try {
       const res = await api('DELETE', `/api/turn?thread=${encodeURIComponent(t.id)}&id=${encodeURIComponent(turn.id)}`);
       if (res.thread) S.thread = res.thread;
@@ -2378,7 +2869,7 @@
   }
 
   async function deleteThread(t) {
-    if (!window.confirm(`Delete "${t.title}"? This cannot be undone.`)) return;
+    if (!(await confirmDialog({ title: 'Delete this conversation?', name: t.title, message: 'All its questions and answers are deleted. This cannot be undone.', confirmLabel: 'Delete conversation' }))) return;
     try {
       const result = await api('DELETE', `/api/thread?id=${encodeURIComponent(t.id)}`);
       if (!result.ok) throw new Error('The conversation could not be deleted.');
@@ -2391,9 +2882,53 @@
   // ------------------------------------------------------------------ render
   function renderRailOnly() { const old = $('.rail'); if (old) old.replaceWith(renderRail()); }
 
+  /**
+   * Opening a conversation shows its end: the latest answer and the follow-up box. The page is still
+   * growing for a moment (figures load, fonts settle), so the end is re-applied until it stops
+   * growing, and dropped at once if the reader scrolls, presses a key or opens something else.
+   */
+  let stopStick = () => {};
+  // The jump button always shows which question is at the top of the page.
+  let syncQueued = false;
+  document.addEventListener('scroll', (e) => {
+    if (syncQueued || !(e.target instanceof Element) || !e.target.matches('.main')) return;
+    syncQueued = true;
+    requestAnimationFrame(() => {
+      syncQueued = false;
+      const jump = $('.picker.jump');
+      const turns = [...document.querySelectorAll('.thread > .turn')];
+      if (!jump || !turns.length) return;
+      const edge = e.target.getBoundingClientRect().top + 110; // below the sticky bar
+      let at = 0;
+      turns.forEach((el, i) => { if (el.getBoundingClientRect().top <= edge) at = i; });
+      jump._set(at);
+    });
+  }, true);
+  function stickToEnd(main) {
+    stopStick();
+    let active = true;
+    const go = () => { if (active) main.scrollTo({ top: main.scrollHeight, behavior: 'instant' }); };
+    const events = ['wheel', 'touchstart', 'keydown', 'mousedown'];
+    let timer = 0;
+    const stop = () => {
+      active = false; // also cancels the frames already queued
+      clearTimeout(timer);
+      main.removeEventListener('load', go, true);
+      for (const ev of events) main.removeEventListener(ev, stop, true);
+      stopStick = () => {};
+    };
+    stopStick = stop;
+    go();
+    requestAnimationFrame(() => { go(); requestAnimationFrame(go); });
+    main.addEventListener('load', go, true); // an image finished loading and made the page taller
+    for (const ev of events) main.addEventListener(ev, stop, true);
+    timer = setTimeout(stop, 1500);
+  }
+
   let renderedView = null;
   let renderedThread = null;
   function render() {
+    if (voiceOn()) stopDictation();
     const previousMain = $('.main');
     const preserve = renderedView === S.view && (S.view !== 'thread' || renderedThread === S.thread);
     const scroll = preserve && previousMain ? previousMain.scrollTop : 0;
@@ -2404,6 +2939,7 @@
     let view;
     if (S.view === 'thread' && S.thread) view = renderThread();
     else if (S.view === 'library') view = renderLibrary();
+    else if (S.view === 'score') view = renderScore();
     else { S.view = 'home'; view = renderHome(); }
     // going to another screen (not redrawing this one): the new screen eases in
     if (!preserve) view.classList.add('nav-enter');
@@ -2411,7 +2947,8 @@
     main.replaceChildren(h('div', { class: 'topstrip' }), view);
     $('#app').replaceChildren(renderRail(), main);
     refreshReferences();
-    main.scrollTo({ top: scroll, behavior: 'instant' });
+    if (!preserve && S.view === 'thread') stickToEnd(main);
+    else { stopStick(); main.scrollTo({ top: scroll, behavior: 'instant' }); }
     if (preserve && window.scrollY !== pageScroll) window.scrollTo({ top: pageScroll, behavior: 'instant' });
     renderedView = S.view;
     renderedThread = S.thread;

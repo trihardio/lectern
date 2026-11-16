@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>local.lectern.voice</string>
+  <key>CFBundleName</key><string>Lectern Voice</string>
+  <key>CFBundleExecutable</key><string>LecternVoice</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>LSUIElement</key><true/>
+  <key>NSMicrophoneUsageDescription</key><string>Lectern uses your microphone to type your spoken question.</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>Lectern turns your speech into text. Recognition runs on this Mac when supported; otherwise Apple processes the audio.</string>
+</dict></plist>

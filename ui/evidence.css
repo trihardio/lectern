@@ -54,7 +54,7 @@
 .bar-fill.against { background: var(--brick); }
 .bar-fill.conditional { background: var(--amber); }
 .bar-fill.mixed { background: repeating-linear-gradient(135deg, var(--ink-3) 0 4px, var(--line) 4px 8px); }
-.bar-fill.design { background: var(--focus); opacity: .7; }
+.bar-fill.by-design { background: var(--focus); opacity: .7; }
 .evidence-caption { color: var(--ink-3); font: 12px/1.55 var(--sans); margin: 15px 0 0; }
 .coverage-table { width: 100%; border-collapse: collapse; min-width: 700px; font: 13px/1.4 var(--sans); table-layout: fixed; }
 .coverage-table th { text-align: center; padding: 12px 8px; }

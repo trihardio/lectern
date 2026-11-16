@@ -17,14 +17,24 @@ ARCH="$(uname -m)"
 PACKAGER_VERSION=20.3.0
 VERSION="$(node -p "require('./package.json').version")"
 
+# Ship the native speech helper so installed apps do not need a compiler.
+node electron/build-voice.js native
+
 npx --yes "@electron/packager@$PACKAGER_VERSION" . Lectern \
   --platform=darwin --arch="$ARCH" --out=dist --overwrite \
   --app-bundle-id=local.lectern.app \
   --app-version="$VERSION" --build-version="$VERSION" \
   --app-copyright="Lectern $VERSION" \
-  --ignore='^/(test|dist|release|scripts|Lectern|\.git|\.github|\.vscode|\.impeccable|CLAUDE\.md|PRODUCT\.md|DESIGN\.md)($|/)'
+  --asar.unpackDir=native \
+  --ignore='^/(test|dist|release|scripts|Lectern|\.git|\.github|\.vscode|\.impeccable|\.scratch|output|bench|CLAUDE\.md|PRODUCT\.md|DESIGN\.md)($|/)'
 
 APP="dist/Lectern-darwin-$ARCH/Lectern.app"
+
+# Smaller download: Chromium ships its own built-in messages in 55 languages. Lectern's window is English, so
+# only the English ones are kept (the app still follows the Mac's language for its own menus and file dialogs,
+# which come from Contents/Resources/*.lproj and are left alone).
+CHROMIUM_LOCALES="$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources"
+find "$CHROMIUM_LOCALES" -maxdepth 1 -type d -name '*.lproj' ! -name 'en.lproj' ! -name 'en_GB.lproj' ! -name 'Base.lproj' -exec rm -rf {} +
 # Apple Silicon only runs signed apps. An "ad-hoc" signature is enough for an app you built yourself.
 codesign --force --deep --sign - "$APP"
 

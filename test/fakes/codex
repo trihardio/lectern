@@ -45,7 +45,9 @@ process.stdin.on('end', () => {
   }
   if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ tool: 'codex', args, cwd: process.cwd(), hasApiKey: 'OPENAI_API_KEY' in process.env }) + '\n');
   let text = fx.ANSWER_TEXT;
-  if (/search queries/i.test(input)) text = fx.PLAN_JSON;
+  if (/Passage to rewrite:\n\n/i.test(input)) text = JSON.stringify({ text: input.split('Passage to rewrite:\n\n').pop().replace('The report states', 'According to the report,') });
+  else if (/Numbered sentences \(/i.test(input)) text = fx.aiReviewJson(input);
+  else if (/search queries/i.test(input)) text = fx.PLAN_JSON;
   else if (/judge each/i.test(input)) text = fx.insightsJson((input.match(/^\[\d+\] /gm) || []).length, input);
   else if (/exactly the word/i.test(input)) text = 'ready';
   else if (/choose figures from research papers/i.test(input)) text = process.env.FAKE_NO_FIGURES ? '{"figures": []}' : fx.figuresJson(input);

@@ -142,7 +142,7 @@
     if (views.design) {
       const known = charted.filter((r) => KNOWN(fact(r, 'designType')));
       const designKeys = [...new Set(known.map((r) => fact(r, 'designType')))];
-      charts.append(barChart('What kinds of evidence?', designKeys.map((key) => ({ key: 'design', text: DESIGN[key],
+      charts.append(barChart('What kinds of evidence?', designKeys.map((key) => ({ key: 'by-design', text: DESIGN[key],
         ids: known.filter((r) => fact(r, 'designType') === key).map((r) => r.n) })).sort((a, b) => b.ids.length - a.ids.length),
       `Designs extracted from abstract excerpts.${unreported(charted.length - known.length, 'a design')}`));
     }

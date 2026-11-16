@@ -16,6 +16,10 @@ const { SOURCES } = require('./sources');
 const { cleanFilters, options: filterOptions } = require('./filters');
 const { MODES, modeOf } = require('./modes');
 const Profile = require('./profile');
+const { extractText } = require('./checks/extract');
+const { runAiCheck } = require('./checks/aiscore');
+const { runSimilarityCheck } = require('./checks/similarity');
+const { runRewrite } = require('./checks/rewrite');
 
 const ROOT = path.join(__dirname, '..');
 const STATIC = {
@@ -28,6 +32,8 @@ const STATIC = {
   '/app.js': ['ui/app.js', 'text/javascript; charset=utf-8'],
   '/render.js': ['ui/render.js', 'text/javascript; charset=utf-8'],
   '/cite.js': ['shared/cite.js', 'text/javascript; charset=utf-8'],
+  '/checks.js': ['ui/checks.js', 'text/javascript; charset=utf-8'],
+  '/checks.css': ['ui/checks.css', 'text/css; charset=utf-8'],
 };
 const CSP = "default-src 'self'; img-src 'self' data: https://pmc-oa-opendata.s3.amazonaws.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 
@@ -56,10 +62,11 @@ function readBody(req, limit = 2 * 1024 * 1024) {
 }
 
 /**
- * `onDictate` is supplied by the desktop shell: it asks macOS to start dictation in the
- * focused text box. In a plain browser the window uses the browser's own speech recognition.
+ * `voice` is supplied by the Mac desktop shell and owns native speech sessions.
+ * `pdf` is supplied by the desktop shell: it prints the window to a PDF and asks where to save it.
+ * In a plain browser the window uses the browser's own speech recognition.
  */
-function createApp({ dataDir, onDictate } = {}) {
+function createApp({ dataDir, voice, pdf } = {}) {
   const config = new Config(dataDir);
   const store = new Store(config.dataDir);
   const usage = createUsageMonitor();
@@ -79,7 +86,8 @@ function createApp({ dataDir, onDictate } = {}) {
       profileOptions: Profile.options(),
       filterOptions: filterOptions(),
       modes: MODES,
-      dictation: typeof onDictate === 'function',
+      dictation: !!voice,
+      pdfExport: !!(pdf && typeof pdf.save === 'function'),
       dataDir: config.dataDir,
     };
   }
@@ -119,28 +127,53 @@ function createApp({ dataDir, onDictate } = {}) {
       if (!t) throw Object.assign(new Error('That conversation no longer exists.'), { status: 404 });
       return t;
     },
-    // Rename ({ title }) and/or show another version of an edited question ({ leaf }).
+    // Rename ({ title }), show another version of an edited question ({ leaf }), keep it in the library ({ saved }).
     'PUT /api/thread': async (body) => ({
       thread: store.updateThread(body.id, {
         title: typeof body.title === 'string' ? body.title : undefined,
         leaf: typeof body.leaf === 'string' ? body.leaf : undefined,
+        saved: typeof body.saved === 'boolean' ? body.saved : undefined,
       }),
     }),
+    // Keep one question in the library ({ thread, id, saved }).
+    'PUT /api/turn': async (body) => {
+      const turn = store.updateTurn(String(body.thread || ''), String(body.id || ''), { saved: typeof body.saved === 'boolean' ? body.saved : undefined });
+      if (!turn) throw Object.assign(new Error('That conversation no longer exists.'), { status: 404 });
+      return { turn };
+    },
     'DELETE /api/thread': async (_b, url) => ({ ok: store.deleteThread(url.searchParams.get('id')) }),
     // Copy a conversation, up to and including one question, into a new conversation.
     'POST /api/thread/branch': async (body) => ({ thread: store.branchThread(body.id, typeof body.turnId === 'string' ? body.turnId : null) }),
     // Delete one question, its answer, and everything asked after it on that branch.
     'DELETE /api/turn': async (_b, url) => ({ thread: store.deleteTurn(url.searchParams.get('thread'), url.searchParams.get('id')) }),
 
-    // Voice input in the desktop app: ask macOS to start dictation in the focused text box.
-    'POST /api/dictate': async () => {
-      if (typeof onDictate !== 'function') return { ok: false, error: 'Dictation needs the desktop app.' };
-      try { return { ok: onDictate() !== false }; } catch (e) { return { ok: false, error: e.message }; }
+    'POST /api/voice': async (body) => {
+      if (!voice) return { ok: false, error: 'Native voice input needs the Mac desktop app.' };
+      if (body.action === 'stop' && typeof body.id === 'string') return voice.stop(body.id);
+      if (body.action === 'start') return voice.start(body.language);
+      return { ok: false, error: 'Unknown voice input action.' };
     },
+    'GET /api/voice': async (_body, url) => voice
+      ? voice.status(url.searchParams.get('id'))
+      : { ok: false, error: 'Native voice input needs the Mac desktop app.' },
 
     'GET /api/library': async () => ({ papers: store.getLibrary() }),
     'POST /api/library': async (body) => ({ papers: store.addToLibrary(body.paper) }),
     'DELETE /api/library': async (_b, url) => ({ papers: store.removeFromLibrary(url.searchParams.get('id')) }),
+
+    // AI score page: save the report the window is showing as a PDF (desktop app only; a browser prints instead).
+    'POST /api/checks/pdf': async (body) => {
+      if (!pdf || typeof pdf.save !== 'function') return { ok: false, error: 'Saving a PDF needs the desktop app. In a browser, use Print and choose Save as PDF.' };
+      const base = String(body.name || 'Lectern report').replace(/\.pdf$/i, '').replace(/[\u0000-\u001f\u007f/\\:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120).trim() || 'Lectern report';
+      try { return await pdf.save({ name: `${base}.pdf` }); } catch (e) { return { ok: false, error: `The PDF could not be saved: ${e.message}` }; }
+    },
+
+    // AI score page: plain text from a dropped document ({ name, data: base64 }). Nothing is stored.
+    'POST /api/checks/extract': async (body) => {
+      const data = Buffer.from(String(body.data || ''), 'base64');
+      const { text, kind } = extractText({ name: String(body.name || '').slice(0, 200), data });
+      return { text, kind, name: String(body.name || '').slice(0, 200) };
+    },
   };
 
   async function handleAsk(req, res) {
@@ -185,6 +218,42 @@ function createApp({ dataDir, onDictate } = {}) {
     }
   }
 
+  /** AI score page: run one check and stream its progress as server-sent events. Nothing is stored. */
+  async function handleCheck(req, res, kind) {
+    const body = await readBody(req, 3 * 1024 * 1024);
+    const text = String(body.text || '');
+    if (!text.trim()) return json(res, 400, { error: 'Paste some text or drop a document first.' });
+    res.writeHead(200, {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      connection: 'keep-alive',
+      'x-accel-buffering': 'no',
+    });
+    const abort = new AbortController();
+    let open = true;
+    res.on('close', () => { open = false; if (!res.writableEnded) abort.abort(); });
+    const emit = (event, data) => { if (open && !res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
+    const beat = setInterval(() => { if (open && !res.writableEnded) res.write(': keep-alive\n\n'); }, 15000);
+    const engine = typeof body.engine === 'string' ? body.engine : undefined;
+    try {
+      const o = body.options || {};
+      const result = kind === 'rewrite'
+        ? await runRewrite({ text, config, signal: abort.signal, emit, engine, selectedModel: typeof body.model === 'string' ? body.model.slice(0, 100) : undefined })
+        : kind === 'ai'
+        ? await runAiCheck({ text, config, signal: abort.signal, emit, engine, selectedModel: typeof body.model === 'string' ? body.model.slice(0, 100) : undefined })
+        : await runSimilarityCheck({
+          text, config, store, signal: abort.signal, emit, engine,
+          options: { quotes: o.quotes !== false, references: o.references !== false, web: o.web !== false, papers: o.papers !== false },
+        });
+      emit('result', result);
+    } catch (e) {
+      if (!abort.signal.aborted) emit('error', { message: e.message || 'Something went wrong.' });
+    } finally {
+      clearInterval(beat);
+      if (!res.writableEnded) res.end();
+    }
+  }
+
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://127.0.0.1');
@@ -219,10 +288,13 @@ function createApp({ dataDir, onDictate } = {}) {
       if (req.headers['x-lectern-token'] !== token) return json(res, 403, { error: 'This window is out of date. Reload it.' });
 
       if (req.method === 'POST' && url.pathname === '/api/ask') return await handleAsk(req, res);
+      if (req.method === 'POST' && url.pathname === '/api/checks/ai') return await handleCheck(req, res, 'ai');
+      if (req.method === 'POST' && url.pathname === '/api/checks/rewrite') return await handleCheck(req, res, 'rewrite');
+      if (req.method === 'POST' && url.pathname === '/api/checks/similarity') return await handleCheck(req, res, 'similarity');
 
       const route = routes[`${req.method} ${url.pathname}`];
       if (!route) return json(res, 404, { error: 'Not found' });
-      const body = req.method === 'GET' || req.method === 'DELETE' ? {} : await readBody(req);
+      const body = req.method === 'GET' || req.method === 'DELETE' ? {} : await readBody(req, url.pathname === '/api/checks/extract' ? 17 * 1024 * 1024 : undefined);
       return json(res, 200, await route(body, url));
     } catch (e) {
       if (res.headersSent) { try { res.end(); } catch { /* socket already closed */ } return; }

@@ -41,6 +41,12 @@ function newestLeaf(thread, id) {
   }
 }
 
+/** The first plain paragraph of an answer, for a list: no headings, no citation marks or markdown. */
+function leadOf(answer) {
+  const paras = String(answer || '').split(/\n\s*\n/).map((p) => p.replace(/\[[^\]]{1,40}\]/g, '').replace(/[#*_`>|]/g, '').replace(/\s+/g, ' ').replace(/\s+([,.;:])/g, '$1').trim()).filter(Boolean);
+  return clip(paras.find((p) => p.length > 40) || paras[0] || '', 220);
+}
+
 class Store {
   constructor(dataDir) {
     this.threadsDir = path.join(dataDir, 'threads');
@@ -54,8 +60,8 @@ class Store {
     return path.join(this.threadsDir, `${id}.json`);
   }
 
-  _write(thread) {
-    thread.updatedAt = new Date().toISOString();
+  _write(thread, touch = true) {
+    if (touch) thread.updatedAt = new Date().toISOString(); // saving to the library does not make a chat "recent" again
     writeAtomic(this._threadFile(thread.id), JSON.stringify(thread));
     return thread;
   }
@@ -66,7 +72,12 @@ class Store {
       if (!f.endsWith('.json')) continue;
       try {
         const t = JSON.parse(fs.readFileSync(path.join(this.threadsDir, f), 'utf8'));
-        out.push({ id: t.id, title: t.title, updatedAt: t.updatedAt, createdAt: t.createdAt, turns: (t.turns || []).length });
+        out.push({
+          id: t.id, title: t.title, updatedAt: t.updatedAt, createdAt: t.createdAt, turns: (t.turns || []).length,
+          saved: !!t.saved, savedAt: t.saved ? (t.savedAt || null) : null,
+          // single questions kept in the library, with the opening of their answer for the list
+          prompts: (t.turns || []).filter((x) => x.saved).map((x) => ({ id: x.id, question: clip(String(x.question || ''), 400), savedAt: x.savedAt || null, preview: leadOf(x.answer) })),
+        });
       } catch { /* skip unreadable file */ }
     }
     return out.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
@@ -95,10 +106,18 @@ class Store {
     return this._write(thread);
   }
 
-  /** Rename, and/or show another branch (`leaf` must be a turn in the thread). */
-  updateThread(id, { title, leaf } = {}) {
+  /**
+   * Rename, show another branch (`leaf` must be a turn in the thread), and/or keep the conversation in the
+   * library (`saved`). Saving changes nothing else about the conversation, not even its place in the recent list.
+   */
+  updateThread(id, { title, leaf, saved } = {}) {
     const t = this.getThread(id);
     if (!t) return null;
+    if (typeof saved === 'boolean') {
+      if (saved && !t.saved) { t.saved = true; t.savedAt = new Date().toISOString(); }
+      if (!saved) { delete t.saved; delete t.savedAt; }
+      if (title == null && leaf == null) return this._write(t, false);
+    }
     if (title != null) t.title = clip(String(title).trim() || t.title, 120);
     if (leaf != null) {
       if (!t.turns.some((x) => x.id === leaf)) throw Object.assign(new Error('That version no longer exists.'), { status: 404 });
@@ -108,6 +127,18 @@ class Store {
   }
 
   renameThread(id, title) { return this.updateThread(id, { title }); }
+
+  /** Keep one question (with its answer) in the library, or take it out. Changes nothing else, not even the recent order. */
+  updateTurn(threadId, turnId, { saved } = {}) {
+    const t = this.getThread(threadId);
+    if (!t) return null;
+    const turn = t.turns.find((x) => x.id === turnId);
+    if (!turn) throw Object.assign(new Error('That question no longer exists.'), { status: 404 });
+    if (saved === true && !turn.saved) { turn.saved = true; turn.savedAt = new Date().toISOString(); }
+    if (saved === false) { delete turn.saved; delete turn.savedAt; }
+    this._write(t, false);
+    return { id: turn.id, saved: !!turn.saved, savedAt: turn.saved ? turn.savedAt : null };
+  }
 
   /**
    * Delete a turn and every turn that followed it. If the thread is left empty, the
@@ -148,6 +179,7 @@ class Store {
       id: uid(8), title: clip(`${t.title} (copy)`, 120), createdAt: now, updatedAt: now,
       turns: JSON.parse(JSON.stringify(turns)), leaf: turns[turns.length - 1].id,
     };
+    for (const x of copy.turns) { delete x.saved; delete x.savedAt; } // a copy starts with nothing kept in the library
     return this._write(copy);
   }
 

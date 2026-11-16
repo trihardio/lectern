@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 VERSION="$(node -p "require('./package.json').version")"
 PACKAGER_VERSION=20.3.0
 DMGBUILD_VERSION=1.6.5
-IGNORE='^/(test|dist|release|scripts|Lectern|\.git|\.github|\.vscode|\.impeccable|CLAUDE\.md|PRODUCT\.md|DESIGN\.md)($|/)'
+IGNORE='^/(test|dist|release|scripts|Lectern|\.git|\.github|\.vscode|\.impeccable|\.scratch|output|bench|native|CLAUDE\.md|PRODUCT\.md|DESIGN\.md)($|/)'
 mkdir -p release
 
 echo "== tests"
@@ -34,6 +34,8 @@ npx --yes "@electron/packager@$PACKAGER_VERSION" . Lectern \
   --app-version="$VERSION" --build-version="$VERSION" --app-copyright="Lectern $VERSION" \
   --win32metadata.CompanyName=Lectern --win32metadata.ProductName=Lectern --win32metadata.FileDescription=Lectern \
   --ignore="$IGNORE"
+# Smaller download: keep only Chromium's English built-in messages (Lectern's window is English).
+find dist/Lectern-win32-x64/locales -name '*.pak' ! -name 'en-US.pak' ! -name 'en-GB.pak' -delete
 ZIP="release/Lectern-$VERSION-windows-x64.zip"
 rm -f "$ZIP"
 ( cd dist && mv Lectern-win32-x64 Lectern && ditto -c -k --norsrc --keepParent Lectern "../$ZIP" && mv Lectern Lectern-win32-x64 )

@@ -303,6 +303,36 @@ function figuresJson(input) {
   });
 }
 
+// ---- AI score page: a web page that a submission copies from, and canned model replies
+const CHECK_SOURCE_TEXT = 'Remote work has become a defining feature of the modern workplace since the pandemic. In a randomised trial at a Chinese travel agency, call-centre employees who worked from home were 13 percent more productive than colleagues in the office, and attrition among them fell by half. Managers reported that the gains came mostly from fewer breaks and sick days and from a quieter working environment at home.';
+function checkPage(path) {
+  if (path === '/robots.txt') return { status: 200, type: 'text/plain', body: 'User-agent: *\nDisallow: /members/\n' };
+  if (path === '/remote-work') return { status: 200, type: 'text/html; charset=utf-8', body: `<!doctype html><html><head><title>Working from home: the evidence</title></head><body><nav>Home | About</nav><article><h1>Working from home</h1><p>${CHECK_SOURCE_TEXT}</p></article><footer>Copyright</footer></body></html>` };
+  if (path === '/moved') return { status: 301, location: '/remote-work' };
+  if (path === '/to-local') return { status: 302, location: 'http://127.0.0.1:9/secret' };
+  if (path.startsWith('/members/')) return { status: 200, type: 'text/html', body: `<html><body><p>${CHECK_SOURCE_TEXT}</p></body></html>` };
+  return { status: 404, type: 'text/plain', body: 'not found' };
+}
+/** The fake model's reading of numbered sentences: stock AI words score high, everything else low. */
+function aiReviewJson(input) {
+  const sents = [...input.matchAll(/^\[(\d+)\] (.*)$/gm)].map((m) => ({ n: +m[1], text: m[2] }));
+  const spans = sents.map((s) => (/delve|pivotal|tapestry|underscore|crucial role/i.test(s.text)
+    ? { from: s.n, to: s.n, ai: 88, why: 'Stock vocabulary and a generic claim with no concrete detail.' }
+    : { from: s.n, to: s.n, ai: 18, why: 'Specific figures and uneven phrasing read as human.' }));
+  const issues = [];
+  for (const s of sents) {
+    if (/recieve/.test(s.text)) issues.push({ s: s.n, quote: 'recieve', kind: 'spelling', note: 'Misspelt.', fix: 'receive' });
+    if (/informations/.test(s.text)) issues.push({ s: s.n, quote: 'informations', kind: 'grammar', note: '"Information" has no plural.', fix: 'information' });
+  }
+  issues.push({ s: 1, quote: 'words that are not in the text at all', kind: 'clarity', note: 'Invented quote, must be dropped.', fix: '' });
+  // Browser checks can ask for a broken reply: FAKE_REVIEW_MODE=partial (every other sentence unrated) or malformed.
+  if (process.env.FAKE_REVIEW_MODE === 'malformed') return 'Sure! Here is my careful analysis of the writing, in prose instead of JSON.';
+  const kept = process.env.FAKE_REVIEW_MODE === 'partial' ? spans.filter((_, k) => k % 2 === 0) : spans;
+  return JSON.stringify({ summary: 'The opening paragraph shows stock phrasing and generic claims; the data paragraph is specific.', spans: kept, issues });
+}
+const SOURCE_HUNT_JSON = JSON.stringify({ sources: [{ url: 'https://example.edu/remote-work', passages: [1] }, { url: 'https://example.edu/members/copy', passages: [1] }, { url: 'https://example.edu/to-local', passages: [2] }, { url: 'not a url' }] });
+
 module.exports = {
+  CHECK_SOURCE_TEXT, checkPage, aiReviewJson, SOURCE_HUNT_JSON,
   FIGURE_PMC, europepmcLite, bucketList, BUCKET_FILES, FIGURE_XML, FIGURE_JSON, figuresJson,
   BASE, doi, openalex, openalexWork, openalexSources, semanticscholar, crossref, europepmc, PLAN_JSON, ANSWER_TEXT, VERIFY_JSON, insightsJson };

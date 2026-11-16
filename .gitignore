@@ -1,6 +1,7 @@
 node_modules/
 dist/
 release/
+native/
 .DS_Store
 *.log
 
@@ -9,3 +10,11 @@ release/
 
 # Design tooling (decision pages, sketches); PRODUCT.md and DESIGN.md stay in the repo
 /.impeccable/
+
+# Benchmark texts and download cache stay local (licences allow use; no need to republish). Manifests are kept.
+/bench/data/*
+!/bench/data/manifest.json
+!/bench/data/splits.json
+
+# Local working documents (audit reports and other inputs) stay out of the repository.
+/output/

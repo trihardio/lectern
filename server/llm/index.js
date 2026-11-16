@@ -20,13 +20,19 @@ const ENGINE_INFO = {
   },
   codex: {
     label: 'ChatGPT', short: 'ChatGPT', billing: 'Uses the ChatGPT plan you are signed in to',
-    models: ['', 'gpt-6.1-sol', 'gpt-6-astra', 'gpt-6.1-terra', 'gpt-6-luna'],
+    // From the model list Codex itself reports (~/.codex/models_cache.json, checked 2026-11-17).
+    // Older and smaller models stay available on the ChatGPT plan; hidden internal models are left out.
+    models: ['', 'gpt-6.1-sol', 'gpt-6-astra', 'gpt-6.1-terra', 'gpt-6-luna', 'gpt-6-sol', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
     blurbs: {
       '': 'Whatever model Codex is set to use',
       'gpt-6.1-sol': 'For everyday research questions',
       'gpt-6-astra': 'For complex questions that need careful reasoning',
       'gpt-6.1-terra': 'For code and technical questions',
       'gpt-6-luna': 'For quick questions',
+      'gpt-6-sol': 'Previous GPT-6 workhorse',
+      'gpt-5.6-sol': 'Older GPT-5 workhorse',
+      'gpt-5.6-terra': 'Older GPT-5, balanced',
+      'gpt-5.6-luna': 'Older GPT-5, fastest',
     },
   },
 };
@@ -55,7 +61,7 @@ async function pickEngine(settings, preferred) {
  * role 'main' writes the answer with the chosen model and effort;
  * role 'helper' uses the small fast model at low effort (and falls back to the main model if that fails).
  */
-async function complete({ engine, role = 'main', settings, model, effort, system, prompt, web = false, signal, onEvent }) {
+async function complete({ engine, role = 'main', settings, model, effort, system, prompt, web = false, signal, onEvent, strictModel = false }) {
   const helper = role === 'helper';
   const chosenModel = model || (helper ? settings.helperModels[engine] : settings.models[engine]) || '';
   const base = {
@@ -64,6 +70,7 @@ async function complete({ engine, role = 'main', settings, model, effort, system
     effort: helper ? 'low' : (effort || settings.effort),
     thinkingSummary: !helper,
     model: chosenModel,
+    strictModel, // true: fail rather than drop a model option the CLI rejects
   };
 
   const run = (opts) => {

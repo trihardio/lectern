@@ -76,7 +76,11 @@ async function complete(opts) {
       // Options differ between Codex versions. Drop whichever one this version rejects and retry.
       const complaint = `${stderr}\n${state.error || ''}`;
       const flag = unknownFlag(stderr);
-      if (flag && args.includes(flag)) { args = withoutFlag(args, flag, VALUE_FLAGS.has(flag)); continue; }
+      if (flag && args.includes(flag)) {
+        // A check that must say which model read the text cannot quietly run on Codex's default model.
+        if (opts.strictModel && (flag === '-m' || flag === '--model')) throw Object.assign(new Error(`This version of Codex rejected the model option, so ${opts.model} could not be used. Nothing was read with a different model; update Codex or pick another model.`), { code: 'MODEL_REJECTED' });
+        args = withoutFlag(args, flag, VALUE_FLAGS.has(flag)); continue;
+      }
       if (o.web && /web_search/i.test(complaint)) { o.web = false; onEvent({ type: 'notice', text: 'This Codex version could not enable web search; the answer uses the retrieved papers only.' }); args = buildArgs(o); continue; }
       if (o.effort && /reasoning[_ ]effort/i.test(complaint)) { o.effort = ''; args = buildArgs(o); continue; }
     }
@@ -84,7 +88,7 @@ async function complete(opts) {
     if (state.error) throw new Error(explain(state.error, code));
     if (code !== 0) throw new Error(explain(stderr, code));
     if (!state.text) throw new Error('Codex finished without writing an answer.');
-    return { text: state.text, usage: state.usage };
+    return { text: state.text, usage: state.usage, model: null }; // Codex's event stream does not name the model that answered
   }
   throw new Error('This version of Codex does not accept the options Lectern needs. Update Codex and try again.');
 }
