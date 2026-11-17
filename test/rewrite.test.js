@@ -51,7 +51,8 @@ test('rewrite rejects oversize input before calling a model and does not fall ba
 test('rewrite API streams a completed result from the configured provider', async () => {
   const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'lectern-rewrite-api-')) });
   app.config.update({ bins: { codex: path.join(__dirname, 'fakes', 'codex'), claude: '/nonexistent/claude' } });
-  const base = await app.listen(0);
+  const pageUrl = await app.listen(0); // the window's address, with the token
+  const base = pageUrl.slice(0, pageUrl.indexOf('?'));
   try {
     const response = await fetch(base + 'api/checks/rewrite', { method: 'POST', headers: { 'x-lectern-token': app.token, 'content-type': 'application/json' }, body: JSON.stringify({ text: original, engine: 'codex', model: 'gpt-6.1-sol' }) });
     const stream = await response.text();

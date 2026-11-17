@@ -60,11 +60,7 @@
 .pf-status .chk-busy { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--cab-3); vertical-align: middle; }
 .pf-warn { color: var(--amber); }
 .pf-error { color: var(--brick); font-weight: 500; }
-.pf-limits { margin-top: 6px; }
-.pf-acc { max-width: 74ch; margin: 8px 0 0; font: 400 13px/1.55 var(--sans); color: var(--ink-3); }
-.pf-acc summary { width: fit-content; cursor: pointer; color: var(--ink-2); font-weight: 500; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
-.pf-acc summary:hover { color: var(--ink); }
-.pf-acc p { margin: 8px 0 0; }
+/* the limits and the measured accuracy use the Writing desk's fine print (.chk-about in checks.css) */
 
 /* ---- the rail of suggestions */
 .pf-rail {
@@ -127,4 +123,9 @@
   .pf-grid { grid-template-columns: minmax(0, 1fr); }
   .pf-rail { position: static; max-height: none; }
   .pf-run { margin-left: 0; }
+}
+/* A narrow sheet with text in it keeps its buttons on one line: the paste hint is only needed while it is empty. */
+@container pf (max-width: 520px) {
+  .pf-sheet .chk-sheet-top.has-text { justify-content: flex-end; }
+  .pf-sheet .chk-sheet-top.has-text .chk-hint { display: none; }
 }

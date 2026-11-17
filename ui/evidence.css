@@ -65,8 +65,9 @@
 .coverage-table td { padding: 9px 7px; }
 .coverage-cell { width: 100%; min-height: 72px; padding: 10px 4px; border: 1px solid transparent; border-radius: 9px; color: var(--ink); background: color-mix(in srgb, var(--focus) calc(7% + var(--density) * 42%), var(--sheet)); font-size: 13px; }
 .coverage-cell:hover:not(:disabled) { border-color: var(--focus); }
+/* an empty cell is blank but for a faint dash (decoration: the caption under the map says what an empty cell means) */
 .coverage-cell.empty { font-family: var(--sans); background: var(--line-soft); color: var(--ink-3); cursor: default; }
-.coverage-cell small { display: block; font-size: 10px; margin-top: 5px; }
+.coverage-dash { opacity: .6; }
 .evidence-empty { background: var(--sheet); border: 1px dashed var(--line); border-radius: 12px; padding: 18px; color: var(--ink-3); font: 13px/1.6 var(--sans); }
 .evidence-empty .evidence-heading { margin: 0; }
 .thread-workspace { --thread-header: 68px; --window-inset: 0px; min-height: 100%; overflow-anchor: none; }
@@ -95,9 +96,6 @@
 .reference-toolbar .input { flex: 1; min-width: 160px; }
 .reference-filter { display: flex; gap: 10px; align-items: center; padding: 10px 0; color: var(--ink-2); font-size: 12px; }
 .reference-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 12px 0; }
-.reference-exports { display: flex; gap: 8px; font-size: 12px; flex-wrap: wrap; }
-.reference-exports summary { cursor: pointer; }
-.reference-exports .btn { margin-top: 7px; }
 .evidence-turn .cite.named { background: var(--line-soft); color: var(--ink); text-decoration: none; border-radius: 5px; padding: 2px 5px; margin: 1px 3px; font-weight: 600; font-size: 11.5px; line-height: 17px; }
 .evidence-turn .cite[data-stance]::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 2px; margin-right: 5px; background: var(--ink-3); vertical-align: 1px; }
 .evidence-turn .cite[data-stance="supports"]::before { background: var(--spruce); }
@@ -138,6 +136,7 @@
 .pf-image { display: block; border-radius: 9px; background: #fff; padding: 10px; border: 1px solid var(--line-soft); }
 .pf-image img { display: block; max-width: 100%; max-height: 520px; margin: 0 auto; height: auto; object-fit: contain; }
 .pf-image:hover { border-color: var(--ink-3); }
+.pf-missing { margin: 8px 0 0; color: var(--ink-2); font-size: 13px; }
 .pf-read { margin: 12px 0 0; color: var(--ink); }
 .pf-read strong { font-weight: 600; }
 .pf-caption { margin-top: 8px; color: var(--ink-2); font-size: 13px; }

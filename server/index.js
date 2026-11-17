@@ -7,7 +7,7 @@ const http = require('http');
 const path = require('path');
 const crypto = require('crypto');
 
-const { Config, EFFORTS } = require('./config');
+const { Config, EFFORTS, checkPatch } = require('./config');
 const { Store } = require('./store');
 const llm = require('./llm');
 const { createUsageMonitor } = require('./llm/usage');
@@ -46,25 +46,49 @@ const STATIC = {
 };
 const CSP = "default-src 'self'; img-src 'self' data: https://pmc-oa-opendata.s3.amazonaws.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 
+const FAILED = 'Lectern could not finish that. Try again; if it keeps happening, restart Lectern.';
+const OPEN_FROM_APP = 'Open this window from the Lectern app, or use the address printed in the terminal.\n';
+
 function json(res, status, body) {
   const text = JSON.stringify(body);
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   res.end(text);
 }
 
+/** Compare a secret in constant time, so the time an answer takes says nothing about how much of a guess was right. */
+function sameSecret(given, secret) {
+  const a = Buffer.from(typeof given === 'string' ? given : '');
+  const b = Buffer.from(secret);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/**
+ * Read a JSON body. Anything but a JSON object (null, a list, a number) reads as {}, so a route only ever sees an
+ * object. A body over `limit` is read to its end and thrown away, then refused with 413, so the window gets an
+ * answer it can show instead of a broken connection; a body far over the limit is cut off.
+ */
 function readBody(req, limit = 2 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let size = 0;
+    let over = false;
     const chunks = [];
+    const tooLarge = () => Object.assign(new Error('That is more than Lectern can take at once. Shorten the text or split it into parts, then try again.'), { status: 413 });
     req.on('data', (c) => {
       size += c.length;
-      if (size > limit) { reject(Object.assign(new Error('Request too large'), { status: 413 })); req.destroy(); return; }
+      if (over) {
+        if (size > limit * 4 + 64 * 1024 * 1024) { reject(tooLarge()); req.destroy(); }
+        return;
+      }
+      if (size > limit) { over = true; chunks.length = 0; return; }
       chunks.push(c);
     });
     req.on('end', () => {
+      if (over) return reject(tooLarge());
       if (!chunks.length) return resolve({});
-      try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
-      catch { reject(Object.assign(new Error('Body is not valid JSON'), { status: 400 })); }
+      let body;
+      try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+      catch { return reject(Object.assign(new Error('The request could not be read. Reload the window and try again.'), { status: 400 })); }
+      resolve(body && typeof body === 'object' && !Array.isArray(body) ? body : {});
     });
     req.on('error', reject);
   });
@@ -81,7 +105,9 @@ function createApp({ dataDir, voice, pdf } = {}) {
   const usage = createUsageMonitor();
   // The window receives this token inside its HTML and must send it back with every API call.
   // Another website open in a browser can reach 127.0.0.1 but cannot read the token, so it
-  // cannot spend your credits or read your library.
+  // cannot spend your credits or read your library. The page itself is served with the token only
+  // to an address that already carries it (?t=…), which only the app and the terminal know, so other
+  // programs or other people on this computer cannot fetch the page to learn it.
   const token = crypto.randomBytes(24).toString('hex');
   let port = 0;
 
@@ -105,7 +131,9 @@ function createApp({ dataDir, voice, pdf } = {}) {
     'GET /api/state': async () => publicState(),
     'GET /api/usage': async () => usage(config.get()),
 
-    'PUT /api/settings': async (body) => { config.update(body); return publicState(); },
+    // The window may point Lectern at its own copy of claude or codex; checkPatch accepts only a real
+    // program of that name, so the settings cannot be used to make Lectern run anything else.
+    'PUT /api/settings': async (body) => { checkPatch(body, config.get()); config.update(body); return publicState(); },
 
     'GET /api/models': async (_body, url) => {
       const engine = url.searchParams.get('engine') || '';
@@ -114,8 +142,8 @@ function createApp({ dataDir, voice, pdf } = {}) {
 
     'POST /api/test-engine': async (body) => {
       const settings = config.get();
-      const engine = body.engine;
-      if (body.model) settings.models[engine] = String(body.model);
+      const engine = typeof body.engine === 'string' ? body.engine : '';
+      if (typeof body.model === 'string' && body.model && settings.models[engine] !== undefined) settings.models[engine] = body.model.slice(0, 100);
       const started = Date.now();
       try {
         const out = await llm.complete({
@@ -124,7 +152,7 @@ function createApp({ dataDir, voice, pdf } = {}) {
           prompt: 'Say the word.',
           signal: AbortSignal.timeout(90000),
         });
-        return { ok: true, reply: String(out.text || '').trim().slice(0, 80), ms: Date.now() - started, model: settings.models[engine] || 'default' };
+        return { ok: true, reply: String(out.text || '').trim().slice(0, 80), ms: Date.now() - started, model: settings.models[engine] || '' };
       } catch (e) {
         return { ok: false, error: e.message };
       }
@@ -133,7 +161,7 @@ function createApp({ dataDir, voice, pdf } = {}) {
     'GET /api/threads': async () => ({ threads: store.listThreads() }),
     'GET /api/thread': async (_b, url) => {
       const t = store.getThread(url.searchParams.get('id'));
-      if (!t) throw Object.assign(new Error('That conversation no longer exists.'), { status: 404 });
+      if (!t) throw Object.assign(new Error('That chat no longer exists.'), { status: 404 });
       return t;
     },
     // Rename ({ title }), show another version of an edited question ({ leaf }), keep it in the library ({ saved }).
@@ -147,7 +175,7 @@ function createApp({ dataDir, voice, pdf } = {}) {
     // Keep one question in the library ({ thread, id, saved }).
     'PUT /api/turn': async (body) => {
       const turn = store.updateTurn(String(body.thread || ''), String(body.id || ''), { saved: typeof body.saved === 'boolean' ? body.saved : undefined });
-      if (!turn) throw Object.assign(new Error('That conversation no longer exists.'), { status: 404 });
+      if (!turn) throw Object.assign(new Error('That chat no longer exists.'), { status: 404 });
       return { turn };
     },
     'DELETE /api/thread': async (_b, url) => ({ ok: store.deleteThread(url.searchParams.get('id')) }),
@@ -186,7 +214,7 @@ function createApp({ dataDir, voice, pdf } = {}) {
 
     // Writing desk: plain text from a dropped document ({ name, data: base64 }). Nothing is stored.
     'POST /api/checks/extract': async (body) => {
-      const data = Buffer.from(String(body.data || ''), 'base64');
+      const data = Buffer.from(typeof body.data === 'string' ? body.data : '', 'base64');
       const { text, kind } = extractText({ name: String(body.name || '').slice(0, 200), data });
       return { text, kind, name: String(body.name || '').slice(0, 200) };
     },
@@ -195,7 +223,7 @@ function createApp({ dataDir, voice, pdf } = {}) {
   async function handleAsk(req, res) {
     const body = await readBody(req);
     const mode = modeOf(body.mode).id;
-    const question = String(body.question || '').trim().slice(0, modeOf(mode).maxInput);
+    const question = typeof body.question === 'string' ? body.question.trim().slice(0, modeOf(mode).maxInput) : '';
     if (!question) return json(res, 400, { error: 'Type a question first.' });
 
     res.writeHead(200, {
@@ -211,10 +239,10 @@ function createApp({ dataDir, voice, pdf } = {}) {
     const beat = setInterval(() => { if (open && !res.writableEnded) res.write(': keep-alive\n\n'); }, 15000);
 
     try {
-      const o = body.overrides || {};
+      const o = body.overrides && typeof body.overrides === 'object' ? body.overrides : {};
       await runAsk({
         question,
-        threadId: body.threadId || null,
+        threadId: typeof body.threadId === 'string' && body.threadId ? body.threadId : null,
         parentId: body.parentId === null || (typeof body.parentId === 'string' && /^[a-f0-9]{8,32}$/.test(body.parentId)) ? body.parentId : undefined,
         mode,
         filters: cleanFilters(body.filters),
@@ -227,7 +255,7 @@ function createApp({ dataDir, voice, pdf } = {}) {
         config, store, signal: abort.signal, emit,
       });
     } catch (e) {
-      if (!abort.signal.aborted) emit('error', { message: e.message || 'Something went wrong.' });
+      if (!abort.signal.aborted) emit('error', { message: e.message || FAILED });
     } finally {
       clearInterval(beat);
       if (!res.writableEnded) res.end();
@@ -237,7 +265,7 @@ function createApp({ dataDir, voice, pdf } = {}) {
   /** Writing desk: run one check and stream its progress as server-sent events. Nothing is stored. */
   async function handleCheck(req, res, kind) {
     const body = await readBody(req, 3 * 1024 * 1024);
-    const text = String(body.text || '');
+    const text = typeof body.text === 'string' ? body.text : '';
     if (!text.trim()) return json(res, 400, { error: 'Paste some text or drop a document first.' });
     res.writeHead(200, {
       'content-type': 'text/event-stream; charset=utf-8',
@@ -252,21 +280,21 @@ function createApp({ dataDir, voice, pdf } = {}) {
     const beat = setInterval(() => { if (open && !res.writableEnded) res.write(': keep-alive\n\n'); }, 15000);
     const engine = typeof body.engine === 'string' ? body.engine : undefined;
     try {
-      const o = body.options || {};
+      const o = body.options && typeof body.options === 'object' ? body.options : {};
       const model = typeof body.model === 'string' ? body.model.slice(0, 100) : undefined;
       const result = kind === 'proofread'
         ? await runProofread({ text, config, signal: abort.signal, emit, engine, selectedModel: model, variant: typeof body.variant === 'string' ? body.variant : 'auto' })
         : kind === 'rewrite'
-        ? await runRewrite({ text, config, signal: abort.signal, emit, engine, selectedModel: typeof body.model === 'string' ? body.model.slice(0, 100) : undefined })
+        ? await runRewrite({ text, config, signal: abort.signal, emit, engine, selectedModel: model })
         : kind === 'ai'
-        ? await runAiCheck({ text, config, signal: abort.signal, emit, engine, selectedModel: typeof body.model === 'string' ? body.model.slice(0, 100) : undefined })
+        ? await runAiCheck({ text, config, signal: abort.signal, emit, engine, selectedModel: model })
         : await runSimilarityCheck({
-          text, config, store, signal: abort.signal, emit, engine,
+          text, config, store, signal: abort.signal, emit, engine, selectedModel: model,
           options: { quotes: o.quotes !== false, references: o.references !== false, web: o.web !== false, papers: o.papers !== false },
         });
       emit('result', result);
     } catch (e) {
-      if (!abort.signal.aborted) emit('error', { message: e.message || 'Something went wrong.' });
+      if (!abort.signal.aborted) emit('error', { message: e.message || FAILED });
     } finally {
       clearInterval(beat);
       if (!res.writableEnded) res.end();
@@ -292,6 +320,16 @@ function createApp({ dataDir, voice, pdf } = {}) {
         return res.end(data);
       }
 
+      // The page carries the token, so it is served only to an address that already has it: the one the app opens
+      // and the terminal prints. Any other request for it (a bookmark, an old tab, another program) gets a note instead.
+      if (req.method === 'GET' && url.pathname === '/' && !sameSecret(url.searchParams.get('t'), token)) {
+        res.writeHead(403, {
+          'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': CSP,
+          'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer',
+        });
+        return res.end(OPEN_FROM_APP);
+      }
+
       if (req.method === 'GET' && STATIC[url.pathname]) {
         const [file, type] = STATIC[url.pathname];
         let content = fs.readFileSync(path.join(ROOT, file), 'utf8');
@@ -304,7 +342,7 @@ function createApp({ dataDir, voice, pdf } = {}) {
       }
 
       if (!url.pathname.startsWith('/api/')) { res.writeHead(404); return res.end('Not found'); }
-      if (req.headers['x-lectern-token'] !== token) return json(res, 403, { error: 'This window is out of date. Reload it.' });
+      if (!sameSecret(req.headers['x-lectern-token'], token)) return json(res, 403, { error: 'This window is out of date. Reload it.' });
 
       if (req.method === 'POST' && url.pathname === '/api/ask') return await handleAsk(req, res);
       if (req.method === 'POST' && url.pathname === '/api/checks/ai') return await handleCheck(req, res, 'ai');
@@ -318,19 +356,25 @@ function createApp({ dataDir, voice, pdf } = {}) {
       return json(res, 200, await route(body, url));
     } catch (e) {
       if (res.headersSent) { try { res.end(); } catch { /* socket already closed */ } return; }
-      return json(res, e.status || 500, { error: e.message || 'Server error' });
+      if (!e.status) console.error('Lectern:', e);
+      return json(res, e.status || 500, { error: e.message || FAILED });
     }
   });
 
   return {
     config, store, server, token,
-    /** Start listening. Port 0 picks any free port. Resolves the URL to open. */
+    /**
+     * Start listening. Port 0 picks any free port. Resolves the address to open: it carries the token
+     * (http://127.0.0.1:<port>/?t=<token>), so only whoever started Lectern can open the window.
+     */
     listen(wantedPort = 0) {
       return new Promise((resolve, reject) => {
-        server.once('error', reject);
+        const failed = (e) => reject(e);
+        server.once('error', failed);
         server.listen(wantedPort, '127.0.0.1', () => {
+          server.off('error', failed);
           port = server.address().port;
-          resolve(`http://127.0.0.1:${port}/`);
+          resolve(`http://127.0.0.1:${port}/?t=${token}`);
         });
       });
     },

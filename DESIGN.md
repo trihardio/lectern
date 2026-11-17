@@ -16,6 +16,7 @@ Tokens live in `ui/styles.css` (`:root`, light and dark). The specimen component
 | Sheet (cards, panels) | `--sheet` | `#FCFDFB` | `#131D19` | never cream |
 | Ink | `--ink` / `-2` / `-3` | `#18201C` `#47514B` `#636D67` | `#E5EDE8` `#B2C0B8` `#8B9A92` | `-3` is the lightest text allowed on the sheet (AA) |
 | Cabinet (rail, primary buttons, send) | `--cab` `--cab-2` `--cab-3` | `#1F3A33` `#284A40` `#36594E` | `#0A110F` `#15211D` `#1F2F29` | the rail re-maps `--ink*`/`--line*` to cabinet tokens |
+| Rail layers (field, hovered row, open row, hairlines) | `--rail-bg` `--rail-2` `--rail-3` `--rail-line` | `--cab` `--cab-2` `--cab-3` `--cab-line` | `--cab-2` `#22332C` `#2A3E35` `#2E4038` | dark lifts the rail a step off the desk and adds a 1px right edge in `--rail-line` |
 | Accession stamp | `--stamp` | `#5B3FA8` | `#B9A6F5` | **citations only**. Nothing else is violet |
 | Highlighter (mixed, wordmark, display rule) | `--mark` | `#F7E64A` | `#F2DE4C` | |
 | Findings | `--spruce` / `--brick` / `--amber` | higher / lower / depends | | always with a word, never colour alone |
@@ -36,11 +37,15 @@ Tokens live in `ui/styles.css` (`:root`, light and dark). The specimen component
   paper's stance); the wash sweeps in with `background-size`, 0.55s `--ease`.
 - **Margin labels** `.margin-note > .specimen` (built by `addMargin()`): one label per paper the first
   time a paragraph cites it, on the answer's own grid so it sits level with the paragraph. Shown when
-  the page container is at least 960px wide (`@container page`), hidden below.
+  the page container is at least 960px wide (`@container page`), hidden below. The sample line and the
+  "+N more" line are sans; only their numbers (`.sp-num`) are mono.
 - **Determination slip** `.answer-summary`: 1px ink border, a dashed rule under a mono header.
-- **Folder tab** `[data-folder]` + `::before`: on margin labels, home examples (cabinet colour) and
-  reference rows. `folderOf()` in `ui/app.js` maps design text to a folder.
-- **Mounted figures**: white mat with two strips of linen tape (`.pf-image::before/::after`).
+- **Folder tab** `[data-folder]` + `::before`: on margin labels, home examples (cabinet colour; `--cab-ink-2` in
+  dark mode, where the cabinet colour would vanish) and reference rows. `folderOf()` in `ui/app.js` maps design
+  text to a folder.
+- **Mounted figures**: white mat with two strips of linen tape (`.pf-image::before/::after`). When an image cannot be loaded, the
+  mat gives way to one muted line, "The image could not be loaded." (`.pf-missing`, `--ink-2`, 13 px), the same height as
+  the empty mat, so nothing below moves; the caption, source and link stay.
 
 ## Rules
 - Hairline seams (1px) between panels; shadows only on floating things (composer, dialogs, cite card).
@@ -48,6 +53,10 @@ Tokens live in `ui/styles.css` (`:root`, light and dark). The specimen component
 - Motion follows the 0.1.0 Motion system (`Motion` in `ui/app.js`, Reduce motion honoured). The only new
   motion is the highlighter sweep.
 - The hatched "mixed" fill (`.tab.mixed`, `.bar-fill.mixed`) is data texture for colour-blind reading, not decoration.
+- An empty coverage-map cell is blank but for a faint dash; the caption under the map says what an empty cell means.
+- Switches that are on use `--sel`, like every other selected thing; the stronger study kinds (`.badge.strong`) are bold
+  on the same pale tint as other badges, never a near-black fill.
+- A fold arrow stays on the line of its heading's last word (`.fold-tail` is `nowrap`).
 
 ## Writing check workspace
 

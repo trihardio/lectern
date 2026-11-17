@@ -52,8 +52,14 @@ process.stdin.on('end', () => {
   else if (/exactly the word/i.test(input)) text = 'ready';
   else if (/choose figures from research papers/i.test(input)) text = process.env.FAKE_NO_FIGURES ? '{"figures": []}' : fx.figuresJson(input);
   else if (/claim-citation pairs/i.test(input)) text = process.env.FAKE_NO_CITATIONS ? '{"items": []}' : fx.VERIFY_JSON;
+  const web = args.includes('web_search="live"');
+  if (web && text === fx.ANSWER_TEXT) text = fx.withWebLinks(text);
   out({ type: 'thread.started', thread_id: 't1' });
   out({ type: 'turn.started' });
+  if (web) { // a finished web search names the page it opened (codex-rs exec_events.rs: WebSearchItem with an action)
+    out({ type: 'item.started', item: { id: 'ws_1', type: 'web_search', query: 'remote work productivity', action: { type: 'search', query: 'remote work productivity' } } });
+    out({ type: 'item.completed', item: { id: 'ws_1', type: 'web_search', query: 'remote work productivity', action: { type: 'open_page', url: 'https://example.org/report' } } });
+  }
   out({ type: 'item.completed', item: { id: 'item_0', type: 'reasoning', text: 'Comparing designs.' } });
   out({ type: 'item.completed', item: { id: 'item_1', type: 'agent_message', text } });
   out({ type: 'turn.completed', usage: { input_tokens: 8800, cached_input_tokens: 0, output_tokens: 450, reasoning_output_tokens: 100 } });

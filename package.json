@@ -1,7 +1,7 @@
 {
   "name": "lectern",
   "productName": "Lectern",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Ask a research question and get an answer grounded in real, linkable papers.",
   "main": "electron/main.js",
   "private": true,
@@ -13,7 +13,7 @@
     "make-app": "bash scripts/make-app.sh"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.3"
   },
   "devDependencies": {
     "electron": "^45.0.0"

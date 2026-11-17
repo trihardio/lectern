@@ -50,6 +50,41 @@ function defaultDataDir() {
 
 function isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
 
+const EMAIL = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
+const BINS = { claude: 'Claude Code', codex: 'Codex' };
+
+/**
+ * Check a settings change that came from the window, before it is saved. Throws an Error with status 400 and a
+ * message to show. A program location ("bins") must be the full path to an existing program named claude or codex
+ * (claude.exe, .cmd or .bat on Windows); an empty value means "find it automatically", and a location that is
+ * already saved is accepted as it is. This stops the settings being used to make Lectern start any other program.
+ */
+function checkPatch(patch, current = {}) {
+  const fail = (message) => { throw Object.assign(new Error(message), { status: 400 }); };
+  if (!isObj(patch)) return;
+  if (typeof patch.email === 'string' && patch.email.trim() && !EMAIL.test(patch.email.trim())) {
+    fail('Your email does not look like an address (name@example.org). Correct it, or leave the field empty.');
+  }
+  if (!isObj(patch.bins)) return;
+  const saved = isObj(current.bins) ? current.bins : {};
+  const win = process.platform === 'win32';
+  for (const [key, label] of Object.entries(BINS)) {
+    if (typeof patch.bins[key] !== 'string') continue;
+    const where = patch.bins[key].trim();
+    if (!where || where === String(saved[key] || '').trim()) continue;
+    const names = win ? [`${key}.exe`, `${key}.cmd`, `${key}.bat`] : [key];
+    const base = path.basename(where);
+    if (!path.isAbsolute(where)) fail(`${label}: enter the full path to the ${key} program (for example ${win ? `C:\\Users\\you\\.local\\bin\\${key}.exe` : `/Users/you/.local/bin/${key}`}), or leave the field empty so Lectern finds it.`);
+    if (!names.includes(win || process.platform === 'darwin' ? base.toLowerCase() : base)) {
+      fail(`${label}: Lectern only starts a program named ${names.join(', ')} here, and ${base} has another name. Enter the path to ${label}'s ${names[0]} program, or leave the field empty.`);
+    }
+    let info;
+    try { info = fs.statSync(where); } catch { fail(`${label}: nothing was found at ${where}. Check the path, or leave the field empty so Lectern finds ${label} itself.`); }
+    if (!info.isFile()) fail(`${label}: ${where} is a folder. Enter the path to the ${names[0]} program inside it.`);
+    if (!win) { try { fs.accessSync(where, fs.constants.X_OK); } catch { fail(`${label}: ${where} is not a program this computer can run. Check the path, or leave the field empty.`); } }
+  }
+}
+
 function merge(base, extra) {
   const out = { ...base };
   for (const [k, v] of Object.entries(extra || {})) {
@@ -78,11 +113,11 @@ class Config {
   _load() {
     try {
       const data = JSON.parse(fs.readFileSync(this.file, 'utf8'));
-      if (!isObj(data)) throw new Error('Invalid settings format');
+      if (!isObj(data)) throw new Error('The settings file does not hold a settings object.');
       return this._sanitize(merge(DEFAULTS, data));
     } catch (e) {
       if (e.code === 'ENOENT') return this._sanitize(merge(DEFAULTS, {}));
-      throw new Error('Settings could not be read. The settings file was left untouched.');
+      throw new Error(`Lectern could not read its settings file, ${this.file}. The file was left as it is. Fix it, or move it out of that folder (Lectern then starts with default settings), and open Lectern again.`);
     }
   }
 
@@ -92,6 +127,8 @@ class Config {
     s.maxPapers = Math.max(6, Math.min(30, Math.round(Number(s.maxPapers) || 16)));
     for (const k of Object.keys(s.keys)) s.keys[k] = String(s.keys[k] || '').trim();
     s.email = String(s.email || '').trim();
+    if (s.email && !EMAIL.test(s.email)) s.email = ''; // only a real-looking address is sent with database requests
+    for (const k of Object.keys(s.bins)) s.bins[k] = String(s.bins[k] || '').trim();
     s.profile = Profile.sanitize(s.profile);
     if (s.citeMarks !== 'number') s.citeMarks = 'author';
     return s;
@@ -142,4 +179,4 @@ class Config {
   }
 }
 
-module.exports = { Config, DEFAULTS, ENGINES, EFFORTS, defaultDataDir, writeAtomic };
+module.exports = { Config, DEFAULTS, ENGINES, EFFORTS, defaultDataDir, writeAtomic, checkPatch };

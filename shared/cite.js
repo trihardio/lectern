@@ -124,7 +124,16 @@
     const word = (String(p.title || '').toLowerCase().match(/[a-z]{4,}/) || ['paper'])[0];
     return `${fam || 'anon'}${p.year || ''}${word}`;
   }
-  const bibEsc = (s) => String(s || '').replace(/([&%$#_])/g, '\\$1');
+  // Characters TeX reads as commands or grouping are written so they print as themselves: a title with a brace or
+  // a backslash can no longer end its field early or run a command.
+  const bibEsc = (s) => String(s == null ? '' : s)
+    .replace(/\\/g, '\u0000')
+    .replace(/([{}&%$#_])/g, '\\$1')
+    .replace(/~/g, '\\textasciitilde{}').replace(/\^/g, '\\textasciicircum{}')
+    .replace(/\u0000/g, '\\textbackslash{}');
+  // DOIs and web addresses are read verbatim, so they are kept whole; only braces and backslashes, which would
+  // unbalance the braces around the field, are percent-encoded (the address still resolves to the same page).
+  const bibUrl = (s) => String(s || '').replace(/[{}\\]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
   const BIB_TYPES = { 'Conference paper': 'inproceedings', 'Book chapter': 'incollection', Book: 'book', Thesis: 'phdthesis', Preprint: 'misc', Report: 'techreport' };
 
   function bibtex(p, usedKeys) {
@@ -133,18 +142,18 @@
     const type = BIB_TYPES[p.kind] || 'article';
     const venueField = type === 'inproceedings' || type === 'incollection' ? 'booktitle' : (type === 'article' ? 'journal' : 'howpublished');
     const fields = [
-      ['author', (p.authors || []).map((x) => (x.given ? `${x.family}, ${x.given}` : `{${x.family}}`)).join(' and ')],
-      ['title', p.title ? `{${p.title}}` : ''],
-      [venueField, p.venue],
-      ['year', p.year],
-      ['volume', p.volume],
-      ['number', p.issue],
-      ['pages', String(p.pages || '').replace(/\s*[-–]+\s*/g, '--')],
-      ['publisher', type !== 'article' ? p.publisher : ''],
-      ['doi', p.doi],
-      ['url', doiUrl(p)],
+      ['author', (p.authors || []).map((x) => (x.given ? `${bibEsc(x.family)}, ${bibEsc(x.given)}` : `{${bibEsc(x.family)}}`)).join(' and ')],
+      ['title', p.title ? `{${bibEsc(p.title)}}` : ''],
+      [venueField, bibEsc(p.venue)],
+      ['year', bibEsc(p.year)],
+      ['volume', bibEsc(p.volume)],
+      ['number', bibEsc(p.issue)],
+      ['pages', bibEsc(String(p.pages || '').replace(/\s*[-–]+\s*/g, '--'))],
+      ['publisher', type !== 'article' ? bibEsc(p.publisher) : ''],
+      ['doi', bibUrl(p.doi)],
+      ['url', bibUrl(doiUrl(p))],
     ].filter(([, v]) => v);
-    const body = fields.map(([k, v]) => `  ${k} = {${k === 'doi' || k === 'url' ? v : bibEsc(v)}}`).join(',\n');
+    const body = fields.map(([k, v]) => `  ${k} = {${v}}`).join(',\n');
     const text = `@${type}{${key},\n${body}\n}`;
     return { text, html: `<pre>${esc(text)}</pre>` };
   }

@@ -4,9 +4,12 @@
 // Runs read-only in an empty folder; the model only reads the prompt and writes an answer.
 // Codex returns the answer in one piece rather than word by word.
 
-const { findBin, runCli, runQuick, statusCache, unknownFlag, withoutFlag } = require('./cli');
+const { findBin, runCli, runQuick, statusCache, unknownFlag, withoutFlag, tooOld, shortReason } = require('./cli');
 
 const VALUE_FLAGS = new Set(['-m', '--model', '-c', '--sandbox']);
+// Flags that keep a run safe: the read-only sandbox, and no session saved to disk. A version that rejects one is
+// too old to use; Lectern stops and asks for an update instead of running without it.
+const SAFETY_FLAGS = new Set(['--sandbox', '-s', '--ephemeral']);
 
 function buildArgs({ model, effort, web }) {
   const args = ['exec', '--json', '--skip-git-repo-check', '--ephemeral', '--sandbox', 'read-only'];
@@ -17,7 +20,22 @@ function buildArgs({ model, effort, web }) {
   return args;
 }
 
+/**
+ * Pages Codex's web search really opened or returned: a finished web_search item names the page it opened
+ * (action open_page or find_in_page) and, in newer versions, the results it got. Only these may become web
+ * sources; a link the model writes from memory never does.
+ */
+function addWebResults(state, item) {
+  const add = (url, title) => {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url) || state.webResults.size >= 200) return;
+    if (!state.webResults.has(url)) state.webResults.set(url, { url, title: typeof title === 'string' ? title.replace(/\s+/g, ' ').trim().slice(0, 300) : '' });
+  };
+  if (item.action && typeof item.action === 'object') add(item.action.url, '');
+  if (Array.isArray(item.results)) for (const r of item.results) if (r && typeof r === 'object') add(r.url, r.title);
+}
+
 function makeLineHandler(onEvent, state) {
+  if (!state.webResults) state.webResults = new Map();
   return (line) => {
     let msg;
     try { msg = JSON.parse(line); } catch { return; }
@@ -26,6 +44,7 @@ function makeLineHandler(onEvent, state) {
       if (item.type === 'web_search') onEvent({ type: 'status', text: item.query ? `Searching the web: ${item.query}` : 'Searching the web' });
       if (item.type === 'reasoning') onEvent({ type: 'status', text: 'Thinking' });
     } else if (msg.type === 'item.completed') {
+      if (item.type === 'web_search') addWebResults(state, item);
       if (item.type === 'agent_message' && item.text) {
         const piece = (state.text ? '\n\n' : '') + item.text;
         state.text += piece;
@@ -44,19 +63,32 @@ function makeLineHandler(onEvent, state) {
   };
 }
 
-function explain(raw, code) {
+/**
+ * A plain message for a failed run. What the CLI printed on stderr (which can hold file paths and account details)
+ * goes to the log only, never into the window or a saved conversation. An error the provider reported in the event
+ * stream (`fromStream`) is shown as a short line without paths or addresses.
+ */
+function explain(raw, code, model, fromStream = false) {
   raw = String(raw || '').trim();
   if (/not logged in|login|unauthorized|401|sign in/i.test(raw)) {
     return 'Codex is not signed in. Open a terminal, run "codex login", then try again.';
   }
-  if (/usage limit|rate limit|quota/i.test(raw)) return `Your ChatGPT plan's Codex limit was reached. ${raw.slice(0, 200)}`;
-  return `Codex stopped with an error${code ? ` (exit ${code})` : ''}: ${raw.slice(0, 400) || 'no details were given'}`;
+  if (/usage limit|rate limit|quota/i.test(raw)) {
+    const when = /try again (in|at) ([^\n.;|]{1,40})/i.exec(raw);
+    return `Your ChatGPT plan's Codex limit was reached${when ? ` (try again ${when[1].toLowerCase()} ${when[2].trim()})` : ''}. Try again later, or pick another provider.`;
+  }
+  console.error(`Lectern: Codex stopped${code ? ` (exit ${code})` : ''}:`, raw.slice(0, 2000) || 'no details');
+  if (model && /model/i.test(raw) && /not.?found|invalid|unknown|not available|does not exist|unsupported/i.test(raw)) {
+    return `Codex could not use the model ${model}. Pick another model, or update Codex, then try again.`;
+  }
+  const reason = fromStream ? shortReason(raw) : '';
+  return `Codex stopped with an error${code ? ` (exit ${code})` : ''}${reason ? `: ${reason}` : ''}. Try again; if it keeps happening, run "codex" in Terminal to check that it works.`;
 }
 
 async function complete(opts) {
   const { signal, onEvent = () => {} } = opts;
   const bin = await findBin('codex', opts.bin);
-  if (!bin) throw new Error('The Codex CLI was not found on this Mac. Install it, or set its location in Settings.');
+  if (!bin) throw new Error('The Codex CLI was not found on this computer. Install it, or set its location in Settings.');
 
   // Codex has no separate system-prompt option, so instructions lead the prompt.
   const input = opts.system ? `${opts.system}\n\n---\n\n${opts.prompt}` : opts.prompt;
@@ -65,7 +97,7 @@ async function complete(opts) {
   onEvent({ type: 'status', text: 'Waiting for Codex' });
 
   for (let attempt = 0; attempt < 5; attempt++) {
-    const state = { text: '', usage: { input: 0, output: 0 }, error: null };
+    const state = { text: '', usage: { input: 0, output: 0 }, error: null, webResults: new Map() };
     const { code, stderr } = await runCli({
       bin, args, input, signal,
       dropEnv: ['OPENAI_API_KEY', 'CODEX_API_KEY'], // use the signed-in plan, not a stray API key
@@ -77,6 +109,7 @@ async function complete(opts) {
       const complaint = `${stderr}\n${state.error || ''}`;
       const flag = unknownFlag(stderr);
       if (flag && args.includes(flag)) {
+        if (SAFETY_FLAGS.has(flag)) throw tooOld('Codex', flag);
         // A check that must say which model read the text cannot quietly run on Codex's default model.
         if (opts.strictModel && (flag === '-m' || flag === '--model')) throw Object.assign(new Error(`This version of Codex rejected the model option, so ${opts.model} could not be used. Nothing was read with a different model; update Codex or pick another model.`), { code: 'MODEL_REJECTED' });
         args = withoutFlag(args, flag, VALUE_FLAGS.has(flag)); continue;
@@ -85,10 +118,11 @@ async function complete(opts) {
       if (o.effort && /reasoning[_ ]effort/i.test(complaint)) { o.effort = ''; args = buildArgs(o); continue; }
     }
 
-    if (state.error) throw new Error(explain(state.error, code));
-    if (code !== 0) throw new Error(explain(stderr, code));
+    if (state.error) throw new Error(explain(state.error, code, opts.model, true));
+    if (code !== 0) throw new Error(explain(stderr, code, opts.model));
     if (!state.text) throw new Error('Codex finished without writing an answer.');
-    return { text: state.text, usage: state.usage, model: null }; // Codex's event stream does not name the model that answered
+    // Codex's event stream does not name the model that answered.
+    return { text: state.text, usage: state.usage, model: null, webResults: [...state.webResults.values()] };
   }
   throw new Error('This version of Codex does not accept the options Lectern needs. Update Codex and try again.');
 }
@@ -112,4 +146,4 @@ async function status(opts = {}) {
   });
 }
 
-module.exports = { complete, status, buildArgs, makeLineHandler };
+module.exports = { complete, status, buildArgs, makeLineHandler, addWebResults, SAFETY_FLAGS };

@@ -93,7 +93,7 @@ function batches(units) {
 function parseReply(raw, ids) {
   const json = extractJson(raw);
   if (!json || typeof json !== 'object' || !Array.isArray(json.fixes)) {
-    return { status: 'failed', fixes: new Map(), problems: 1, error: 'The model did not reply in the expected format.' };
+    return { status: 'failed', fixes: new Map(), problems: 1, error: 'The model’s reply could not be read, so this part was not checked. Run the check again.' };
   }
   const allowed = new Set(ids);
   const fixes = new Map();
@@ -283,10 +283,15 @@ const overlaps = (s, e, ranges) => ranges.some((r) => s < r.end && e > r.start);
 function suggestionsFor(text, unit, fix, guard) {
   const dropped = { misaligned: 0, protected: 0, heading: 0 };
   if (!fix) return { suggestions: [], dropped };
+  // A correction much longer than its sentence changes too much to be one: the edit distance is at least the
+  // difference in length. It is dropped before the word-by-word table, which grows with both lengths.
+  if (fix.text.length > 4 * unit.src.length + 200) { dropped.misaligned++; return { suggestions: [], dropped }; }
   const a = tokens(unit.src);
   const b = tokens(fix.text);
+  const limit = Math.max(3, Math.ceil(PROOF.maxChange * a.length));
+  if (b.length - a.length > limit) { dropped.misaligned++; return { suggestions: [], dropped }; }
   const { distance } = align(a.map((x) => x.t), b.map((x) => x.t));
-  if (distance > Math.max(3, Math.ceil(PROOF.maxChange * a.length))) { dropped.misaligned++; return { suggestions: [], dropped }; }
+  if (distance > limit) { dropped.misaligned++; return { suggestions: [], dropped }; }
   const gapIsSpace = (s, e) => /\n/.test(text.slice(unit.start + s, unit.start + e)) && !/\S/.test(text.slice(unit.start + s, unit.start + e));
   const edits = diffEdits(unit.src, fix.text, gapIsSpace);
   const used = new Set();
@@ -418,7 +423,7 @@ async function runProofread({ text, config, signal, emit = () => {}, engine: pre
         } else batch.forEach((u) => unchecked.add(u.i));
       } catch (e) {
         if (signal && signal.aborted) throw e;
-        entry.error = e.message || 'The request failed.';
+        entry.error = e.message || 'The model did not answer for this part. Run the check again.';
         batch.forEach((u) => unchecked.add(u.i));
         if (e.code === 'MODEL_REJECTED') stopReason = entry.error; // the same rejection would repeat: stop, do not switch models
       }

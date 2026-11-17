@@ -351,7 +351,18 @@ function proofreadJson(input) {
   return JSON.stringify({ fixes });
 }
 
+/**
+ * The answer as the stand-in CLIs write it with web search on: a paragraph (before the follow-up questions) that links
+ * one page the search returned and one page the model "remembers", which must stay plain text.
+ */
+function withWebLinks(answer) {
+  const line = 'Recent coverage is in [Sample report](https://example.org/report); see also [a page from memory](https://not-searched.example/made-up).';
+  const at = answer.indexOf('\n\n## Worth following up');
+  return at === -1 ? `${answer}\n\n${line}` : `${answer.slice(0, at)}\n\n${line}${answer.slice(at)}`;
+}
+
 module.exports = {
+  withWebLinks,
   proofreadJson,
   CHECK_SOURCE_TEXT, checkPage, aiReviewJson, SOURCE_HUNT_JSON,
   FIGURE_PMC, europepmcLite, bucketList, BUCKET_FILES, FIGURE_XML, FIGURE_JSON, figuresJson,

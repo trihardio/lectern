@@ -18,14 +18,16 @@ const llm = require('../llm');
 const Prompts = require('../prompts');
 const { extractJson, httpUrl } = require('../util');
 const { searchAll, merge } = require('../sources');
-const { htmlText, pdfText } = require('./extract');
+const { htmlText, pdfText, decodeEntities } = require('./extract');
 const T = require('./text');
 
 const K = 6;               // words per shingle
 const MIN_MATCH = 8;       // shortest run of matching words that counts
 const MAX_GAP = 3;         // words that may differ inside one matching run
 const PAGE_BYTES = 6 * 1024 * 1024;
-const UA = 'Lectern/0.1 (desktop research app; similarity check)';
+const UA = `Lectern/${require('../../package.json').version} (desktop research app; similarity check)`;
+const ROBOTS_RULE_MAX = 512;   // characters; a longer robots.txt rule is ignored
+const ROBOTS_RULES_MAX = 4000; // rules kept from one robots.txt
 
 const STOP = new Set(`a about above after again against all also am an and any are as at be because been before being below between both but by can
 could did do does doing down during each few for from further had has have having he her here hers him his how i if in into is it its itself just
@@ -172,29 +174,80 @@ function passageQuery(sub, s) {
 
 // ------------------------------------------------------------------ safe fetching of web pages
 
+/** An IPv6 address as eight 16-bit numbers, or null. Handles "::" and a dotted IPv4 tail ("::ffff:10.0.0.1"). */
+function ipv6Words(ip) {
+  let v = String(ip).toLowerCase().replace(/%.*$/, ''); // drop a zone ("fe80::1%en0")
+  const tail = /(\d+\.\d+\.\d+\.\d+)$/.exec(v);
+  if (tail) {
+    if (!net.isIPv4(tail[1])) return null;
+    const [a, b, c, d] = tail[1].split('.').map(Number);
+    v = v.slice(0, -tail[1].length) + `${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const halves = v.split('::');
+  if (halves.length > 2) return null;
+  const part = (s) => (s ? s.split(':') : []);
+  const head = part(halves[0]);
+  const rest = halves.length === 2 ? part(halves[1]) : [];
+  const fill = 8 - head.length - rest.length;
+  if (halves.length === 2 ? fill < 1 : fill !== 0) return null;
+  const words = [...head, ...Array(halves.length === 2 ? fill : 0).fill('0'), ...rest];
+  if (words.some((w) => !/^[0-9a-f]{1,4}$/.test(w))) return null;
+  return words.map((w) => parseInt(w, 16));
+}
+
+const ipv4Of = (hi, lo) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+
+/**
+ * Is this address on this computer, on the local network, or otherwise not a public web server?
+ * IPv6 forms that carry an IPv4 address (mapped, compatible, NAT64, 6to4) are judged by that IPv4 address.
+ */
 function privateAddress(ip) {
   if (net.isIPv4(ip)) {
     const [a, b] = ip.split('.').map(Number);
     return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
   }
-  const v = ip.toLowerCase();
-  if (v === '::1' || v === '::' || v.startsWith('fc') || v.startsWith('fd') || v.startsWith('fe80')) return true;
-  const hexMapped = v.match(/^::ffff:([a-f0-9]{1,4}):([a-f0-9]{1,4})$/);
-  if (hexMapped) {
-    const a = parseInt(hexMapped[1], 16), b = parseInt(hexMapped[2], 16);
-    return privateAddress(`${a >> 8}.${a & 255}.${b >> 8}.${b & 255}`);
-  }
-  const mapped = v.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  return mapped ? privateAddress(mapped[1]) : false;
+  const w = ipv6Words(ip);
+  if (!w) return true; // not an address we can judge: refuse it
+  const zeros = (from, to) => w.slice(from, to).every((x) => x === 0);
+  if (zeros(0, 8)) return true;                                   // ::
+  if ((w[0] & 0xfe00) === 0xfc00) return true;                    // fc00::/7 unique local
+  if ((w[0] & 0xffc0) === 0xfe80 || (w[0] & 0xffc0) === 0xfec0) return true; // fe80::/10 link-local, fec0::/10 site-local
+  if ((w[0] & 0xff00) === 0xff00) return true;                    // ff00::/8 multicast
+  if (zeros(0, 6)) return privateAddress(ipv4Of(w[6], w[7]));     // ::/96 IPv4-compatible (and ::1)
+  if (zeros(0, 5) && w[5] === 0xffff) return privateAddress(ipv4Of(w[6], w[7])); // ::ffff:0:0/96 IPv4-mapped
+  if (zeros(0, 4) && w[4] === 0xffff && w[5] === 0) return privateAddress(ipv4Of(w[6], w[7])); // ::ffff:0:0:0/96 translated
+  if (w[0] === 0x64 && w[1] === 0xff9b && (zeros(2, 6) || w[2] === 1)) return privateAddress(ipv4Of(w[6], w[7])); // 64:ff9b::/96, 64:ff9b:1::/48 NAT64
+  if (w[0] === 0x2002) return privateAddress(ipv4Of(w[1], w[2])); // 2002::/16 6to4
+  return false;
 }
 
-// Pin the validated DNS result to the connection, closing the DNS-rebinding gap.
+/**
+ * GET a URL over a connection pinned to the addresses that were already checked (closes the DNS-rebinding gap).
+ * Resolves a fetch Response. A status that a Response cannot carry (outside 200-599, such as the 999 LinkedIn
+ * sends to robots) is an error, and 204, 205 and 304 get an empty body: building a Response from them would
+ * throw inside the socket callback, where nothing can catch it, and stop the whole app.
+ */
 function publicRequest(url, options, addresses) {
   return new Promise((resolve, reject) => {
     const req = (url.protocol === 'https:' ? https : http).get(url, {
       headers: options.headers, signal: options.signal,
       lookup: (_host, opts, cb) => opts.all ? cb(null, addresses) : cb(null, addresses[0].address, addresses[0].family),
-    }, (res) => resolve(new Response(Readable.toWeb(res), { status: res.statusCode, headers: res.headers })));
+    }, (res) => {
+      const status = res.statusCode;
+      if (!(status >= 200 && status <= 599)) {
+        res.destroy();
+        reject(Object.assign(new Error(`the site answered ${status}`), { status }));
+        return;
+      }
+      try {
+        const empty = status === 204 || status === 205 || status === 304;
+        if (empty) res.resume();
+        resolve(new Response(empty ? null : Readable.toWeb(res), { status, headers: res.headers }));
+      } catch (e) {
+        res.destroy();
+        reject(Object.assign(new Error('the site sent a reply that could not be read'), { status, cause: e }));
+      }
+    });
     req.on('error', reject);
   });
 }
@@ -269,10 +322,30 @@ async function robotsAllow(url, opts) {
   let best = null;
   for (const r of rules) {
     if (!r.path) continue;
-    const re = new RegExp('^' + r.path.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\\\$$/, '$'));
-    if (re.test(path) && (!best || r.path.length > best.path.length || (r.path.length === best.path.length && r.allow))) best = r;
+    if (robotsMatch(r.path, path) && (!best || r.path.length > best.path.length || (r.path.length === best.path.length && r.allow))) best = r;
   }
   return !best || best.allow;
+}
+
+/**
+ * Does a robots.txt rule match a path? "*" stands for any run of characters and a final "$" anchors the end
+ * (RFC 9309). Literal pieces are found left to right with indexOf, so a hostile rule cannot make matching slow.
+ */
+function robotsMatch(rule, path) {
+  const anchored = rule.endsWith('$');
+  const pieces = (anchored ? rule.slice(0, -1) : rule).split('*');
+  if (!path.startsWith(pieces[0])) return false;
+  let at = pieces[0].length;
+  const last = pieces.length - 1;
+  for (let k = 1; k <= last; k++) {
+    const piece = pieces[k];
+    if (k === last && anchored) return path.length - piece.length >= at && path.endsWith(piece);
+    if (!piece) continue;
+    const found = path.indexOf(piece, at);
+    if (found === -1) return false;
+    at = found + piece.length;
+  }
+  return !anchored || at === path.length;
 }
 
 function parseRobots(txt) {
@@ -290,12 +363,23 @@ function parseRobots(txt) {
       lastWasAgent = true;
     } else {
       lastWasAgent = false;
-      if (cur && (key === 'allow' || key === 'disallow')) cur.rules.push({ allow: key === 'allow', path: m[2] });
+      if (cur && (key === 'allow' || key === 'disallow') && m[2].length <= ROBOTS_RULE_MAX && cur.rules.length < ROBOTS_RULES_MAX) cur.rules.push({ allow: key === 'allow', path: m[2] });
     }
   }
   const mine = groups.filter((g) => g.agents.some((a) => a.includes('lectern')));
   const any = groups.filter((g) => g.agents.includes('*'));
   return (mine.length ? mine : any).flatMap((g) => g.rules);
+}
+
+/** The text of a page's first <title>, found in one pass (a page full of unclosed <title> tags cannot slow it). */
+function titleOf(html) {
+  const open = /<title\b[^<>]*>/i.exec(html);
+  if (!open) return '';
+  const from = open.index + open[0].length;
+  const close = /<\/title\s*>/gi;
+  close.lastIndex = from;
+  const end = close.exec(html);
+  return end ? decodeEntities(html.slice(from, end.index)).replace(/\s+/g, ' ').trim().slice(0, 300) : '';
 }
 
 /** Fetch a page and return its readable text, or { skipped: reason }. */
@@ -308,7 +392,7 @@ async function readPage(url, opts) {
     else if (r.type.includes('html') || r.type.includes('xml') || /^\s*</.test(r.data.subarray(0, 200).toString('utf8'))) text = htmlText(r.data.toString('utf8'));
     else if (r.type.startsWith('text/')) text = r.data.toString('utf8');
     else return { skipped: 'not a readable page' };
-    const title = (r.data.toString('utf8', 0, 200000).match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [, ''])[1].replace(/\s+/g, ' ').trim();
+    const title = titleOf(r.data.toString('utf8', 0, 200000));
     if (text.replace(/\s/g, '').length < 200) return { skipped: 'no readable text (it may need a sign-in or JavaScript)' };
     return { url: r.url, text: text.slice(0, 600000), title };
   } catch (e) {
@@ -323,7 +407,7 @@ async function readPage(url, opts) {
  * emit(event, data): 'step' { id, state, detail }, 'notice' { text }, 'result' { ...report }.
  * options: { quotes: bool, references: bool, web: bool, papers: bool }
  */
-async function runSimilarityCheck({ text: input, options = {}, config, store, signal, emit = () => {}, engine: preferred, lookup }) {
+async function runSimilarityCheck({ text: input, options = {}, config, store, signal, emit = () => {}, engine: preferred, selectedModel, lookup }) {
   const opts = { quotes: options.quotes !== false, references: options.references !== false, web: options.web !== false, papers: options.papers !== false };
   const normal = T.normalizeText(input);
   const { text, trimmed, totalWords } = T.capWords(normal);
@@ -364,9 +448,19 @@ async function runSimilarityCheck({ text: input, options = {}, config, store, si
   }
 
   // 2. The web, through the model's web search. Its URLs are only candidates: each page is fetched and compared here.
+  // The provider and model chosen in the window search, or the check says why the web was not searched: it never
+  // quietly switches to another provider or model (the same rule as the AI-writing review and the proofreader).
   if (opts.web) {
-    const engine = await llm.pickEngine(settings, preferred);
-    if (!engine) {
+    let engine = null;
+    if (preferred) {
+      const choice = (await llm.engineStatus(settings)).find((s) => s.id === preferred);
+      if (choice && choice.ready) engine = preferred;
+    } else engine = await llm.pickEngine(settings);
+    const requestedModel = engine ? (selectedModel || settings.models[engine] || '') : '';
+    if (!engine && preferred) {
+      notes.push('The selected model provider is not connected, so the web was not searched. Sign in, or choose a connected provider, to include web pages.');
+      emit('step', { id: 'web', state: 'skipped', detail: 'selected provider not connected' });
+    } else if (!engine) {
       notes.push('No model is connected, so the web was not searched. Sign in to Claude or ChatGPT to include web pages.');
       emit('step', { id: 'web', state: 'skipped', detail: 'no model connected' });
     } else if (!passages.length) {
@@ -377,6 +471,7 @@ async function runSimilarityCheck({ text: input, options = {}, config, store, si
       try {
         const out = await llm.complete({
           engine, role: 'main', settings, effort: 'low', web: true,
+          model: requestedModel || undefined, strictModel: !!requestedModel,
           system: Prompts.SOURCE_HUNT_SYSTEM,
           prompt: Prompts.sourceHuntPrompt(passages.map((s, k) => ({ n: k + 1, text: s.text }))),
           signal, onEvent: (ev) => { if (ev.type === 'status' && /search|read/i.test(ev.text)) emit('step', { id: 'web', state: 'now', detail: ev.text }); },
@@ -476,4 +571,4 @@ async function runSimilarityCheck({ text: input, options = {}, config, store, si
   };
 }
 
-module.exports = { runSimilarityCheck, prepareSubmission, indexSource, compare, pickPassages, passageQuery, safeFetch, readPage, robotsAllow, parseRobots, privateAddress, K, MIN_MATCH };
+module.exports = { runSimilarityCheck, prepareSubmission, indexSource, compare, pickPassages, passageQuery, safeFetch, publicRequest, readPage, robotsAllow, robotsMatch, parseRobots, privateAddress, K, MIN_MATCH };

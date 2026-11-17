@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const readline = require('readline');
-const { findBin, runQuick, shellPath, scratchDir, launch } = require('./cli');
+const { findBin, runQuick, shellPath, scratchDir, launch, track } = require('./cli');
 const APP_VERSION = require('../../package.json').version;
 
 const CACHE_MS = 110 * 1000; // leave headroom for the window's two-minute refresh timer
@@ -80,7 +80,8 @@ async function readCodexUsage(bin, { timeout = 12000 } = {}) {
   delete env.CODEX_API_KEY;
   const how = await launch(bin, ['app-server']); // a .cmd from npm on Windows runs through node
   return new Promise((resolve, reject) => {
-    const child = spawn(how.file, how.args, { cwd: scratchDir(), env, stdio: ['pipe', 'pipe', 'ignore'], shell: how.shell, windowsHide: true });
+    // Tracked like every tool Lectern starts, so quitting stops it too (server/llm/cli.js stopAll).
+    const child = track(spawn(how.file, how.args, { cwd: scratchDir(), env, stdio: ['pipe', 'pipe', 'ignore'], shell: how.shell, windowsHide: true }));
     const lines = readline.createInterface({ input: child.stdout });
     let done = false;
     const finish = (err, value) => {

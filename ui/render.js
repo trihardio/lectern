@@ -8,6 +8,27 @@
 
   const esc = (s) => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const unesc = (s) => String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+
+  /**
+   * A web address in a form for telling whether two links name the same page: http and https, "www.", a trailing
+   * slash and the #fragment do not count. '' for anything that is not a web address. Same rule as urlKey() in
+   * server/util.js, which picks the turn's web sources.
+   */
+  function urlKey(u) {
+    let x;
+    try { x = new URL(String(u || '').trim()); } catch (e) { return ''; }
+    if (x.protocol !== 'http:' && x.protocol !== 'https:') return '';
+    return x.host.replace(/^www\./, '') + x.pathname.replace(/\/+$/, '') + x.search;
+  }
+
+  /** The turn's web source for a link the model wrote, or null: only pages the web search really returned. */
+  function webSourceFor(url, ctx) {
+    const key = urlKey(url);
+    if (!key) return null;
+    for (const w of ctx.webSources) if (w && /^https?:\/\//i.test(w.url || '') && urlKey(w.url) === key) return w;
+    return null;
+  }
 
   /** "[1, 3-5]" -> [1, 3, 4, 5]; "[W2]" -> ['W2']. Returns null if any part is not a valid reference. */
   function parseCiteGroup(inner, ctx) {
@@ -34,12 +55,16 @@
   function inline(raw, ctx) {
     const stash = [];
     const keep = (html) => { stash.push(html); return `\u0000${stash.length - 1}\u0000`; };
-    let s = esc(raw);
+    // \u0000 marks a stashed piece below, so the model's own text may not contain it.
+    let s = esc(raw).replace(/\u0000/g, '');
 
     s = s.replace(/`([^`]+)`/g, (_, code) => keep(`<code>${code}</code>`));
-    // Links: http(s) only. The URL was escaped above, so it is safe inside the attribute.
-    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, url) =>
-      keep(`<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`));
+    // Links: only to a page the turn has as a web source (one the web search returned in that run), and then
+    // to that source's own address. Any other link the model wrote, such as one from memory, is its plain text.
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, url) => {
+      const w = webSourceFor(unesc(url), ctx);
+      return w ? keep(`<a href="${esc(w.url)}" target="_blank" rel="noopener noreferrer">${label}</a>`) : label;
+    });
     s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     s = s.replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s).,;:!?]|$)/g, '$1<em>$2</em>');
 
@@ -58,7 +83,7 @@
         }
         const w = ctx.webSources[Number(r.slice(1)) - 1] || {};
         if (!/^https?:\/\//i.test(w.url || '')) return `<span class="cite cite-web">${r}</span>`;
-        return `<a class="cite cite-web" href="${esc(w.url)}" target="_blank" rel="noopener noreferrer" title="${esc(w.title || w.url)}">${r}</a>`;
+        return `<a class="cite cite-web" href="${esc(w.url)}" target="_blank" rel="noopener noreferrer" title="${esc(w.title || w.url)}" aria-label="Web page ${r.slice(1)}: ${esc(w.title || w.url)}">${r}</a>`;
       }).join('');
       return `<span class="cites">${marks}</span>`;
     });

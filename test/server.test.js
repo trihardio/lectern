@@ -8,6 +8,7 @@ const http = require('http');
 const mock = require('./mock-fetch');
 const fx = require('./fixtures');
 const { createApp } = require('../server');
+const { checkPatch } = require('../server/config');
 
 const FAKES = path.join(__dirname, 'fakes');
 // Stop the tests from finding a real `claude` or `codex` on this machine.
@@ -29,7 +30,10 @@ const argOf = (run, flag) => run.args[run.args.indexOf(flag) + 1];
 async function start() {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lectern-test-'));
   const app = createApp({ dataDir });
-  const base = await app.listen(0);
+  // Pinned before anything can look for an engine. In-process, so it is not the window's checked settings route.
+  app.config.update({ bins: { claude: NO_BIN, codex: NO_BIN } });
+  const page = await app.listen(0); // the window's address, with the token
+  const base = page.slice(0, page.indexOf('?'));
   const call = async (method, p, body, headers = {}) => {
     const res = await mock.realFetch(base + p.replace(/^\//, ''), {
       method, headers: { 'x-lectern-token': app.token, ...(body ? { 'content-type': 'application/json' } : {}), ...headers },
@@ -47,8 +51,7 @@ async function start() {
       return { event: e.slice(7), data: JSON.parse(d.slice(6)) };
     });
   };
-  await call('PUT', '/api/settings', { bins: { claude: NO_BIN, codex: NO_BIN } });
-  return { app, base, call, askStream, dataDir, stop: () => app.close() };
+  return { app, base, page, call, askStream, dataDir, stop: () => app.close() };
 }
 
 test('usage endpoint is authenticated and reports disconnected providers without a model call', async () => {
@@ -69,9 +72,19 @@ test('usage endpoint is authenticated and reports disconnected providers without
 test('serves the window with its token and locks the API to it', async () => {
   const s = await start();
   try {
-    const page = await (await mock.realFetch(s.base)).text();
+    assert.equal(s.page, `${s.base}?t=${s.app.token}`, 'listen() gives the address with the token');
+    const page = await (await mock.realFetch(s.page)).text();
     assert.ok(page.includes(`content="${s.app.token}"`));
     assert.ok(!page.includes('__LECTERN_TOKEN__'));
+
+    // Only the address with the token gets the page: anyone else on this computer gets a note and no token.
+    for (const address of [s.base, `${s.base}?t=`, `${s.base}?t=${'0'.repeat(48)}`, `${s.base}?t=${s.app.token.slice(0, -1)}`]) {
+      const res = await mock.realFetch(address);
+      const text = await res.text();
+      assert.equal(res.status, 403, address);
+      assert.ok(!text.includes(s.app.token) && !/lectern-token/.test(text), 'no token in the reply');
+      assert.match(text, /Open this window from the Lectern app/);
+    }
 
     const noToken = await mock.realFetch(`${s.base}api/state`);
     assert.equal(noToken.status, 403);
@@ -125,6 +138,7 @@ test('saved logins: an engine is ready only when it is found and signed in', asy
     // Signed out: found, but not ready. (A link to the fake under another path, since a ready status is cached per path.)
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lectern-bin-'));
     fs.symlinkSync(CLAUDE, path.join(dir, 'claude'));
+    s.app.config.update({ bins: { codex: NO_BIN } }); // the window cannot save a missing program; in-process can
     process.env.FAKE_SIGNED_OUT = '1';
     try {
       st = (await s.call('PUT', '/api/settings', { bins: { claude: path.join(dir, 'claude'), codex: NO_BIN } })).json;
@@ -245,13 +259,101 @@ test('reader profile: stored clean, and it shapes the plan and the answer instru
   } finally { log.stop(); await s.stop(); }
 });
 
-test('web search: pages the model links to are listed and marked', async () => {
+test('web search: pages the model links to are listed and marked, but only pages the search really returned', async () => {
+  mock.reset();
+  for (const [bins, engine] of [[{ claude: CLAUDE, codex: NO_BIN }, 'claude-code'], [{ claude: NO_BIN, codex: CODEX }, 'codex']]) {
+    const s = await start();
+    try {
+      await s.call('PUT', '/api/settings', { bins });
+      const events = await s.askStream({ question: 'Does remote work improve productivity?', overrides: { web: true, engine } });
+      const answer = events.filter((e) => e.event === 'delta').map((e) => e.data.text).join('');
+      assert.match(answer, /not-searched\.example/, `${engine}: the model also linked a page from memory`);
+      assert.deepEqual(events.filter((e) => e.event === 'websource').map((e) => e.data), [{ n: 1, url: 'https://example.org/report', title: 'Sample report' }],
+        `${engine}: only the page the web search returned is a source`);
+    } finally { await s.stop(); }
+  }
+  mock.reset();
+});
+
+test('settings: the window can point Lectern only at a real claude or codex program', async () => {
+  const s = await start();
+  try {
+    const put = (bins) => s.call('PUT', '/api/settings', { bins });
+    for (const [bins, why] of [
+      [{ claude: '/bin/sh' }, /only starts a program named claude/],
+      [{ codex: path.join(FAKES, 'claude') }, /only starts a program named codex/],
+      [{ claude: 'claude' }, /full path/],
+      [{ claude: '/nonexistent/place/claude' }, /nothing was found/],
+      [{ claude: path.join(os.tmpdir()) }, /named claude/],
+    ]) {
+      const res = await put(bins);
+      assert.equal(res.status, 400, JSON.stringify(bins));
+      assert.match(res.json.error, why);
+    }
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lectern-bin-'));
+    fs.writeFileSync(path.join(dir, 'claude'), '#!/bin/sh\n', { mode: 0o644 }); // right name, not runnable
+    assert.match((await put({ claude: path.join(dir, 'claude') })).json.error, /not a program this computer can run/);
+    assert.equal((await s.call('GET', '/api/state')).json.settings.bins.claude, NO_BIN, 'nothing was saved');
+
+    assert.equal((await put({ claude: CLAUDE, codex: CODEX })).status, 200, 'the real (stand-in) programs are accepted');
+    // Empty means "find it automatically" (not saved through the API here: that would search for the real tools).
+    assert.doesNotThrow(() => checkPatch({ bins: { claude: '', codex: '  ' } }, { bins: { claude: CLAUDE } }));
+    s.app.config.update({ bins: { claude: NO_BIN } });
+    assert.equal((await put({ claude: NO_BIN, codex: CODEX })).status, 200, 'a location already saved is kept as it is');
+    assert.equal((await s.call('PUT', '/api/settings', { email: 'not-an-address' })).status, 400);
+    assert.equal((await s.call('PUT', '/api/settings', { email: 'me@example.org' })).json.settings.email, 'me@example.org');
+  } finally { await s.stop(); }
+});
+
+test('requests: odd bodies are refused cleanly, and a body over the limit gets a 413 answer, not a broken connection', async () => {
+  const s = await start();
+  try {
+    for (const body of ['null', '[]', '"x"', '7', '{"question": {"a": 1}}', '{"question": ["Does X?"]}']) {
+      const res = await mock.realFetch(`${s.base}api/ask`, { method: 'POST', headers: { 'x-lectern-token': s.app.token, 'content-type': 'application/json' }, body });
+      assert.equal(res.status, 400, body);
+      assert.match((await res.json()).error, /Type a question first/);
+    }
+    const check = await mock.realFetch(`${s.base}api/checks/ai`, { method: 'POST', headers: { 'x-lectern-token': s.app.token, 'content-type': 'application/json' }, body: '{"text": {"a": 1}}' });
+    assert.equal(check.status, 400);
+    assert.equal((await s.call('PUT', '/api/settings', null)).status, 200, 'an empty body is an empty change');
+
+    const big = JSON.stringify({ text: 'word '.repeat(Math.ceil(3.2 * 2 ** 20 / 5)) });
+    const res = await mock.realFetch(`${s.base}api/checks/ai`, { method: 'POST', headers: { 'x-lectern-token': s.app.token, 'content-type': 'application/json' }, body: big });
+    assert.equal(res.status, 413);
+    assert.match((await res.json()).error, /more than Lectern can take at once/);
+    const settings = await mock.realFetch(`${s.base}api/settings`, { method: 'PUT', headers: { 'x-lectern-token': s.app.token, 'content-type': 'application/json' }, body: JSON.stringify({ email: 'x'.repeat(2.2 * 2 ** 20) }) });
+    assert.equal(settings.status, 413);
+  } finally { await s.stop(); }
+});
+
+test('an answer is saved after the turn it was asked from, even if another version is shown meanwhile', async () => {
   mock.reset();
   const s = await start();
   try {
     await s.call('PUT', '/api/settings', { bins: { claude: CLAUDE, codex: NO_BIN } });
-    const events = await s.askStream({ question: 'Does remote work improve productivity?', overrides: { web: true } });
-    assert.deepEqual(events.find((e) => e.event === 'websource').data, { n: 1, url: 'https://example.org/report', title: 'Sample report' });
+    const done = (events) => events.find((e) => e.event === 'done').data;
+    const a = done(await s.askStream({ question: 'Does sleep affect memory?' }));
+    const b = done(await s.askStream({ question: 'What about naps?', threadId: a.threadId }));
+    assert.equal(b.parent, a.turnId);
+    // The third question follows the branch on screen (b). While its answer is being written, the reader switches
+    // to another version (a), as the window does when they click the version arrows.
+    const res = await mock.realFetch(`${s.base}api/ask`, {
+      method: 'POST', headers: { 'x-lectern-token': s.app.token, 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'And for older adults?', threadId: a.threadId }),
+    });
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let text = '';
+    let switched = false;
+    for (;;) {
+      const { done: end, value } = await reader.read();
+      if (end) break;
+      text += dec.decode(value, { stream: true });
+      if (!switched && /event: delta/.test(text)) { s.app.store.updateThread(a.threadId, { leaf: a.turnId }); switched = true; }
+    }
+    assert.ok(switched, 'the version was switched while the answer was written');
+    const c = JSON.parse(text.split('\n\n').find((x) => x.startsWith('event: done')).split('\n')[1].slice(6));
+    assert.equal(c.parent, b.turnId, 'the answer follows the question it was asked after');
   } finally { await s.stop(); mock.reset(); }
 });
 
@@ -279,6 +381,9 @@ test('the same question runs on Claude and on ChatGPT', async () => {
       const tested = (await s.call('POST', '/api/test-engine', { engine })).json;
       assert.equal(tested.ok, true, tested.error);
       assert.equal(tested.reply, 'ready');
+      assert.equal(tested.model, engine === 'codex' ? 'configured-model' : 'claude-opus-5-5', 'the model the test used');
+      s.app.config.update({ models: { [engine]: '' } });
+      assert.equal((await s.call('POST', '/api/test-engine', { engine })).json.model, '', 'no model set: an empty name, never the word "default"');
     } finally { await s.stop(); }
   }
   mock.reset();
@@ -322,7 +427,7 @@ test('library: save, list, remove', async () => {
     assert.equal((await s.call('GET', '/api/library')).json.papers.length, 1, 'saving twice keeps one copy');
     res = await s.call('DELETE', `/api/library?id=${encodeURIComponent(paper.id)}`);
     assert.equal(res.json.papers.length, 0);
-    assert.equal((await s.call('POST', '/api/library', { paper: { nope: 1 } })).status, 500);
+    assert.equal((await s.call('POST', '/api/library', { paper: { nope: 1 } })).status, 400);
   } finally { await s.stop(); }
 });
 

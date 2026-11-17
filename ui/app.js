@@ -280,21 +280,27 @@
     }
 
     // The answer while it streams: each new stretch of text fades in over STREAM_MS, so words appear as
-    // they arrive instead of all at once. The answer element is rebuilt on every update; the stretches
-    // still fading are remembered by their place in the text and given a negative delay on the new
-    // element, so a stretch keeps fading where it was instead of jumping to full.
+    // they arrive instead of all at once. Only the block of the answer that changed is drawn again
+    // (syncBlocks); the stretches of it still fading are remembered by their place in the block's text and
+    // given a negative delay on the new block, so a stretch keeps fading where it was instead of jumping to full.
     const STREAM_MS = 520;
-    function stream(root, owner, name = 'stream') {
-      const a = root && (root.classList && root.classList.contains('answer') ? root : root.querySelector && root.querySelector('.answer'));
-      if (!a) return root;
-      const t = now();
-      const len = a.textContent.length;
-      const st = recall(owner, name) || { len: 0, pieces: [] }; // one memory per part of the answer (the brief, the body)
-      const pieces = st.pieces.filter((p) => t - p.t0 < STREAM_MS && p.from < len).map((p) => ({ ...p, to: Math.min(p.to, len) }));
-      if (len > st.len) pieces.push({ from: st.len, to: len, t0: t });
-      keep(owner, name, { len, pieces });
-      if (calm() || !pieces.length) return root;
-      const walker = document.createTreeWalker(a, NodeFilter.SHOW_TEXT);
+    /** The stretches of a block's text that are fading: those still fading in its last version, plus what is new. */
+    function fadeNext(prev, len, t) {
+      const pieces = (prev ? prev.pieces : []).filter((p) => t - p.t0 < STREAM_MS && p.from < len).map((p) => ({ ...p, to: Math.min(p.to, len) }));
+      const from = prev ? prev.len : 0;
+      if (len > from) {
+        const last = pieces[pieces.length - 1];
+        // text that arrives within a tenth of a second of the stretch before it joins that stretch (fewer spans to fade)
+        if (last && last.to === from && t - last.t0 < 100) last.to = len;
+        else pieces.push({ from, to: len, t0: t });
+      }
+      return pieces;
+    }
+    /** Wrap the stretches of `root`'s text that are still fading in .tok-in spans, each carrying on from where it was. */
+    function fadeIn(root, pieces, t) {
+      const live = pieces.filter((p) => t - p.t0 < STREAM_MS && p.to > p.from);
+      if (calm() || !live.length) return root;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
       const nodes = [];
       for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n);
       let pos = 0;
@@ -303,7 +309,7 @@
         const start = pos;
         const end = pos + text.length;
         pos = end;
-        const hits = pieces.filter((p) => p.to > start && p.from < end).sort((x, y) => x.from - y.from);
+        const hits = live.filter((p) => p.to > start && p.from < end).sort((x, y) => x.from - y.from);
         if (!hits.length) continue;
         const frag = document.createDocumentFragment();
         let cur = start;
@@ -361,7 +367,7 @@
       d.classList.remove('closing');
     }
 
-    return { calm, changed, age, appeared, settle, enter, play, pop, leave, count, roll, say, slide, glide, stream, animateDialog, keepDialogOpen };
+    return { calm, changed, age, appeared, settle, enter, play, pop, leave, count, roll, say, slide, glide, fadeNext, fadeIn, animateDialog, keepDialogOpen };
   })();
 
   async function api(method, path, body) {
@@ -395,7 +401,8 @@
       if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
         await navigator.clipboard.write([new ClipboardItem({
           'text/plain': new Blob([out.text], { type: 'text/plain' }),
-          'text/html': new Blob([out.html || out.text], { type: 'text/html' }),
+          // plain text is escaped for the rich copy (a "<" must not become a tag) and keeps its line breaks
+          'text/html': new Blob([out.html || Render.esc(out.text).replace(/\r?\n/g, '<br>')], { type: 'text/html' }),
         })]);
       } else {
         await navigator.clipboard.writeText(out.text);
@@ -433,6 +440,8 @@
   const STANCE_LABEL = { supports: 'Supports', conditional: 'Conditional', mixed: 'Mixed', against: 'Against', na: 'Not tested' };
   const nf = new Intl.NumberFormat('en');
   const isWebUrl = (u) => /^https?:\/\//i.test(u || '');
+  /** A DOI as a link: encoded, with "?", "#" and "%" escaped too (they are legal in a DOI but end a URL path). */
+  const doiHref = (doi) => (doi ? `https://doi.org/${encodeURI(String(doi)).replace(/[?#]/g, encodeURIComponent)}` : '');
 
   // ------------------------------------------------------------------ state
   /** Every search filter, switched off. The server (server/filters.js) cleans whatever is sent. */
@@ -464,6 +473,8 @@
     libraryTab: 'papers', // 'papers' or 'chats'
     editing: null, // id of the question being edited in place
     renaming: null, // id of the conversation being renamed in the sidebar
+    renameDraft: null, // { id, value, start, end, focused }: the name being typed, kept when the sidebar is drawn again
+    oaRefused: false, // OpenAlex turned a search away because there was no key (it works without one, within a smaller allowance)
   };
 
   // ------------------------------------------------------------------ conversation tree
@@ -689,35 +700,52 @@
     refreshUsage();
   }
 
+  /**
+   * The name box of a conversation being renamed. The sidebar can be drawn again while the reader types (an answer
+   * finishes, say): the new box keeps what was typed and where the caret was, and the old box going away saves nothing.
+   */
   function renameField(t) {
     let done = false;
+    const draft = S.renameDraft && S.renameDraft.id === t.id ? S.renameDraft : null;
     const finish = async (save) => {
       if (done) return;
       done = true;
       const title = input.value.trim();
       S.renaming = null;
+      S.renameDraft = null;
       if (save && title && title !== t.title) {
         try {
           await api('PUT', '/api/thread', { id: t.id, title });
           t.title = title;
           if (S.thread && S.thread.id === t.id) S.thread.title = title;
+          const shown = S.thread && S.thread.id === t.id ? $('.thread-title') : null;
+          if (shown) { shown.textContent = title; shown.title = title; }
         } catch (e) { toast(e.message); }
       }
       renderRailOnly();
     };
     const input = h('input', {
-      class: 'input history-rename', value: t.title, maxlength: '120', 'aria-label': 'Conversation name',
+      class: 'input history-rename', value: draft ? draft.value : t.title, maxlength: '120', 'aria-label': 'Chat name',
       onkeydown: (e) => {
         if (e.key === 'Enter') { e.preventDefault(); finish(true); }
         else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
       },
-      onblur: () => finish(true),
+      onblur: () => { if (!input._replaced) finish(true); },
     });
-    requestAnimationFrame(() => { input.focus(); input.select(); });
+    input._keep = () => { // called just before the sidebar is drawn again
+      input._replaced = true;
+      S.renameDraft = { id: t.id, value: input.value, start: input.selectionStart, end: input.selectionEnd, focused: document.activeElement === input };
+    };
+    requestAnimationFrame(() => {
+      if (!input.isConnected || (draft && !draft.focused)) return;
+      input.focus();
+      if (draft) input.setSelectionRange(draft.start, draft.end); else input.select();
+    });
     return input;
   }
 
   function renderRail() {
+    $('.history-rename')?._keep?.(); // a name being typed survives this drawing
     const active = engineInfo(S.compose.engine);
     const liveElsewhere = S.live && S.live.running && !(S.view === 'thread' && S.thread === S.live.thread);
     // a conversation that was not in the list a moment ago rises in; the first list drawn is not "new"
@@ -737,7 +765,7 @@
           h('button', { class: 'history-item', onclick: () => { S.thread = S.live.thread; S.view = 'thread'; render(); } },
             `Answering: ${S.live.question}`)),
         S.threads.length === 0 && !liveElsewhere && h('li', { class: 'history-empty' }, 'Your questions will appear here.'),
-        S.threads.map((t, i) => rise(h('li', { class: S.view === 'thread' && S.thread && S.thread.id === t.id ? 'on' : '' },
+        S.threads.map((t, i) => rise(h('li', { class: S.view === 'thread' && S.thread && S.thread.id === t.id ? 'on' : '', 'data-id': t.id },
           S.renaming === t.id
             ? renameField(t)
             : [
@@ -748,10 +776,14 @@
                   'aria-label': `${t.saved ? 'Remove' : 'Save'} "${t.title}" ${t.saved ? 'from' : 'to'} the library`, onclick: () => setChatSaved(t.id, !t.saved) }, icon('bookmark')),
                 h('button', { class: 'history-act', title: 'Rename', 'aria-label': `Rename "${t.title}"`, onclick: () => { S.renaming = t.id; renderRailOnly(); } }, '✎'),
                 h('button', { class: 'history-act', title: 'Duplicate', 'aria-label': `Duplicate "${t.title}"`, onclick: () => duplicateThread(t) }, '⧉'),
-                h('button', { class: 'history-act del', title: 'Delete', 'aria-label': `Delete "${t.title}"`, onclick: () => deleteThread(t) }, '×')),
+                // a conversation whose answer is being written cannot be deleted: the answer would be lost
+                answering(t)
+                  ? h('button', { class: 'history-act del', disabled: true, title: 'Wait until the answer is written, or stop it', 'aria-label': `Delete "${t.title}" (available once the answer is written)` }, '×')
+                  : h('button', { class: 'history-act del', title: 'Delete', 'aria-label': `Delete "${t.title}"`, onclick: () => deleteThread(t) }, '×')),
             ]), t.id, i))),
       h('div', { class: 'rail-foot' },
-        h('div', { class: 'rail-model-row' }, h('button', { class: 'rail-link engine-pill', onclick: openSettings },
+        h('div', { class: 'rail-model-row' }, h('button', { class: 'rail-link engine-pill', onclick: openSettings,
+          'aria-label': active ? `Model: ${prettyModel(S.compose.model, active.id)}, ${EFFORT_LABEL[S.compose.effort].toLowerCase()} effort. Open Settings` : 'No model connected. Open Settings' },
           h('span', null,
             h('span', { class: `dot${active ? '' : ' off'}` }), ' ',
             active ? active.short : 'No model connected',
@@ -760,8 +792,10 @@
         h('button', { class: 'rail-link', onclick: openSettings }, 'Settings')));
     Motion.settle('history');
     Motion.glide($('.history', rail), 'li:not(.history-empty)');
+    rail._key = railKey();
     return rail;
   }
+  const answering = (t) => !!(S.live && S.live.running && S.live.thread.id === t.id);
 
   // ------------------------------------------------------------------ composer
   /** Small line icons, drawn as SVG (built element by element, no markup strings). */
@@ -799,11 +833,11 @@
   }
 
   const EFFORT_HELP = {
-    low: 'Fastest. Fine for simple questions',
-    medium: 'Balanced speed and depth',
-    high: 'Thinks longer before answering',
-    xhigh: 'Thinks much longer. Slower',
-    max: 'Deepest thinking. Slowest, uses the most of your plan',
+    low: 'Quick thinking. Fastest',
+    medium: 'Balanced thinking and speed',
+    high: 'Longer thinking. Slower',
+    xhigh: 'Much longer thinking. Much slower',
+    max: 'Longest thinking. Slowest, uses the most of your plan',
   };
 
   /** Close any open composer menu when clicking elsewhere or pressing Escape. */
@@ -819,7 +853,6 @@
    */
   function buildComposer({ placeholder, autofocus, dock }) {
     const c = S.compose;
-    const running = isBusy();
 
     const mode = modeInfo(c.mode);
     // A tool brings its own hint; a plain answer keeps the hint of the box it is in.
@@ -829,7 +862,7 @@
       class: 'ask', rows: '1', placeholder, 'aria-label': placeholder, maxlength: mode.maxInput,
       oninput: (e) => {
         if (e.isTrusted && voiceOn()) stopDictation();
-        c.draft = e.target.value; grow(e.target); sendBtn.disabled = !e.target.value.trim() && !running;
+        c.draft = e.target.value; grow(e.target); sendBtn.disabled = !e.target.value.trim() && !isBusy();
       },
       onkeydown: (e) => {
         if (voiceOn() && !['Shift', 'Meta', 'Control', 'Alt', 'CapsLock', 'Fn'].includes(e.key)) stopDictation();
@@ -844,9 +877,10 @@
       ask(c.draft, { mode: m, fromBox: true });
     };
 
-    const sendBtn = running
+    const sendFor = () => (isBusy()
       ? h('button', { type: 'button', class: 'send stop', 'aria-label': 'Stop', title: 'Stop', onclick: stopAsk }, icon('stop'))
-      : h('button', { type: 'submit', class: 'send', 'aria-label': 'Ask', title: 'Ask (Enter)', disabled: !c.draft.trim() || null }, icon('send'));
+      : h('button', { type: 'submit', class: 'send', 'aria-label': 'Ask', title: 'Ask (Enter)', disabled: !c.draft.trim() || null }, icon('send')));
+    let sendBtn = sendFor();
 
     const micBtn = h('button', {
       type: 'button', class: `mic${voiceActive() ? ' on' : ''}`, 'aria-pressed': String(voiceOn()),
@@ -862,7 +896,12 @@
     // ---- the row under the box
     const n = filterCount();
     const toggleWeb = () => { c.web = !c.web; savePrefs(); render(); };
-    const setMode = (id) => { stopDictation(); c.mode = id; if (closeMenu) closeMenu(); render(); requestAnimationFrame(() => $(dock ? '.dock .ask' : '.ask')?.focus()); };
+    const setMode = (id) => {
+      stopDictation(); c.mode = id; if (closeMenu) closeMenu(); render(); requestAnimationFrame(() => $(dock ? '.dock .ask' : '.ask')?.focus());
+      // the text stays as typed (nothing is cut off), but the reader learns at once that this tool takes less
+      const max = modeInfo(id).maxInput;
+      if (c.draft.length > max) toast(`${id === 'answer' ? 'A question' : modeInfo(id).label} takes up to ${nf.format(max)} characters. Your text has ${nf.format(c.draft.length)}: shorten it before you ask.`);
+    };
     const webChip = Motion.pop(h('button', { type: 'button', class: 'chip', hidden: !c.web, title: 'Web search is on. Click to turn it off', onclick: toggleWeb }, icon('globe'), 'Web'), 'composer', 'web', !!c.web, !!c.web);
     const filtersBtn = h('button', {
       type: 'button', class: `chip filters-btn${n ? ' on' : ''}`, title: 'Year, journal, study design, field of study and more',
@@ -876,22 +915,22 @@
     const plusBtn = h('button', {
       type: 'button', class: 'icon-round cmenu-anchor', 'aria-label': 'Research tools and web search', title: 'Research tools and web search', 'aria-haspopup': 'menu', 'aria-expanded': 'false',
       onclick: () => openMenu(plusBtn, () => [
-        h('div', { class: 'cmenu-head' }, 'Research tools'),
+        h('div', { class: 'cmenu-head', 'aria-hidden': 'true' }, 'Research tools'),
         S.app.modes.map((m) => h('button', {
           type: 'button', class: 'cmenu-row', role: 'menuitemradio', 'aria-checked': String(m.id === c.mode), onclick: () => setMode(m.id),
         }, icon(m.id), h('span', { class: 'cmenu-text' }, h('b', null, m.label), h('small', null, m.blurb)), m.id === c.mode && icon('check'))),
-        h('div', { class: 'cmenu-sep' }),
+        h('div', { class: 'cmenu-sep', role: 'separator' }),
         h('button', { type: 'button', class: 'cmenu-row', role: 'menuitemcheckbox', 'aria-checked': String(c.web), onclick: toggleWeb },
           icon('globe'), h('span', { class: 'cmenu-text' }, h('b', null, 'Web search'), h('small', null, 'Also look at the open web for context the papers lack')),
           c.web && icon('check')),
-      ], 'left'),
+      ], 'left', 'Research tools'),
     }, icon('plus'));
 
     const info = engineInfo(c.engine);
     const modelBtn = h('button', {
       type: 'button', class: 'model-btn cmenu-anchor', 'aria-haspopup': 'menu', 'aria-expanded': 'false',
       'aria-label': info ? `Model: ${prettyModel(c.model, c.engine)}, ${EFFORT_LABEL[c.effort]} effort. Change` : 'Connect a model',
-      onclick: () => (info || S.app.engines.some((e) => e.found) ? openMenu(modelBtn, () => modelMenu(), 'right') : openSettings()),
+      onclick: () => (info || S.app.engines.some((e) => e.found) ? openMenu(modelBtn, () => modelMenu(), 'right', 'Model and effort') : openSettings()),
     }, info
       // the names roll when the model or the effort changes (the same memory serves the home box and the follow-up box)
       ? [Motion.roll(h('span', { class: 'model-name' }), 'composer', 'model', prettyModel(c.model, c.engine)),
@@ -902,7 +941,7 @@
     function modelMenu(page) {
       if (page === 'effort') {
         return [
-          h('button', { type: 'button', class: 'cmenu-row back', onclick: () => redrawMenu(modelMenu()) }, icon('left'), h('b', null, 'Effort')),
+          h('button', { type: 'button', class: 'cmenu-row back', role: 'menuitem', 'aria-label': 'Back to the models', onclick: () => redrawMenu(modelMenu()) }, icon('left'), h('b', null, 'Effort')),
           S.app.efforts.map((lvl) => h('button', {
             type: 'button', class: 'cmenu-row', role: 'menuitemradio', 'aria-checked': String(lvl === c.effort),
             onclick: () => { c.effort = lvl; savePrefs(); closeMenu(); render(); },
@@ -911,9 +950,9 @@
       }
       const eng = engineInfo(c.engine);
       return [
-        Motion.slide(h('div', { class: 'cmenu-engines', role: 'radiogroup', 'aria-label': 'Which plan to use' },
+        Motion.slide(h('div', { class: 'cmenu-engines', role: 'group', 'aria-label': 'Which plan to use' },
           S.app.engines.map((e) => h('button', {
-            type: 'button', role: 'radio', 'aria-checked': String(e.id === c.engine), disabled: !e.ready || null,
+            type: 'button', role: 'menuitemradio', 'aria-checked': String(e.id === c.engine), disabled: !e.ready || null,
             title: e.detail,
             onclick: () => { menuQuiet = performance.now(); c.engine = e.id; c.model = S.app.settings.models[e.id] || ''; savePrefs(); closeMenu(); render(); requestAnimationFrame(() => $('.model-btn')?.click()); },
           }, e.short, !e.ready && h('small', null, e.found ? 'not signed in' : 'not installed')))), 'engine-toggle'),
@@ -921,11 +960,11 @@
           type: 'button', class: 'cmenu-row', role: 'menuitemradio', 'aria-checked': String(id === c.model),
           onclick: () => { c.model = id; savePrefs(); closeMenu(); render(); },
         }, h('span', { class: 'cmenu-text' }, h('b', null, prettyModel(id, c.engine)), h('small', null, (eng.blurbs || {})[id] || 'Custom model from Settings')), id === c.model && icon('check'))),
-        eng && h('div', { class: 'cmenu-sep' }),
-        eng && h('button', { type: 'button', class: 'cmenu-row', onclick: () => redrawMenu(modelMenu('effort')) },
+        eng && h('div', { class: 'cmenu-sep', role: 'separator' }),
+        eng && h('button', { type: 'button', class: 'cmenu-row', role: 'menuitem', 'aria-haspopup': 'menu', onclick: () => redrawMenu(modelMenu('effort')) },
           h('b', null, 'Effort'), h('span', { class: 'cmenu-value' }, EFFORT_LABEL[c.effort]), icon('right')),
-        h('p', { class: 'cmenu-note' }, eng ? `${eng.billing}. ${eng.detail}.` : 'Sign in to Claude or ChatGPT on this Mac to start.',
-          ' ', h('button', { type: 'button', class: 'linkish', onclick: () => { closeMenu(); openSettings(); } }, 'Settings')),
+        h('p', { class: 'cmenu-note', role: 'none' }, eng ? `${eng.billing}. ${eng.detail}.` : 'Sign in to Claude or ChatGPT on this computer to start.',
+          ' ', h('button', { type: 'button', class: 'linkish', role: 'menuitem', onclick: () => { closeMenu(); openSettings(); } }, 'Settings')),
       ];
     }
 
@@ -934,12 +973,18 @@
       if (!menuEl) return;
       fill(menuEl, kids);
       Motion.play(menuEl, 'swap', 340); // the new page of the menu slides in
-      menuEl.querySelector('button:not([disabled])')?.focus();
+      menuEl.querySelector('button:not([disabled])')?.focus({ preventScroll: true });
     }
-    function openMenu(anchor, build, side) {
+    function openMenu(anchor, build, side, label) {
       if (closeMenu) { const same = menuEl && menuEl.dataset.side === side; closeMenu(); if (same) return; }
+      // The room on each side is measured before the menu is added, while the page's layout is still clean,
+      // so opening the menu lays out the page once, not twice.
+      const wrapRect = wrap.getBoundingClientRect();
+      const anchorRect = anchor.getBoundingClientRect();
+      const below = window.innerHeight - wrapRect.bottom - 12;
+      const above = anchorRect.top - 12;
       menuEl = h('div', {
-        class: `cmenu ${side}${dock ? ' up' : ''}`, role: 'menu', 'data-side': side,
+        class: `cmenu ${side}${dock ? ' up' : ''}`, role: 'menu', 'data-side': side, 'aria-label': label,
         onkeydown: (e) => {
           if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
           e.preventDefault();
@@ -953,11 +998,8 @@
       if (performance.now() - menuQuiet < 500) menuEl.classList.add('quiet');
       wrap.append(menuEl);
       // A home composer can also be near the bottom of a narrow window. Choose the side
-      // with room and constrain the menu itself so every tool stays reachable.
-      const wrapRect = wrap.getBoundingClientRect();
-      const anchorRect = anchor.getBoundingClientRect();
-      const below = window.innerHeight - wrapRect.bottom - 12;
-      const above = anchorRect.top - 12;
+      // with room and constrain the menu itself so every tool stays reachable. (The docked box always
+      // opens upwards when there is more room above, so only the home box needs the menu's height.)
       const up = (dock || below < Math.min(menuEl.scrollHeight, 530)) && above > below;
       menuEl.classList.toggle('up', up);
       if (up) menuEl.style.bottom = `${wrapRect.bottom - anchorRect.top + 6}px`;
@@ -968,10 +1010,10 @@
         menuEl = null;
         closeMenu = null;
         anchor.setAttribute('aria-expanded', 'false');
-        if (refocus) anchor.focus();
+        if (refocus) anchor.focus({ preventScroll: true });
       };
       const first = menuEl.querySelector('button:not([disabled])');
-      if (first) first.focus();
+      if (first) first.focus({ preventScroll: true });
     }
 
     fill(wrap,
@@ -982,6 +1024,15 @@
         h('div', { class: 'under-right' }, modelBtn)));
 
     requestAnimationFrame(() => { grow(ta); if (autofocus) ta.focus(); });
+    // An answer started or finished in place: only the send button changes (and the text, when it was just sent),
+    // so the box keeps its caret, its focus and an input method's unfinished word.
+    wrap._mode = c.mode;
+    wrap._sync = () => {
+      const fresh = sendFor(); // (focus is not moved onto Stop: a key pressed next must not stop the answer)
+      sendBtn.replaceWith(fresh);
+      sendBtn = fresh;
+      if (ta.value !== c.draft) { ta.value = c.draft; grow(ta); }
+    };
     return wrap;
   }
 
@@ -1140,6 +1191,15 @@
       'aria-pressed': String(String(draft.yearFrom) === String(from) && !draft.yearTo),
       onclick: () => { draft.yearFrom = from; draft.yearTo = ''; draw(); },
     }, label);
+    // Lectern's own drop-down, not the system menu. Its button keeps the id, so the label names it and a redraw
+    // puts the keyboard focus back on it.
+    const journalPicker = () => {
+      const p = picker({ label: 'Journal impact', cls: 'journal', value: Number(draft.journalMin) || 0,
+        options: opts.journalTiers.map((t) => ({ value: t.min, label: t.label })),
+        onChange: (v) => { draft.journalMin = Number(v); draw(); } });
+      p.querySelector('.picker-btn').id = 'f-journal';
+      return p;
+    };
 
     function draw() {
       const scroll = body.parentElement ? body.parentElement.scrollTop : 0;
@@ -1154,9 +1214,7 @@
             h('input', { class: 'input year', id: 'f-from', type: 'number', min: '1800', max: '2100', placeholder: 'any', value: draft.yearFrom, oninput: (e) => { draft.yearFrom = e.target.value; }, onchange: draw }),
             h('label', { for: 'f-to' }, 'to'),
             h('input', { class: 'input year', id: 'f-to', type: 'number', min: '1800', max: '2100', placeholder: String(year), value: draft.yearTo, oninput: (e) => { draft.yearTo = e.target.value; }, onchange: draw })),
-          h('div', { class: 'frow' }, h('label', { class: 'flabel', for: 'f-journal' }, 'Journal impact'),
-            h('select', { class: 'select wide', id: 'f-journal', onchange: (e) => { draft.journalMin = Number(e.target.value); draw(); } },
-              opts.journalTiers.map((t) => h('option', { value: t.min, selected: t.min === Number(draft.journalMin) }, t.label)))),
+          h('div', { class: 'frow' }, h('label', { class: 'flabel', for: 'f-journal' }, 'Journal impact'), journalPicker()),
           h('p', { class: 'fnote' }, 'Uses OpenAlex\'s 2-year mean citedness. This is a citation impact measure, not a Q1–Q4 journal rank. Papers whose journal impact is unknown are left out.'),
           h('div', { class: 'frow' }, h('label', { class: 'flabel', for: 'f-cites' }, 'Citations'), 'At least',
             h('input', { class: 'input num', id: 'f-cites', type: 'number', min: '0', placeholder: '0', value: draft.minCitations, oninput: (e) => { draft.minCitations = e.target.value; }, onchange: draw })),
@@ -1199,14 +1257,6 @@
     openDialog('Filters', body);
   }
 
-  /** Redraw the ask box(es) in place after a change made from inside one of them. */
-  function refreshComposers() {
-    for (const old of document.querySelectorAll('.composer-wrap')) {
-      const dock = old.classList.contains('docked');
-      old.replaceWith(buildComposer({ placeholder: dock ? 'Ask a follow-up' : 'Ask a research question', autofocus: false, dock }));
-    }
-  }
-
   // ------------------------------------------------------------------ home
   const EXAMPLES = [
     'Does remote work improve employee productivity?',
@@ -1224,12 +1274,13 @@
       buildComposer({ placeholder: 'Ask a research question', autofocus: !noEngine }),
       noEngine && h('div', { class: 'setup' },
         h('h2', null, 'Sign in to Claude or ChatGPT to start'),
-        h('p', null, 'Lectern uses the plan you already have, through the login saved on this Mac. No API key needed. Open the Claude app or the ChatGPT app and sign in, then come back here.'),
+        h('p', null, 'Lectern uses the plan you already have, through the login saved on this computer. No API key needed. Open the Claude app or the ChatGPT app and sign in, then come back here.'),
         h('button', { class: 'btn primary', onclick: async () => { try { await refreshState(); if (!S.app.activeEngine) openSettings(); } catch (e) { toast(e.message); } } }, 'I have signed in'), ' ',
         h('button', { class: 'btn quiet', onclick: openSettings }, 'Settings')),
-      !noEngine && oaMissing && h('p', { class: 'hint' },
-        'OpenAlex, the largest database here, needs a free key to work. ',
-        h('button', { onclick: openSettings }, 'Add it in Settings')),
+      // OpenAlex works without a key; the note appears only once it has turned a search away for want of one.
+      !noEngine && oaMissing && S.oaRefused && h('p', { class: 'hint' },
+        'OpenAlex, the largest database here, turned a search away. It works without a key, but a free key gives a much larger daily allowance and steadier results. ',
+        h('button', { onclick: openSettings }, 'Add one in Settings')),
       // (this line's words fade up when they change, e.g. after the reader picks a level)
       Motion.say(h('p', { class: 'hint' },
         profileLabel() ? `Answers are written for: ${profileLabel()}. ` : 'Answers can match your level and field of study. ',
@@ -1237,7 +1288,7 @@
       h('div', { class: 'examples' },
         h('p', null, 'Or try one of these'),
         h('ul', null, EXAMPLES.map((q) => h('li', null,
-          h('button', { class: 'example', onclick: () => ask(q, { fromBox: true }) }, q))))));
+          h('button', { class: 'example', onclick: () => ask(q) }, q)))))); // what is typed in the box stays there
   }
 
   // ------------------------------------------------------------------ a turn (one question and its answer)
@@ -1275,7 +1326,7 @@
   function paperRow(p, { turn, showNumber }) {
     const ins = turn ? insightFor(turn, p.n) : null;
     const saved = S.library.some((x) => x.id === p.id);
-    const href = p.doi ? `https://doi.org/${p.doi}` : (isWebUrl(p.url) ? p.url : '');
+    const href = p.doi ? doiHref(p.doi) : (isWebUrl(p.url) ? p.url : '');
     const stance = ins && turn.yesNo ? ins.stance : null;
     const tabClass = showNumber ? (stance || 'plain') : 'plain';
     const strongKind = p.kind === 'Meta-analysis' || p.kind === 'Systematic review';
@@ -1317,13 +1368,13 @@
           ins.finding),
         ins && (ins.design || ins.sample) && h('div', { class: 'design' }, [ins.design, ins.sample].filter(Boolean).join(', ')),
         h('div', { class: 'paper-actions' },
-          p.doi && h('a', { href: `https://doi.org/${p.doi}`, target: '_blank', rel: 'noopener noreferrer' }, 'DOI'),
+          p.doi && h('a', { href: doiHref(p.doi), target: '_blank', rel: 'noopener noreferrer' }, 'DOI'),
           isWebUrl(p.pdfUrl) && h('a', { href: p.pdfUrl, target: '_blank', rel: 'noopener noreferrer' }, 'PDF'),
           h('a', { href: `https://scholar.google.com/scholar?q=${encodeURIComponent(p.title)}`, target: '_blank', rel: 'noopener noreferrer' }, 'Google Scholar'),
           h('button', { type: 'button', onclick: () => openCite(p) }, 'Cite'),
           saveBtn,
           (p.doi || p.title) && h('button', {
-            type: 'button', disabled: isBusy() || null, title: 'See what this paper cites and what cites it',
+            type: 'button', 'data-busy': '', disabled: isBusy() || null, title: 'See what this paper cites and what cites it',
             // Title for the reader, DOI for an exact match: the server looks the DOI up first.
             onclick: () => ask(p.doi ? `${p.title} https://doi.org/${p.doi}` : p.title, { mode: 'trail' }),
           }, 'Citation trail'),
@@ -1339,7 +1390,11 @@
     const papers = turn.papers || [];
     const shelf = h('section', { class: 'shelf references-list', 'aria-label': 'Reference papers' });
     const listEl = h('ol', { class: 'papers' });
-    const count = h('span', { class: 'reference-count' });
+    // "12 of 30 papers": the numbers are label data (mono, and the first counts to its new value), the words are sans
+    const countNum = h('span', { class: 'reference-count' });
+    const countOf = h('span', { hidden: true }, ' of ', h('span', { class: 'reference-count' }));
+    const countRest = document.createTextNode('');
+    const count = h('span', { class: 'shelf-count' }, countNum, countOf, countRest);
     const filterLine = h('div', { class: 'reference-filter' });
     let visible = [];
     st.mscope = st.mscope || `refs-${++motionScopes}`; // papers that arrive after the list is first drawn rise in
@@ -1352,7 +1407,10 @@
       if (st.sort === 'cited') list.sort((a, b) => (b.citations || 0) - (a.citations || 0));
       if (st.sort === 'newest') list.sort((a, b) => (b.year || 0) - (a.year || 0));
       visible = list;
-      Motion.count(count, 'refs', 'shelf', list.length, (n) => `${Math.round(n)}${list.length !== papers.length ? ` of ${papers.length}` : ''} papers`);
+      Motion.count(countNum, 'refs', 'shelf', list.length);
+      countOf.hidden = list.length === papers.length;
+      countOf.lastChild.textContent = String(papers.length);
+      countRest.nodeValue = papers.length === 1 ? ' paper' : ' papers';
       filterLine.hidden = !st.paperNs;
       fill(filterLine, st.filterLabel || 'Selected evidence', h('button', { class: 'linkish', type: 'button', onclick: () => { st.paperNs = null; st.filterLabel = ''; draw(); } }, 'Clear selection'));
       listEl.replaceChildren(...list.map((p, i) => {
@@ -1372,15 +1430,26 @@
       st.toolsOpen = !st.toolsOpen; toolbar.hidden = !st.toolsOpen; filterBtn.setAttribute('aria-expanded', String(st.toolsOpen));
       if (st.toolsOpen) toolbar.querySelector('input').focus();
     } }, 'Filter');
+    // The same Export menu as under an answer; here it exports the papers the list shows (after Filter).
     fill(shelf, h('div', { class: 'shelf-head' }, count), filterLine, toolbar, listEl,
       h('div', { class: 'reference-bottom' }, filterBtn,
-        h('details', { class: 'reference-exports' }, h('summary', null, 'Export references'),
-          h('button', { class: 'btn small', onclick: () => copyRich(Cite.formatList(visible, S.app.settings.citeStyle), 'References copied') }, 'Copy list'),
-          h('button', { class: 'btn small', onclick: () => download('lectern-references.bib', Cite.formatList(visible, 'bibtex').text) }, 'BibTeX'),
-          h('button', { class: 'btn small', onclick: () => download('lectern-references.ris', Cite.formatList(visible, 'ris').text, 'application/x-research-info-systems') }, 'RIS'))));
+        menuButton({ label: 'Export references', cls: 'refs-export', btnCls: 'btn quiet small', align: 'right', items: [
+          { label: `Copy list (${Cite.STYLES[S.app.settings.citeStyle].label})`, note: 'The papers shown in this list',
+            run: () => exportSome(visible, () => copyRich(Cite.formatList(visible, S.app.settings.citeStyle), 'References copied')) },
+          { label: 'Download .bib', note: 'BibTeX, for LaTeX and reference managers',
+            run: () => exportSome(visible, () => download('lectern-references.bib', Cite.formatList(visible, 'bibtex').text)) },
+          { label: 'Download .ris', note: 'RIS, for Zotero, Mendeley or EndNote',
+            run: () => exportSome(visible, () => download('lectern-references.ris', Cite.formatList(visible, 'ris').text, 'application/x-research-info-systems')) },
+        ] })));
     draw();
     Motion.settle(st.mscope);
     return shelf;
+  }
+
+  /** Export only when there is something to export: an empty list (a filter that matches nothing) says so. */
+  function exportSome(papers, run) {
+    if (!papers.length) { toast('Nothing to export: no papers match. Clear the filter or the search first.'); return; }
+    run();
   }
 
   function referenceTurns() {
@@ -1424,7 +1493,8 @@
       turns.length > 1 && picker({ label: 'References for question', cls: 'reference-turn',
         value: turns.indexOf(turn), options: turns.map((t, i) => ({ value: i, tag: String(i + 1).padStart(2, '0'), label: t.question })),
         onChange: (v) => { S.referenceTurn = turns[Number(v)]; refreshReferences(); } }),
-      turn && h('p', { class: 'reference-question', title: turn.question }, turn.question),
+      // With one question there is no picker, so the question is named here; the picker already names it otherwise.
+      turn && turns.length < 2 && h('p', { class: 'reference-question', title: turn.question }, turn.question),
       turn ? buildShelf(turn) : h('p', { class: 'shelf-empty' }, 'References will appear as papers are found.'));
     panel._turn = turn;
     if (turn === previousTurn && $('.papers', panel)) $('.papers', panel).scrollTop = scroll;
@@ -1446,7 +1516,7 @@
   }
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !e.defaultPrevented && S.referencesOpen && !$('#dialog').open && !closeMenu && !citeCardFor && !e.target.closest('.edit-box')) {
+    if (e.key === 'Escape' && !e.defaultPrevented && S.referencesOpen && !document.querySelector('dialog[open]') && !closeMenu && !citeCardFor && !e.target.closest('.edit-box')) {
       e.preventDefault(); closeReferences();
     }
   });
@@ -1455,13 +1525,19 @@
    * Point at a paper (its stamp, its margin label or its row in References): its stamps light, and a
    * highlighter sweeps over every claim it supports, in the colour of what the paper found.
    */
+  const ARTICLES = new WeakMap(); // a turn -> its <article> on the page (set by buildTurn)
+  let lit = null; // { turn, key }: the paper lit right now, so a block of a streaming answer drawn again comes in lit
   function highlightPaper(turn, n) {
-    const article = [...document.querySelectorAll('.turn')].find((el) => el._turn === turn);
-    if (!article) return;
     const key = n == null ? '' : String(Number(n));
-    for (const chip of article.querySelectorAll('.cite[data-n], .specimen[data-n]')) chip.classList.toggle('hot', chip.dataset.n === key);
+    lit = key ? { turn, key } : null;
+    const article = ARTICLES.get(turn);
+    if (article && article.isConnected) paintLit(article, turn, key);
+  }
+  /** Light one paper's stamps, labels and claims inside `root` (an article, or a block not yet on the page). */
+  function paintLit(root, turn, key) {
+    for (const chip of root.querySelectorAll('.cite[data-n], .specimen[data-n]')) chip.classList.toggle('hot', chip.dataset.n === key);
     const tone = key ? (insightFor(turn, Number(key))?.stance || 'plain') : '';
-    for (const claim of article.querySelectorAll('.claim')) {
+    for (const claim of root.querySelectorAll('.claim')) {
       const on = !!key && claim.dataset.ns.split(' ').includes(key);
       claim.classList.toggle('lit', on);
       if (on) claim.dataset.tone = ['supports', 'against', 'conditional', 'mixed'].includes(tone) ? tone : 'plain';
@@ -1493,6 +1569,7 @@
     row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash');
   }
 
+  const STEP_SINCE = new WeakMap(); // a running turn -> { at: the step under way, t: when it started }
   function buildRunline(turn) {
     if (turn.running) {
       // The three steps of an answer, on one line: what is done, what is happening, what is left.
@@ -1513,6 +1590,11 @@
         steps[1] = ['Look up', 'Looking up each cited paper', `Matched ${n} paper${n === 1 ? '' : 's'}`];
         steps[2] = ['Check', turn.status || 'Checking each claim against its paper', 'Check ready'];
       }
+      // The dots after the step under way keep their rhythm when the line is drawn again: their animation starts
+      // as far back as the step has been under way.
+      const since = STEP_SINCE.get(turn);
+      if (!since || since.at !== at) STEP_SINCE.set(turn, { at, t: performance.now() });
+      const dotsAge = Math.round(performance.now() - STEP_SINCE.get(turn).t);
       return h('ol', { class: 'runline steps', 'aria-label': 'Progress', 'aria-live': 'polite' }, steps.map(([label, now, done], i) => {
         const state = i < at ? 'done' : (i === at ? 'now' : 'todo');
         const detail = state === 'done' ? done : (state === 'now' ? now : label);
@@ -1520,7 +1602,7 @@
         const a = Motion.age(turn, `step${i}`, state);
         const fresh = a != null && state !== 'todo';
         const li = h('li', { class: fresh ? `${state} fresh` : state, title: detail, 'aria-label': detail, 'aria-current': state === 'now' ? 'step' : null },
-          h('i', { class: 'pip', 'aria-hidden': 'true' }), h('span', { class: state === 'now' ? 'live' : '' }, label));
+          h('i', { class: 'pip', 'aria-hidden': 'true' }), h('span', { class: state === 'now' ? 'live' : '', style: state === 'now' ? `--dots-age:${dotsAge}` : null }, label));
         if (fresh) li.style.setProperty('--age', String(Math.round(a)));
         return li;
       }));
@@ -1544,33 +1626,20 @@
             `${s.label}: ${s.count} result${s.count === 1 ? '' : 's'}${s.error ? ` — ${s.error}` : ''}`)))));
   }
 
-  function buildTally(turn, turnEl) {
-    const ins = turn.insights || [];
-    if (!turn.yesNo || !ins.length) return h('div', { hidden: true });
-    const order = ['supports', 'conditional', 'mixed', 'against', 'na'];
-    const rows = (turn.papers || []).map((p) => ({ n: p.n, stance: (insightFor(turn, p.n) || {}).stance || 'na' }));
-    const counted = rows.filter((r) => r.stance !== 'na');
-    if (!counted.length) return h('div', { hidden: true });
-    rows.sort((a, b) => order.indexOf(a.stance) - order.indexOf(b.stance) || a.n - b.n);
-    const count = (s) => rows.filter((r) => r.stance === s).length;
-    return h('div', { class: 'tally' },
-      h('p', { class: 'tally-title' }, 'Where the papers point', h('small', null, `${counted.length} of ${rows.length} test this question`)),
-      h('div', { class: 'tabs' }, rows.map((r) => h('button', {
-        type: 'button', class: `tab ${r.stance}`, title: `Paper ${r.n}: ${STANCE_LABEL[r.stance]}`,
-        'aria-label': `Paper ${r.n}: ${STANCE_LABEL[r.stance]}`,
-        onclick: (e) => focusPaper(e.currentTarget.closest('.turn'), turn, r.n),
-      }, r.n))),
-      h('div', { class: 'legend' }, order.filter((s) => count(s) > 0).map((s) =>
-        h('span', null, h('i', { class: `tab ${s}` }), `${STANCE_LABEL[s]} ${count(s)}`))),
-      h('p', { class: 'tally-note' }, 'One tab per paper, judged from its abstract. A count of papers is not a verdict: open the ones you rely on.'));
-  }
-
+  const reasoningLabel = (turn) => (turn.running && !turn.answer ? 'Thinking it through' : 'How the model reasoned');
   function buildReasoning(turn) {
     if (!turn.thinking || !turn.thinking.trim()) return h('div', { hidden: true });
-    const wasOpen = S.liveView && S.liveView.turn === turn && S.liveView.reasoning && S.liveView.reasoning.open;
-    return h('details', { class: 'reasoning', open: wasOpen || null },
-      h('summary', null, turn.running && !turn.answer ? 'Thinking it through' : 'How the model reasoned'),
-      h('pre', null, turn.thinking.trim()));
+    return h('details', { class: 'reasoning' }, h('summary', null, reasoningLabel(turn)), h('pre', null, turn.thinking.trim()));
+  }
+  /** The reasoning of the answer being written grows in place, so a reader who opened it keeps it open and can click it. */
+  function patchReasoning(v, turn) {
+    const text = (turn.thinking || '').trim();
+    const d = v.reasoning;
+    if (!text || d.tagName !== 'DETAILS') { if (text || d.tagName === 'DETAILS') swapPart(v, 'reasoning', buildReasoning(turn)); return; }
+    const summary = d.querySelector('summary');
+    if (summary.textContent !== reasoningLabel(turn)) summary.textContent = reasoningLabel(turn);
+    const pre = d.querySelector('pre');
+    if (pre.textContent !== text) pre.textContent = text;
   }
 
   // "Rahman & Aldous 2019" for each paper number, built from the database records. Two papers
@@ -1602,11 +1671,13 @@
     return labels;
   }
 
+  /** The answer drawn once: the brief, the body, the questions to ask next. Also counts which papers it cites. */
   function answerParts(turn) {
     const labels = citeLabels(turn);
     const opts = { paperCount: (turn.papers || []).length, webSources: turn.webSources || [],
       citeLabel: labels ? (n) => labels.get(n) : null, citeStance: (n) => insightFor(turn, n)?.stance || '' };
-    const parts = Render.splitLead(Render.splitFollowUps(turn.answer || '').body); // no brief for a meta opening
+    const split = Render.splitFollowUps(turn.answer || '');
+    const parts = Render.splitLead(split.body); // no brief for a meta opening
     const lead = Render.renderAnswer(parts.lead, opts);
     const body = Render.renderAnswer(parts.body, opts);
     turn.cited = new Set([...lead.cited, ...body.cited]);
@@ -1614,20 +1685,20 @@
     for (const match of (lead.html + body.html).matchAll(/data-n="(\d+)"/g)) {
       const n = Number(match[1]); turn.citeCounts.set(n, (turn.citeCounts.get(n) || 0) + 1);
     }
-    return { lead, body, hasLead: !!parts.lead };
+    return { lead, body, hasLead: !!parts.lead, followUps: split.followUps };
   }
 
-  function buildSummary(turn) {
-    const parts = answerParts(turn);
+  const summaryTally = (turn) => `${(turn.papers || []).length} papers · abstracts`;
+  function buildSummary(turn, parts = answerParts(turn)) {
     // asked every time, so the memory knows the card was not there before the opening arrived
     const shown = Motion.age(turn, 'lead', !!parts.hasLead);
     if (!parts.hasLead) return h('div', { hidden: true });
-    const text = h('div', { class: 'answer summary-text', html: parts.lead.html });
-    markClaims(text);
+    const text = h('div', { class: 'answer summary-text' });
+    drawText(text, parts.lead.html, turn);
     const card = h('section', { class: 'answer-summary', 'aria-label': 'Answer in brief' },
-      h('p', { class: 'summary-eyebrow' }, h('span', null, 'Answer in brief'), h('span', { class: 'summary-tally' }, `${(turn.papers || []).length} papers · abstracts`)),
+      h('p', { class: 'summary-eyebrow' }, h('span', null, 'Answer in brief'), h('span', { class: 'summary-tally' }, summaryTally(turn))),
       text,
-      h('p', { class: 'summary-source' }, 'Abstract-level synthesis. Open the evidence you rely on.'));
+      h('p', { class: 'summary-source' }, 'Summary from abstracts. Open the evidence you rely on.'));
     return shown == null ? card : Motion.enter(card, 0, shown); // the card rises in when the opening first arrives
   }
 
@@ -1640,21 +1711,32 @@
     const labels = citeLabels(turn);
     const p = (turn.papers || []).find((x) => x.n === f.n);
     const name = `${f.label}${f.title ? `: ${f.title}` : ''}`;
+    const page = isWebUrl(f.page) ? f.page : ''; // links and images only ever point at web addresses
+    const img = h('img', {
+      src: f.img, alt: name, loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer',
+      // A failed image leaves the card (caption, source, link) and says so in one line, instead of hiding the
+      // whole card and pulling everything below it up while the reader is there.
+      onerror: (e) => {
+        const box = e.target.closest('.pf-image');
+        // one line, the same height as the loading box, so nothing moves; the source line below links the article
+        if (box) box.replaceWith(h('p', { class: 'pf-missing' }, 'The image could not be loaded.'));
+      },
+    });
     const card = h('figure', { class: 'paper-figure', 'data-evidence-section': first ? 'figures' : null, tabindex: first ? '-1' : null },
       h('figcaption', { class: 'pf-head' },
         h('button', { type: 'button', class: 'cite named', 'data-n': f.n, 'aria-label': `Paper ${f.n}: ${labels?.get(f.n) || `Paper ${f.n}`}` }, labels?.get(f.n) || `Paper ${f.n}`),
         h('span', { class: 'pf-label' }, f.label), f.title && h('span', { class: 'pf-title' }, f.title)),
-      h('a', { class: 'pf-image', href: f.page, target: '_blank', rel: 'noopener noreferrer', title: 'Open the full article, with the figure at full size' },
-        h('img', {
-          src: f.img, alt: name, loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer',
-          onerror: (e) => { const fig = e.target.closest('.paper-figure'); if (fig) fig.hidden = true; },
-        })),
+      page
+        ? h('a', { class: 'pf-image', href: page, target: '_blank', rel: 'noopener noreferrer', title: 'Open the full article, with the figure at full size' }, img)
+        : h('div', { class: 'pf-image' }, img),
       f.read && h('p', { class: 'pf-read' }, h('strong', null, 'How to read: '), f.read),
       f.caption && h('details', { class: 'pf-caption' }, h('summary', null, 'Full caption'), h('p', null, f.caption)),
       h('p', { class: 'pf-source' }, 'From ', h('cite', null, p ? p.title : `paper ${f.n}`),
-        f.license && ` · ${f.license}`, ' · ', h('a', { href: f.page, target: '_blank', rel: 'noopener noreferrer' }, 'Open in Europe PMC')));
+        f.license && ` · ${f.license}`, page && ' · ', page && h('a', { href: page, target: '_blank', rel: 'noopener noreferrer' }, 'Open in Europe PMC')));
     return card;
   }
+  /** Figures whose image is a web address (the server only sends those; this keeps the window from trusting it). */
+  const figuresOf = (turn) => (turn.figures || []).filter((f) => isWebUrl(f.img));
 
   /**
    * Wrap the words each group of citation marks supports in a .claim span, back to the previous
@@ -1689,6 +1771,71 @@
   }
 
   /**
+   * Draw answer text (render.js output, in which every piece of text is escaped) into `el`. A finished answer is
+   * drawn in one go. While an answer streams it is drawn block by block (each paragraph, heading, list or table):
+   * a block that did not change stays exactly as it is, so the reader can point at it, click, select or fold it, and
+   * only the block being written (usually the last) is drawn again. That block's new words fade in, the paper being
+   * pointed at stays lit in it, and the card of a stamp in it stays up.
+   */
+  function drawText(el, html, turn) {
+    if (turn.running && syncBlocks(el, html, turn)) return;
+    el._blocks = null;
+    el.innerHTML = html; // render.js output (see above)
+    markClaims(el);
+  }
+  /** render.js puts each block on a line of its own; only a code block has line breaks inside it. */
+  function htmlBlocks(html) {
+    const out = [];
+    for (const line of html ? html.split('\n') : []) {
+      const i = out.length - 1;
+      if (i >= 0 && out[i].startsWith('<pre>') && !out[i].endsWith('</pre>')) out[i] += `\n${line}`;
+      else out.push(line);
+    }
+    return out;
+  }
+  const blockTpl = document.createElement('template');
+  /** Returns false when the text is not made of whole blocks (then drawText draws it in one go). */
+  function syncBlocks(el, html, turn) {
+    const want = htmlBlocks(html);
+    const have = el._blocks || [];
+    if (!el._blocks && el.firstChild) el.replaceChildren();
+    const t = performance.now();
+    const next = [];
+    for (let i = 0; i < want.length; i++) {
+      const old = have[i];
+      if (old && old.src === want[i]) { next.push(old); continue; }
+      blockTpl.innerHTML = want[i]; // one block of render.js output (escaped)
+      const node = blockTpl.content.firstChild;
+      if (!node || node.nodeType !== 1 || blockTpl.content.childNodes.length !== 1) return false;
+      markClaims(node);
+      if (lit && lit.turn === turn) paintLit(node, turn, lit.key); // comes in lit, so its highlight does not sweep again
+      const len = node.textContent.length;
+      const pieces = Motion.fadeNext(old, len, t);
+      Motion.fadeIn(node, pieces, t);
+      if (old) replaceBlock(old.node, node); else el.append(node);
+      next.push({ src: want[i], node, len, pieces });
+    }
+    for (let i = want.length; i < have.length; i++) have[i].node.remove();
+    el._blocks = next;
+    return true;
+  }
+  /** Put a new version of a block in place of the old one. The cite card and the keyboard focus move to its twin. */
+  function replaceBlock(was, node) {
+    const twin = (x, sel) => { const i = [...was.querySelectorAll(sel)].indexOf(x); return i < 0 ? null : node.querySelectorAll(sel)[i] || null; };
+    if (citeCardFor && was.contains(citeCardFor)) {
+      const next = twin(citeCardFor, '.cite[data-n]');
+      if (next && next.dataset.n === citeCardFor.dataset.n) {
+        citeCardFor.removeAttribute('aria-describedby');
+        citeCardFor = next;
+        next.setAttribute('aria-describedby', 'cite-card');
+      } else hideCiteCard();
+    }
+    const focused = was.contains(document.activeElement) ? twin(document.activeElement, 'button, a[href]') : null;
+    was.replaceWith(node);
+    if (focused) focused.focus({ preventScroll: true });
+  }
+
+  /**
    * The margin: beside each paragraph, a small specimen label for each paper it cites for the first
    * time (kind of study as a folder colour, author and year, sample when the abstract states one).
    * Laid out on the answer's own grid, so each label sits level with its paragraph; hidden by CSS when
@@ -1700,6 +1847,8 @@
     const seen = new Set();
     let row = 0;
     const notes = [];
+    // "84 distributed teams": the number is label data (mono), the words are words (sans)
+    const sample = (s) => { const m = /^([\d.,]+(?:\s*[–-]\s*[\d.,]+)?)(.*)$/s.exec(String(s)); return m ? [h('span', { class: 'sp-num' }, `N ${m[1]}`), m[2]] : [h('span', { class: 'sp-num' }, 'N'), ` ${s}`]; };
     for (const block of [...el.children]) {
       row += 1;
       block.style.gridRow = String(row);
@@ -1719,9 +1868,9 @@
             h('span', { class: 'sp-no' }, `No. ${String(n).padStart(2, '0')}`, p.year ? ` · ${p.year}` : ''),
             h('span', { class: 'sp-name' }, name),
             h('span', { class: 'sp-det' }, (ins && ins.design) || (p.kind !== 'Article' ? p.kind : FOLDER_LABEL[folder])),
-            ins && ins.sample && h('span', { class: 'sp-n' }, `N ${ins.sample}`));
+            ins && ins.sample && h('span', { class: 'sp-n' }, sample(ins.sample)));
         }),
-        fresh.length > 3 && h('span', { class: 'sp-more' }, `+${fresh.length - 3} more in References`));
+        fresh.length > 3 && h('span', { class: 'sp-more' }, h('span', { class: 'sp-num' }, `+${fresh.length - 3}`), ' more in References'));
       note.style.gridRow = String(row);
       notes.push(note);
     }
@@ -1730,49 +1879,74 @@
 
   /**
    * A small arrow at the right of a heading that hides or shows what belongs under it. Everything starts
-   * open. Which ones the reader closed is kept for this conversation, so a redraw (streaming, a new
-   * version) does not reopen them. `content()` lists the elements under the heading, `notes` is the
-   * margin of the answer, whose labels sit level with their paragraphs and must hide with them.
+   * open. Which ones the reader closed is kept with the turn (and handed on to the saved turn when a streamed
+   * answer is saved), so a redraw (streaming, a new version, the finish) does not reopen them.
    */
-  const FOLDED = new Set();
-  function addFold(turn, heading, key, content, notes) {
-    const full = `${turn.id || 'live'}|${key}`;
+  const FOLDS = new WeakMap(); // a turn -> the keys of its folded headings
+  const foldsOf = (turn) => { let s = FOLDS.get(turn); if (!s) FOLDS.set(turn, (s = new Set())); return s; };
+  /** The arrow after a heading. The heading's last word (or last piece) and the arrow never part at a line end. */
+  function foldButton(heading, onClick) {
+    const btn = h('button', { type: 'button', class: 'fold' }, icon('chev'));
+    btn.addEventListener('click', onClick);
+    const tail = h('span', { class: 'fold-tail' });
+    const last = heading.lastChild;
+    if (last && last.nodeType === 3) {
+      const text = last.nodeValue.replace(/\s+$/, '');
+      const cut = text.search(/\S+$/);
+      if (cut > 0) { last.nodeValue = text.slice(0, cut); tail.append(text.slice(cut)); } else { last.remove(); tail.append(text); }
+    } else if (last) tail.append(last);
+    tail.append(btn);
+    heading.append(tail);
+    return btn;
+  }
+  function paintFold(btn, folded, label) {
+    btn.setAttribute('aria-expanded', String(!folded));
+    btn.setAttribute('aria-label', `${folded ? 'Show' : 'Hide'} ${label}`);
+    btn.title = folded ? 'Show' : 'Hide';
+  }
+  // A folded part is hidden with its own class, not the `hidden` attribute, so that opening a fold never shows
+  // something that is hidden for another reason (a figure whose image could not be loaded).
+  const foldAway = (el, hide) => { if (el.classList.contains('fold-hide') !== hide) el.classList.toggle('fold-hide', hide); };
+  /** One fold that hides `content()` (the evidence views: the comparison, each chart, the coverage map). */
+  function addFold(turn, heading, key, content) {
+    const folds = foldsOf(turn);
     const label = heading.textContent.trim();
-    const btn = h('button', { type: 'button', class: 'fold', 'aria-label': `Hide ${label}`, title: 'Hide' }, icon('chev'));
-    const apply = (folded) => {
-      btn.setAttribute('aria-expanded', String(!folded));
-      btn.setAttribute('aria-label', `${folded ? 'Show' : 'Hide'} ${label}`);
-      btn.title = folded ? 'Show' : 'Hide';
-      for (const el of content()) {
-        el.hidden = folded;
-        if (notes && el.style.gridRow) notes.filter((n) => n.style.gridRow === el.style.gridRow).forEach((n) => { n.hidden = folded; });
-      }
-    };
-    btn.addEventListener('click', () => {
-      const folded = !FOLDED.has(full);
-      if (folded) FOLDED.add(full); else FOLDED.delete(full);
-      apply(folded);
-    });
-    heading.append(btn);
-    apply(FOLDED.has(full));
+    const apply = () => { paintFold(btn, folds.has(key), label); for (const el of content()) foldAway(el, folds.has(key)); };
+    const btn = foldButton(heading, () => { if (folds.has(key)) folds.delete(key); else folds.add(key); apply(); });
+    apply();
   }
 
-  /** The headings of the answer text (and what sits under each, up to the next heading). */
+  /**
+   * The headings of the answer text, each hiding what sits under it up to the next heading of the same or a
+   * higher level. Safe to call again (a streaming answer gains headings): a new heading gets its arrow, and a
+   * block is hidden exactly when a heading above it in the outline is folded, so opening an outer heading
+   * leaves a folded inner one closed. A margin label hides with the block level with it.
+   */
   function foldAnswer(turn, el) {
+    const folds = foldsOf(turn);
     const seen = new Map();
-    const notes = [...el.querySelectorAll(':scope > .margin-note')];
-    for (const hd of el.querySelectorAll(':scope > h2, :scope > h3, :scope > h4')) {
-      const level = Number(hd.tagName[1]);
-      const base = hd.textContent.trim().toLowerCase().slice(0, 60);
+    const outline = []; // the headings the current block sits under: { level, folded }
+    const hiddenRows = new Set();
+    for (const x of el.children) {
+      if (x.classList.contains('margin-note')) continue;
+      const level = /^H[2-4]$/.test(x.tagName) ? Number(x.tagName[1]) : 0;
+      if (level) while (outline.length && outline[outline.length - 1].level >= level) outline.pop();
+      const hide = outline.some((o) => o.folded);
+      foldAway(x, hide);
+      if (hide && x.style.gridRow) hiddenRows.add(x.style.gridRow);
+      if (!level) continue;
+      const label = x.textContent.trim();
+      const base = label.toLowerCase().slice(0, 60);
       const n = (seen.get(base) || 0) + 1; seen.set(base, n);
-      addFold(turn, hd, `a:${base}:${n}`, () => {
-        const out = [];
-        for (let x = hd.nextElementSibling; x && !(/^H[2-4]$/.test(x.tagName) && Number(x.tagName[1]) <= level); x = x.nextElementSibling) {
-          if (!x.classList.contains('margin-note')) out.push(x);
-        }
-        return out;
-      }, notes);
+      let btn = x.querySelector('.fold');
+      if (!btn) {
+        btn = foldButton(x, () => { const key = btn._key; if (folds.has(key)) folds.delete(key); else folds.add(key); foldAnswer(turn, el); });
+      }
+      btn._key = `a:${base}:${n}`;
+      paintFold(btn, folds.has(btn._key), label);
+      outline.push({ level, folded: folds.has(btn._key) });
     }
+    for (const note of el.querySelectorAll(':scope > .margin-note')) foldAway(note, hiddenRows.has(note.style.gridRow));
   }
 
   /** The evidence views: the comparison, each chart, the coverage map. */
@@ -1791,14 +1965,14 @@
     });
   }
 
-  function buildAnswer(turn) {
-    const el = h('div', { class: 'answer answer-body', 'data-evidence-section': 'synthesis', tabindex: '-1', html: answerParts(turn).body.html });
-    markClaims(el);
+  function buildAnswer(turn, parts = answerParts(turn)) {
+    const el = h('div', { class: 'answer answer-body', 'data-evidence-section': 'synthesis', tabindex: '-1' });
+    drawText(el, parts.body.html, turn);
     // Once the answer is complete, each figure goes after the first paragraph that cites its paper
     // (while it streams they wait below it, in buildFigures, so images do not reload on every word).
     if (!turn.running) {
       const lastAfter = new Map(); // two figures after the same paragraph keep their order
-      (turn.figures || []).forEach((f, i) => {
+      figuresOf(turn).forEach((f, i) => {
         const mark = el.querySelector(`.cite[data-n="${f.n}"]`);
         let block = mark;
         while (block && block.parentElement !== el) block = block.parentElement;
@@ -1812,16 +1986,19 @@
   }
 
   function buildFigures(turn) {
-    if (!turn.running || !(turn.figures || []).length) return h('div', { hidden: true });
-    return h('div', { class: 'figures-live' }, turn.figures.map((f, i) => figureCard(turn, f, i === 0)));
+    const figures = figuresOf(turn);
+    if (!turn.running || !figures.length) return h('div', { hidden: true });
+    return h('div', { class: 'figures-live' }, figures.map((f, i) => figureCard(turn, f, i === 0)));
   }
 
   function buildEvidence(turn) {
+    // A failed answer has no evidence to compare: its card would only say what to try, and wrongly.
+    if (turn.error) return h('div', { hidden: true });
     const labels = citeLabels(turn);
     const el = window.LecternEvidenceUI.build(turn, { h, label: (n) => labels?.get(n) || `Paper ${n}`,
+      readingOn: !!S.app.settings.insights,
       inspect: (ids, name) => {
-        const turnEl = [...document.querySelectorAll('.turn')].find((el) => el._turn === turn);
-        if (!turnEl) return;
+        if (!ARTICLES.get(turn)?.isConnected) return;
         const st = shelfState(turn);
         Object.assign(st, { paperNs: ids, filterLabel: name, citedOnly: false, query: '' });
         openReferences(turn, true);
@@ -1835,10 +2012,11 @@
 
   /** Links to the parts of this answer. Only the views it actually has are listed (see evidence.js plan). */
   function buildAnswerNav(turn) {
-    if (turn.mode === 'verify') return h('div', { hidden: true });
+    if (turn.mode === 'verify' || turn.error) return h('div', { hidden: true });
     const views = window.LecternEvidenceUI.plan(turn);
+    const figures = figuresOf(turn);
     const items = [['synthesis', 'Synthesis'],
-      (turn.figures || []).length > 0 && ['figures', (turn.figures.length === 1 ? 'Figure' : 'Figures')],
+      figures.length > 0 && ['figures', (figures.length === 1 ? 'Figure' : 'Figures')],
       views.compare && ['compare', 'Compare studies'],
       (views.direction || views.design) && ['charts', 'Evidence charts'],
       views.coverage && ['coverage', 'Coverage map']].filter(Boolean);
@@ -1847,26 +2025,26 @@
       h('button', { type: 'button', onclick: (e) => {
         const section = e.currentTarget.closest('.turn').querySelector(`[data-evidence-section="${key}"]`);
         section?.querySelectorAll('.fold[aria-expanded="false"]').forEach((b) => b.click()); // a closed section opens when you jump to it
-        if (section) { section.scrollIntoView({ block: 'start', behavior: 'smooth' }); section.focus({ preventScroll: true }); }
+        if (section) { section.scrollIntoView({ block: 'start', behavior: Motion.calm() ? 'instant' : 'smooth' }); section.focus({ preventScroll: true }); }
       } }, label)));
   }
 
   /** The questions the answer suggests asking next, as buttons that ask them in this conversation. */
-  function buildNext(turn) {
-    const questions = Render.splitFollowUps(turn.answer || '').followUps;
+  function buildNext(turn, questions = Render.splitFollowUps(turn.answer || '').followUps) {
     if (!questions.length) return h('div', { hidden: true });
-    const busy = !!(S.live && S.live.running);
     return h('div', { class: 'next' },
       h('h3', null, 'Ask next'),
       h('ul', null, questions.map((q) => h('li', null,
-        h('button', { type: 'button', class: 'example', disabled: busy || null, onclick: () => ask(q, { parent: turn.id }) }, q)))));
+        h('button', { type: 'button', class: 'example', 'data-busy': '', disabled: isBusy() || null, onclick: () => ask(q, { parent: turn.id }) }, q)))));
   }
 
   // Pointing at a citation mark (or tabbing to it) shows which paper it is, without leaving the sentence.
   const citeCard = h('div', { class: 'cite-card', id: 'cite-card', role: 'tooltip', hidden: true });
   let citeCardFor = null;
+  let citeCardFrame = 0;
   function hideCiteCard() {
     citeCard.hidden = true;
+    cancelAnimationFrame(citeCardFrame);
     if (citeCardFor) citeCardFor.removeAttribute('aria-describedby');
     citeCardFor = null;
   }
@@ -1874,6 +2052,7 @@
     if (citeCardFor === chip) return;
     const p = (turn.papers || []).find((x) => x.n === Number(chip.dataset.n));
     if (!p) { hideCiteCard(); return; }
+    const r = chip.getBoundingClientRect(); // read before anything is written, so this read costs no layout
     hideCiteCard();
     citeCardFor = chip;
     chip.setAttribute('aria-describedby', 'cite-card');
@@ -1890,11 +2069,16 @@
       h('small', null, facts));
     if (!citeCard.isConnected) document.body.append(citeCard);
     citeCard.hidden = false;
-    const r = chip.getBoundingClientRect();
-    const below = r.bottom + 8;
-    const tall = citeCard.offsetHeight;
-    citeCard.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - citeCard.offsetWidth - 12))}px`;
-    citeCard.style.top = `${below + tall > window.innerHeight - 12 ? Math.max(12, r.top - tall - 8) : below}px`;
+    // Placed when the frame is drawn, when its size is known anyway, and shown in the same frame.
+    citeCard.style.visibility = 'hidden';
+    citeCardFrame = requestAnimationFrame(() => {
+      if (!citeCardFor) return; // (a redraw of a streaming answer may have handed the card to the stamp's twin)
+      const below = r.bottom + 8;
+      const tall = citeCard.offsetHeight;
+      citeCard.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - citeCard.offsetWidth - 12))}px`;
+      citeCard.style.top = `${below + tall > window.innerHeight - 12 ? Math.max(12, r.top - tall - 8) : below}px`;
+      citeCard.style.visibility = '';
+    });
   }
   document.addEventListener('scroll', hideCiteCard, true);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideCiteCard(); });
@@ -1927,7 +2111,7 @@
     if (turn.stopped) kids.push(h('div', { class: 'notice' }, 'Stopped. This partial answer was not saved.'));
     if (turn.error) {
       kids.push(h('div', { class: 'error' }, turn.error, h('br'),
-        h('button', { class: 'btn small', onclick: () => ask(turn.question, { parent: turn.parentId, mode: turn.mode }) }, 'Try again'), ' ',
+        h('button', { class: 'btn small', 'data-busy': '', disabled: isBusy() || null, onclick: () => ask(turn.question, { parent: turn.parentId, mode: turn.mode }) }, 'Try again'), ' ',
         h('button', { class: 'btn small', onclick: openSettings }, 'Open Settings')));
     }
     const web = turn.webSources || [];
@@ -1943,25 +2127,36 @@
     const hasRefs = !turn.running && turn.answer && (turn.papers || []).length;
     if (saved || hasRefs) {
       const style = S.app.settings.citeStyle;
+      // Two everyday actions and one menu for the exports, instead of six buttons of equal weight.
       kids.push(h('div', { class: 'turn-actions' },
         saved && h('button', {
-          class: 'btn small', disabled: isBusy() || null, title: 'Ask the same question again. This answer is kept as an earlier version.',
+          class: 'btn small', 'data-busy': '', disabled: isBusy() || null, title: 'Ask the same question again. This answer is kept as an earlier version.',
           onclick: () => ask(turn.question, { parent: turn.parent, mode: turn.mode }),
         }, 'Retry'),
-        hasRefs && [
-        h('button', { class: 'btn small', onclick: () => copyAnswer(turn) }, 'Copy answer'),
-        // The whole answer as a PDF: answer, findings by paper, figures, references and abstracts (ui/answerpdf.js).
-        h('button', { class: 'btn small', onclick: (e) => window.LecternAnswerPdf.export({ turn, button: e.currentTarget,
-          deps: { h, api, toast, Cite, Render, state: S, answerParts, insightFor, citeLabels, prettyModel, engineInfo } }) }, 'Download PDF'),
-        h('button', { class: 'btn small', onclick: () => copyRich(Cite.formatList(exportPapers(turn), style), 'Reference list copied') },
-          `Copy reference list (${Cite.STYLES[style].label})`),
-        h('button', { class: 'btn small', onclick: () => download('lectern-references.bib', Cite.formatList(exportPapers(turn), 'bibtex').text) }, 'Download .bib'),
-        h('button', { class: 'btn small', onclick: () => download('lectern-references.ris', Cite.formatList(exportPapers(turn), 'ris').text, 'application/x-research-info-systems') }, 'Download .ris')]));
+        hasRefs && h('button', { class: 'btn small', onclick: () => copyAnswer(turn) }, 'Copy answer'),
+        hasRefs && menuButton({ label: 'Export', cls: 'answer-export', items: [
+          // The whole answer as a PDF: answer, findings by paper, figures, references and abstracts (ui/answerpdf.js).
+          // The Export button is passed as the button, so it is disabled while the PDF is made.
+          { label: 'Download PDF', note: 'The answer, its findings, figures and references',
+            run: (button) => window.LecternAnswerPdf.export({ turn, button,
+              deps: { h, api, toast, Cite, Render, state: S, answerParts, insightFor, citeLabels, prettyModel, engineInfo } }) },
+          'sep',
+          { label: `Copy reference list (${Cite.STYLES[style].label})`, note: 'The papers this answer draws on',
+            run: () => copyRich(Cite.formatList(exportPapers(turn), style), 'Reference list copied') },
+          { label: 'Download .bib', note: 'BibTeX, for LaTeX and reference managers',
+            run: () => download('lectern-references.bib', Cite.formatList(exportPapers(turn), 'bibtex').text) },
+          { label: 'Download .ris', note: 'RIS, for Zotero, Mendeley or EndNote',
+            run: () => download('lectern-references.ris', Cite.formatList(exportPapers(turn), 'ris').text, 'application/x-research-info-systems') },
+        ] })));
     }
     if (!turn.running && turn.engine) {
       const info = engineInfo(turn.engine);
       const u = turn.usage;
-      const bits = [`${info ? info.short : turn.engine}, ${prettyModel(turn.model, turn.engine)}, ${(EFFORT_LABEL[turn.effort] || '').toLowerCase()} effort`];
+      const model = prettyModel(turn.model, turn.engine);
+      const maker = info ? info.short : turn.engine;
+      // "Claude Opus 5.5" already names its maker, so "Claude, " in front would only repeat it; "GPT-6.1 Sol" keeps "ChatGPT, ".
+      const who = model.toLowerCase().startsWith(String(maker).toLowerCase()) ? model : `${maker}, ${model}`;
+      const bits = [`${who}, ${(EFFORT_LABEL[turn.effort] || '').toLowerCase()} effort`];
       if (turn.web) bits.push('web search on');
       if (u && (u.input || u.output)) bits.push(`${nf.format(u.input)} tokens read, ${nf.format(u.output)} written`);
       kids.push(h('div', { class: 'turn-meta' }, bits.join('; ')));
@@ -1969,17 +2164,48 @@
     return h('div', { class: 'foot' }, kids);
   }
 
-  /** The question, with its version switcher and actions (edit, copy, new chat from here, delete). */
+  /**
+   * The question, with its version switcher and actions (save, edit, copy, new chat from here, delete). The bar is
+   * also drawn while the answer is written, with the actions that need a saved answer waiting, so the page does not
+   * move when the answer is saved. A failed or stopped answer is not saved: it can be edited, copied or put away.
+   */
+  const editKey = (turn) => turn.id || 'live';
   function buildPrompt(turn) {
     const t = S.thread;
     const saved = !!(t && turn.id && t.turns.includes(turn));
-    if (saved && S.editing === turn.id) return buildEditBox(turn);
+    const unsaved = !saved && turn === S.live && !turn.running; // failed or stopped
+    if ((saved || unsaved) && S.editing === editKey(turn)) return buildEditBox(turn);
     const busy = isBusy();
     const vers = saved ? versionsOf(t, turn) : [];
     const i = vers.indexOf(turn);
     const tool = turn.mode && turn.mode !== 'answer' ? modeInfo(turn.mode) : null;
     const long = turn.question.length > 240;
     const heading = h('h2', { class: `question${long ? ' long' : ''}` }, long ? `${turn.question.slice(0, 220).trimEnd()}…` : turn.question);
+    const copy = h('button', { class: 'icon-btn', onclick: () => copyRich({ text: turn.question }, 'Question copied') }, 'Copy');
+    const wait = 'Available once the answer is saved';
+    const edit = () => { S.editing = editKey(turn); render(); };
+    let actions;
+    if (saved) {
+      actions = [
+        h('button', { class: `icon-btn save-prompt${turn.saved ? ' on' : ''}`, 'aria-pressed': String(!!turn.saved), title: turn.saved ? 'Remove this question from your library' : 'Keep this question and its answer in your library',
+          onclick: () => setPromptSaved(t.id, turn.id, !turn.saved) }, turn.saved ? 'Unsave' : 'Save'),
+        h('button', { class: 'icon-btn', 'data-busy': '', disabled: busy || null, title: 'Edit this question and ask again. The current answer is kept as an earlier version.', onclick: edit }, 'Edit'),
+        copy,
+        h('button', { class: 'icon-btn', 'data-busy': '', disabled: busy || null, title: 'Start a new chat with everything up to here', onclick: () => branchFrom(turn) }, 'New chat from here'),
+        h('button', { class: 'icon-btn del', 'data-busy': '', disabled: busy || null, onclick: () => deleteTurn(turn) }, 'Delete')];
+    } else if (turn.running) {
+      actions = [
+        h('button', { class: 'icon-btn save-prompt', disabled: true, title: wait }, 'Save'),
+        h('button', { class: 'icon-btn', disabled: true, title: wait }, 'Edit'),
+        copy,
+        h('button', { class: 'icon-btn', disabled: true, title: wait }, 'New chat from here'),
+        h('button', { class: 'icon-btn del', disabled: true, title: wait }, 'Delete')];
+    } else {
+      actions = [
+        h('button', { class: 'icon-btn', 'data-busy': '', disabled: busy || null, title: 'Edit this question and ask it again', onclick: edit }, 'Edit'),
+        copy,
+        h('button', { class: 'icon-btn del', 'data-busy': '', disabled: busy || null, title: 'Remove this question. Its answer was not saved.', onclick: () => discardLive(turn) }, 'Delete')];
+    }
     return h('div', { class: 'prompt' },
       tool && h('div', { class: 'mode-tag' }, icon(tool.id), tool.label),
       heading,
@@ -1992,19 +2218,24 @@
           e.currentTarget.textContent = openNow ? 'Show less' : 'Show all';
         },
       }, 'Show all'),
-      saved && h('div', { class: 'prompt-bar' },
+      h('div', { class: 'prompt-bar' },
         turn.saved && h('span', { class: 'prompt-saved', title: 'This question is in your library' }, icon('bookmark'), 'Saved'),
         vers.length > 1 && h('span', { class: 'versions', role: 'group', 'aria-label': 'Versions of this question' },
           h('button', { class: 'icon-btn', 'aria-label': 'Previous version', disabled: i === 0 || null, onclick: () => showVersion(vers[i - 1]) }, '‹'),
           h('span', { 'aria-live': 'polite' }, `${i + 1} / ${vers.length}`),
           h('button', { class: 'icon-btn', 'aria-label': 'Next version', disabled: i === vers.length - 1 || null, onclick: () => showVersion(vers[i + 1]) }, '›')),
-        h('span', { class: 'prompt-actions' },
-          h('button', { class: `icon-btn save-prompt${turn.saved ? ' on' : ''}`, 'aria-pressed': String(!!turn.saved), title: turn.saved ? 'Remove this question from your library' : 'Keep this question and its answer in your library',
-            onclick: () => setPromptSaved(t.id, turn.id, !turn.saved) }, turn.saved ? 'Unsave' : 'Save'),
-          h('button', { class: 'icon-btn', disabled: busy || null, title: 'Edit this question and ask again. The current answer is kept as an earlier version.', onclick: () => { S.editing = turn.id; render(); } }, 'Edit'),
-          h('button', { class: 'icon-btn', onclick: () => copyRich({ text: turn.question }, 'Question copied') }, 'Copy'),
-          h('button', { class: 'icon-btn', disabled: busy || null, title: 'Start a new conversation with everything up to here', onclick: () => branchFrom(turn) }, 'New chat from here'),
-          h('button', { class: 'icon-btn del', disabled: busy || null, onclick: () => deleteTurn(turn) }, 'Delete'))));
+        h('span', { class: 'prompt-actions' }, actions)));
+  }
+
+  /** Put away a failed or stopped answer, which was never saved (after asking, as with any delete). */
+  async function discardLive(turn) {
+    if (turn !== S.live || turn.running) return;
+    const ok = await confirmDialog({ title: 'Remove this question?', message: 'Its answer was not saved, so it cannot be brought back.', confirmLabel: 'Remove' });
+    if (!ok || turn !== S.live) return;
+    S.live = null;
+    S.editing = null;
+    if (S.thread && !S.thread.id) goHome(); // a new conversation whose only question failed
+    else render();
   }
 
   function buildEditBox(turn) {
@@ -2023,13 +2254,14 @@
       const q = ta.value.trim();
       if (!q || isBusy()) return;
       S.editing = null;
-      ask(q, { parent: turn.parent, mode: turn.mode });
+      // A saved question gets a new version beside it; a failed or stopped one is asked again in its place.
+      ask(q, { parent: turn.id ? turn.parent : turn.parentId, mode: turn.mode });
     };
     requestAnimationFrame(() => { grow(ta); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); });
     return h('div', { class: 'edit-box' },
       ta,
       h('div', { class: 'edit-row' },
-        h('small', null, 'Sends as a new version. The current answer stays under ‹ ›.'),
+        h('small', null, turn.id ? 'Sends as a new version. The current answer stays in the version arrows beside the question.' : 'Asks the edited question in place of this unsaved answer.'),
         h('span', { class: 'spacer' }),
         h('button', { class: 'btn small', onclick: cancel }, 'Cancel'),
         h('button', { class: 'btn small primary', onclick: send }, 'Send')));
@@ -2037,19 +2269,22 @@
 
   function buildTurn(turn) {
     const view = { turn };
+    const parts = answerParts(turn); // drawn once for the brief, the body and the questions to ask next
     view.runline = buildRunline(turn);
-    view.summary = buildSummary(turn);
+    view.summary = buildSummary(turn, parts);
     view.reasoning = buildReasoning(turn);
-    view.answer = buildAnswer(turn);
+    view.answer = buildAnswer(turn, parts);
     view.figures = buildFigures(turn);
     view.nav = buildAnswerNav(turn);
     view.evidence = buildEvidence(turn);
     view.foot = buildFoot(turn);
-    view.next = buildNext(turn);
+    view.next = buildNext(turn, parts.followUps);
+    view.nextKey = parts.followUps.join('\n');
     view.el = h('article', { class: 'turn evidence-turn' },
       h('div', { class: 'page' }, buildPrompt(turn), view.runline, view.summary,
         view.nav, view.reasoning, view.answer, view.figures, view.evidence, view.foot, view.next));
     view.el._turn = turn;
+    ARTICLES.set(turn, view.el);
     const citeChip = (e) => e.target.closest('button.cite[data-n]');
     const specimen = (e) => e.target.closest('button.specimen[data-n]');
     const point = (n) => lightPaper(turn, n);
@@ -2072,29 +2307,127 @@
     return view;
   }
 
-  /** Re-draw one part of the turn being answered, without touching the rest of the page. */
-  const BUILDERS = { runline: buildRunline, summary: buildSummary, evidence: buildEvidence, tally: buildTally, reasoning: buildReasoning, answer: buildAnswer, foot: buildFoot, next: buildNext, figures: buildFigures, nav: buildAnswerNav };
+  /**
+   * Draw again the parts of the turn being answered that changed, without touching the rest of the page. At most
+   * once a frame; the answer's text about 30 times a second (a frame that comes sooner leaves it for the next).
+   * 'text' is the brief, the body and the questions to ask next, from one drawing of the answer.
+   */
+  const BUILDERS = { runline: buildRunline, evidence: buildEvidence, foot: buildFoot, figures: buildFigures, nav: buildAnswerNav };
   const pending = new Set();
   let frame = 0;
+  let textDrawnAt = -Infinity;
   function refreshLive(...parts) {
     for (const p of parts) pending.add(p);
-    if (frame) return;
-    frame = requestAnimationFrame(() => {
-      frame = 0;
-      const v = S.liveView;
-      const todo = [...pending];
-      pending.clear();
-      if (!v || !v.el.isConnected || !S.live || v.turn !== S.live) return;
-      if (todo.includes('answer')) hideCiteCard(); // its mark is about to be replaced
-      for (const part of todo) {
-        if (part === 'shelf') continue;
-        const fresh = BUILDERS[part](S.live);
-        v[part].replaceWith(fresh);
-        v[part] = fresh;
-        if (part === 'answer' || part === 'summary') Motion.stream(fresh, S.live, part); // the text that has just arrived fades in
-      }
-      if (todo.includes('shelf') && (!S.referenceTurn || S.referenceTurn === S.live)) refreshReferences();
-    });
+    if (!frame) frame = requestAnimationFrame(flushLive);
+  }
+  function swapPart(v, part, fresh) { v[part].replaceWith(fresh); v[part] = fresh; }
+  function flushLive(now) {
+    frame = 0;
+    const v = S.liveView;
+    const todo = new Set(pending);
+    pending.clear();
+    if (!v || !v.el.isConnected || !S.live || v.turn !== S.live) return;
+    const turn = S.live;
+    if (todo.has('text')) {
+      if (now - textDrawnAt < 30) refreshLive('text');
+      else { textDrawnAt = now; drawLiveText(v, turn); }
+    }
+    for (const part of todo) if (BUILDERS[part]) swapPart(v, part, BUILDERS[part](turn));
+    if (todo.has('reasoning')) patchReasoning(v, turn);
+    if (todo.has('shelf') && (!S.referenceTurn || S.referenceTurn === turn)) refreshReferences();
+  }
+  function drawLiveText(v, turn) {
+    const parts = answerParts(turn);
+    if (parts.hasLead && v.summary.classList.contains('answer-summary')) {
+      drawText(v.summary.querySelector('.summary-text'), parts.lead.html, turn);
+      const tally = v.summary.querySelector('.summary-tally');
+      if (tally.textContent !== summaryTally(turn)) tally.textContent = summaryTally(turn);
+    } else if (parts.hasLead || v.summary.classList.contains('answer-summary')) swapPart(v, 'summary', buildSummary(turn, parts));
+    drawText(v.answer, parts.body.html, turn);
+    foldAnswer(turn, v.answer);
+    const key = parts.followUps.join('\n');
+    if (key !== v.nextKey) { v.nextKey = key; swapPart(v, 'next', buildNext(turn, parts.followUps)); }
+  }
+
+  /** Buttons that wait while an answer is written (data-busy) follow isBusy() without their turns being drawn again. */
+  function syncBusy() {
+    const busy = isBusy();
+    for (const b of document.querySelectorAll('[data-busy]')) b.disabled = busy;
+  }
+
+  // Long conversations: a question far off screen is not styled or laid out (content-visibility in world.css); it
+  // keeps the height it had when it was last drawn. If it is drawn again at another height while it is wholly above
+  // what the reader sees (the window became narrower, say), the page moves by the difference, so what the reader
+  // sees stays still. Scroll anchoring cannot do this: it is off, because it moved the page when a fold opened.
+  const turnHeights = new WeakMap();
+  let holdTurns = false; // true while the page is moved on purpose (a jump to a question): it is not held still then
+  const turnSizes = window.ResizeObserver ? new ResizeObserver((entries) => {
+    const main = $('.main');
+    if (!main) return;
+    const top = main.getBoundingClientRect().top;
+    let shift = 0;
+    for (const e of entries) {
+      const el = e.target;
+      const now = e.borderBoxSize && e.borderBoxSize[0] ? e.borderBoxSize[0].blockSize : el.offsetHeight;
+      const was = turnHeights.get(el);
+      turnHeights.set(el, now);
+      if (was != null && el.isConnected && el.getBoundingClientRect().bottom <= top) shift += now - was;
+    }
+    if (shift && !holdTurns) main.scrollTop += shift;
+  }) : null;
+  function watchTurn(el) {
+    if (!turnSizes) return;
+    turnHeights.delete(el);
+    turnSizes.observe(el);
+  }
+
+  /**
+   * Scroll to one question of the conversation. Questions passed on the way may be drawn again at another height
+   * (content-visibility); they are not what the reader is reading, so the page is not held still for them while it
+   * moves, and when it stops it lands exactly on the question.
+   */
+  function jumpToTurn(i) {
+    stopStick(); // do not let "stay at the end" pull the page back
+    const el = document.querySelectorAll('.thread > .turn')[i];
+    const main = $('.main');
+    if (!el || !main) return;
+    holdTurns = true;
+    let landed = false;
+    const inputs = ['wheel', 'touchstart', 'keydown', 'mousedown'];
+    const end = (exact) => {
+      if (landed) return;
+      landed = true;
+      clearTimeout(timer);
+      main.removeEventListener('scrollend', land);
+      for (const ev of inputs) main.removeEventListener(ev, leave, true);
+      holdTurns = false;
+      if (exact && el.isConnected) el.scrollIntoView({ block: 'start', behavior: 'instant' });
+    };
+    const land = () => end(true);
+    const leave = () => end(false); // the reader took over the scrolling: the page goes where they take it
+    const timer = setTimeout(land, 1500); // (if the scroll ends without a scrollend event)
+    main.addEventListener('scrollend', land);
+    for (const ev of inputs) main.addEventListener(ev, leave, true);
+    el.scrollIntoView({ block: 'start', behavior: Motion.calm() ? 'instant' : 'smooth' });
+    if (Motion.calm()) requestAnimationFrame(() => requestAnimationFrame(land));
+  }
+
+  /** The bar above a conversation: its title, Save chat, the jump to a question and the References button. */
+  function buildTopbar(t, turns) {
+    // With more than one question on the page, a button jumps to any of them.
+    const jump = turns.length > 1 ? picker({
+      label: 'Jump to a question', cls: 'jump', always: true, value: turns.length - 1,
+      options: turns.map((turn, i) => ({ value: i, tag: String(i + 1).padStart(2, '0'), label: turn.question })),
+      face: (o) => [icon('list'), h('span', { class: 'picker-value' }, 'Questions'), h('span', { class: 'picker-tag' }, `${Number(o.value) + 1}/${turns.length}`)],
+      onChange: (i) => jumpToTurn(Number(i)),
+    }) : null;
+    return h('header', { class: 'thread-topbar' },
+      h('span', { class: 'thread-title', title: t.title }, t.title),
+      saveChatButton(t),
+      jump,
+      h('button', { type: 'button', class: 'btn references-toggle', 'aria-controls': 'references-panel', 'aria-expanded': String(S.referencesOpen), onclick: () => {
+        if (S.referencesOpen) closeReferences(); else openReferences(null, true);
+      } }, icon('review'), 'References'));
   }
 
   function renderThread() {
@@ -2110,30 +2443,38 @@
     panel.addEventListener('mouseleave', () => lightPaper(S.referenceTurn, null));
     panel.addEventListener('focusin', (e) => lightPaper(S.referenceTurn, e.target.closest('.paper[data-n]')?.dataset.n));
     panel.addEventListener('focusout', () => lightPaper(S.referenceTurn, null));
-    // With more than one question on the page, a button jumps to any of them.
-    const jump = views.length > 1 ? picker({
-      label: 'Jump to a question', cls: 'jump', always: true, value: views.length - 1,
-      options: views.map((v, i) => ({ value: i, tag: String(i + 1).padStart(2, '0'), label: v.turn.question })),
-      face: (o) => [icon('list'), h('span', { class: 'picker-value' }, 'Questions'), h('span', { class: 'picker-tag' }, `${Number(o.value) + 1}/${views.length}`)],
-      onChange: (i) => {
-        stopStick(); // do not let "stay at the end" pull the page back
-        const el = document.querySelectorAll('.thread > .turn')[Number(i)];
-        if (el) el.scrollIntoView({ block: 'start', behavior: Motion.calm() ? 'instant' : 'smooth' });
-      },
-    }) : null;
+    const thread = h('div', { class: 'thread' }, views.map((v) => v.el));
+    if (turnSizes) { turnSizes.disconnect(); views.forEach((v) => watchTurn(v.el)); }
+    // Skipping far questions starts once every question has been laid out once, so each keeps its true height.
+    requestAnimationFrame(() => requestAnimationFrame(() => thread.classList.add('cv')));
     return h('section', { class: 'thread-workspace' },
-      h('header', { class: 'thread-topbar' },
-        h('span', { class: 'thread-title', title: t.title }, t.title),
-        saveChatButton(t),
-        jump,
-        h('button', { type: 'button', class: 'btn references-toggle', 'aria-controls': 'references-panel', 'aria-expanded': String(S.referencesOpen), onclick: () => {
-          if (S.referencesOpen) closeReferences(); else openReferences(null, true);
-        } }, icon('review'), 'References')),
+      buildTopbar(t, views.map((v) => v.turn)),
       h('div', { class: `thread-layout${S.referencesOpen ? ' references-open' : ''}` },
         h('div', { class: 'view thread-view' },
-          h('div', { class: 'thread' }, views.map((v) => v.el)),
+          thread,
           h('div', { class: 'dock' }, buildComposer({ placeholder: 'Ask a follow-up', autofocus: false, dock: true }))),
         panel));
+  }
+
+  /** Is this conversation the one drawn on screen right now? Then a question can be added or finished in place. */
+  const drawnThread = (thread) => S.view === 'thread' && S.thread === thread && renderedView === 'thread' && renderedThread === thread && !!$('.thread');
+
+  /** After a question is added or answered in place: the bar above the thread, the follow-up box, the sidebar. */
+  function refreshThreadChrome() {
+    const bar = $('.thread-topbar');
+    if (bar) bar.replaceWith(buildTopbar(S.thread, [...document.querySelectorAll('.thread > .turn')].map((el) => el._turn)));
+    const dock = $('.dock');
+    const box = dock && dock.querySelector('.composer-wrap');
+    if (box && box._sync && box._mode === S.compose.mode) box._sync();
+    else if (dock) {
+      const typing = dock.contains(document.activeElement);
+      if (closeMenu) closeMenu();
+      fill(dock, buildComposer({ placeholder: 'Ask a follow-up', autofocus: false, dock: true }));
+      if (typing) $('.dock .ask')?.focus({ preventScroll: true });
+    }
+    syncBusy();
+    renderRailOnly();
+    refreshReferences();
   }
 
   // ------------------------------------------------------------------ library
@@ -2170,7 +2511,7 @@
   async function openPrompt(threadId, turnId) {
     stopDictation();
     try {
-      const t = S.live && S.live.thread.id === threadId ? S.live.thread : await api('GET', `/api/thread?id=${encodeURIComponent(threadId)}`);
+      const t = S.live && S.live.running && S.live.thread.id === threadId ? S.live.thread : await api('GET', `/api/thread?id=${encodeURIComponent(threadId)}`);
       if (!t.turns.some((x) => x.id === turnId)) throw new Error('That question no longer exists.');
       if (!pathTo(t, t.leaf).some((x) => x.id === turnId)) { // it is on another version: show that one
         t.leaf = newestLeaf(t, turnId);
@@ -2186,10 +2527,13 @@
 
   function saveChatButton(t) {
     const saved = !!t.saved;
+    // Before the first answer is saved there is no chat to keep. The button says why instead of doing nothing
+    // (it stays focusable, so the reason can be read and heard).
+    const why = 'You can save this chat once its first answer has been saved.';
     return h('button', {
-      type: 'button', class: `btn save-chat${saved ? ' on' : ''}`, 'aria-pressed': String(saved), disabled: !t.id || null,
-      title: !t.id ? 'Available once the first answer is written' : (saved ? 'Remove this chat from your library' : 'Keep this chat in your library'),
-      onclick: () => setChatSaved(t.id, !saved),
+      type: 'button', class: `btn save-chat${saved ? ' on' : ''}`, 'aria-pressed': String(saved), 'aria-disabled': t.id ? null : 'true',
+      title: !t.id ? why : (saved ? 'Remove this chat from your library' : 'Keep this chat in your library'),
+      onclick: () => (t.id ? setChatSaved(t.id, !saved) : toast(why)),
     }, icon('bookmark'), saved ? 'Saved' : 'Save chat');
   }
 
@@ -2200,24 +2544,50 @@
     return checks.view();
   }
 
+  const LIB_TABS = [['papers', 'Papers'], ['chats', 'Chats'], ['prompts', 'Prompts']];
   function renderLibrary() {
     const chats = S.threads.filter((t) => t.saved).sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
     const prompts = savedPrompts();
     const tab = ['chats', 'prompts'].includes(S.libraryTab) ? S.libraryTab : 'papers';
-    const tabs = h('div', { class: 'lib-tabs', role: 'tablist', 'aria-label': 'Library' },
-      [['papers', 'Papers', S.library.length], ['chats', 'Chats', chats.length], ['prompts', 'Prompts', prompts.length]].map(([id, label, n]) => h('button', {
-        type: 'button', role: 'tab', class: `lib-tab${tab === id ? ' on' : ''}`, 'aria-selected': String(tab === id),
-        onclick: () => { S.libraryTab = id; S.libraryQuery = ''; render(); },
-      }, label, h('span', { class: 'lib-count' }, n))));
-    return h('section', { class: 'view library' }, h('h1', null, 'Library'), tabs, ...(tab === 'chats' ? libraryChats(chats) : tab === 'prompts' ? libraryPrompts(prompts) : libraryPapers()));
+    const counts = { papers: S.library.length, chats: chats.length, prompts: prompts.length };
+    const pick = (id, focus) => { S.libraryTab = id; S.libraryQuery = ''; render(); if (focus) $(`#lib-tab-${id}`)?.focus(); };
+    // Tabs: one tab stop; the arrow keys, Home and End move between them (and open the one they land on).
+    const tabs = h('div', {
+      class: 'lib-tabs', role: 'tablist', 'aria-label': 'Library',
+      onkeydown: (e) => {
+        const i = LIB_TABS.findIndex(([id]) => id === tab);
+        const to = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: LIB_TABS.length - 1 }[e.key];
+        if (to === undefined) return;
+        e.preventDefault();
+        pick(LIB_TABS[(to + LIB_TABS.length) % LIB_TABS.length][0], true);
+      },
+    }, LIB_TABS.map(([id, label]) => h('button', {
+      type: 'button', role: 'tab', id: `lib-tab-${id}`, class: `lib-tab${tab === id ? ' on' : ''}`, 'aria-selected': String(tab === id),
+      'aria-controls': 'lib-panel', tabindex: tab === id ? '0' : '-1', onclick: () => pick(id, false),
+    }, label, h('span', { class: 'lib-count' }, counts[id]))));
+    return h('section', { class: 'view library' }, h('h1', null, 'Library'), tabs,
+      h('div', { class: 'lib-panel', id: 'lib-panel', role: 'tabpanel', 'aria-labelledby': `lib-tab-${tab}` },
+        tab === 'chats' ? libraryChats(chats) : tab === 'prompts' ? libraryPrompts(prompts) : libraryPapers()));
   }
 
-  /** The search box shared by both tabs: filters as you type and keeps the cursor where it was. */
+  /**
+   * The search box shared by the tabs. Typing filters the list under it in place: the box itself is never drawn
+   * again, so it keeps its caret and an input method's unfinished word (the list waits for the finished word).
+   */
+  let drawLibraryList = null; // set by the tab on screen
   function librarySearch(placeholder) {
     return h('input', {
       class: 'input search', type: 'search', placeholder, value: S.libraryQuery, 'aria-label': placeholder,
-      oninput: (e) => { S.libraryQuery = e.target.value; const pos = e.target.selectionStart; render(); const el = $('.input.search'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } },
+      oninput: (e) => { S.libraryQuery = e.target.value; if (!e.isComposing && drawLibraryList) drawLibraryList(); },
+      oncompositionend: () => { if (drawLibraryList) drawLibraryList(); },
     });
+  }
+  /** The list under the search box, drawn by `draw()` now and again whenever the search changes. */
+  function libraryList(draw) {
+    const box = h('div', { class: 'lib-results' });
+    drawLibraryList = () => fill(box, draw());
+    drawLibraryList();
+    return box;
   }
 
   /** Every saved question across all chats, newest saved first. */
@@ -2227,84 +2597,89 @@
   }
 
   function libraryPrompts(prompts) {
-    const q = S.libraryQuery.trim().toLowerCase();
-    const shown = q ? prompts.filter((p) => `${p.question} ${p.preview} ${p.chat}`.toLowerCase().includes(q)) : prompts;
     const when = (iso) => (iso ? new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '');
     return [
       h('p', { class: 'sub' }, prompts.length
         ? `${prompts.length} saved question${prompts.length === 1 ? '' : 's'}. Open one to see its answer in its chat.`
         : 'Single questions you save are kept here, with their answers.'),
       prompts.length > 0 && h('div', { class: 'bar' }, librarySearch('Find in your saved questions')),
-      prompts.length === 0
-        ? h('p', { class: 'empty' }, 'No saved questions yet. Hover a question in a chat and press Save.')
-        : (shown.length
-          ? h('ol', { class: 'chats prompts' }, shown.map((p) => h('li', { class: 'chat' },
-            h('button', { type: 'button', class: 'chat-open', onclick: () => openPrompt(p.threadId, p.id) },
-              icon('bookmark'),
-              h('span', { class: 'chat-text' },
-                h('span', { class: 'chat-title wrap' }, p.question),
-                p.preview && h('span', { class: 'chat-preview' }, p.preview),
-                h('span', { class: 'chat-meta' }, `From ${p.chat}${p.savedAt ? ` · saved ${when(p.savedAt)}` : ''}`))),
-            h('button', { type: 'button', class: 'btn small chat-remove', 'aria-label': `Remove "${p.question}" from your library`, onclick: () => setPromptSaved(p.threadId, p.id, false) }, 'Remove'))))
-          : h('p', { class: 'empty' }, 'No saved question matches that search.')),
+      libraryList(() => {
+        const q = S.libraryQuery.trim().toLowerCase();
+        const shown = q ? prompts.filter((p) => `${p.question} ${p.preview} ${p.chat}`.toLowerCase().includes(q)) : prompts;
+        if (!prompts.length) return h('p', { class: 'empty' }, 'No saved questions yet. Hover a question in a chat and press Save.');
+        if (!shown.length) return h('p', { class: 'empty' }, 'No saved question matches that search.');
+        return h('ol', { class: 'chats prompts' }, shown.map((p) => h('li', { class: 'chat' },
+          h('button', { type: 'button', class: 'chat-open', onclick: () => openPrompt(p.threadId, p.id) },
+            icon('bookmark'),
+            h('span', { class: 'chat-text' },
+              h('span', { class: 'chat-title wrap' }, p.question),
+              p.preview && h('span', { class: 'chat-preview' }, p.preview),
+              h('span', { class: 'chat-meta' }, `From ${p.chat}${p.savedAt ? ` · saved ${when(p.savedAt)}` : ''}`))),
+          h('button', { type: 'button', class: 'btn small chat-remove', 'aria-label': `Remove "${p.question}" from your library`, onclick: () => setPromptSaved(p.threadId, p.id, false) }, 'Remove'))));
+      }),
     ];
   }
 
   function libraryChats(chats) {
-    const q = S.libraryQuery.trim().toLowerCase();
-    const shown = q ? chats.filter((c) => c.title.toLowerCase().includes(q)) : chats;
     const when = (iso) => (iso ? new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '');
     return [
       h('p', { class: 'sub' }, chats.length
         ? `${chats.length} saved chat${chats.length === 1 ? '' : 's'}. Open one to carry on where you left off.`
         : 'Chats you save are kept here.'),
       chats.length > 0 && h('div', { class: 'bar' }, librarySearch('Find in your saved chats')),
-      chats.length === 0
-        ? h('p', { class: 'empty' }, 'No saved chats yet. Open a conversation and press Save chat, or use the bookmark beside it in the sidebar.')
-        : (shown.length
-          ? h('ol', { class: 'chats' }, shown.map((c) => h('li', { class: 'chat' },
-            h('button', { type: 'button', class: 'chat-open', onclick: () => openThread(c.id) },
-              icon('bookmark'),
-              h('span', { class: 'chat-text' },
-                h('span', { class: 'chat-title' }, c.title),
-                h('span', { class: 'chat-meta' }, `${c.turns} question${c.turns === 1 ? '' : 's'}${c.savedAt ? ` · saved ${when(c.savedAt)}` : ''}`))),
-            h('button', { type: 'button', class: 'btn small chat-remove', 'aria-label': `Remove "${c.title}" from your library`, onclick: () => setChatSaved(c.id, false) }, 'Remove'))))
-          : h('p', { class: 'empty' }, 'No saved chat matches that search.')),
+      libraryList(() => {
+        const q = S.libraryQuery.trim().toLowerCase();
+        const shown = q ? chats.filter((c) => c.title.toLowerCase().includes(q)) : chats;
+        if (!chats.length) return h('p', { class: 'empty' }, 'No saved chats yet. Open a chat and press Save chat, or use the bookmark beside it in the sidebar.');
+        if (!shown.length) return h('p', { class: 'empty' }, 'No saved chat matches that search.');
+        return h('ol', { class: 'chats' }, shown.map((c) => h('li', { class: 'chat' },
+          h('button', { type: 'button', class: 'chat-open', onclick: () => openThread(c.id) },
+            icon('bookmark'),
+            h('span', { class: 'chat-text' },
+              h('span', { class: 'chat-title' }, c.title),
+              h('span', { class: 'chat-meta' }, `${c.turns} question${c.turns === 1 ? '' : 's'}${c.savedAt ? ` · saved ${when(c.savedAt)}` : ''}`))),
+          h('button', { type: 'button', class: 'btn small chat-remove', 'aria-label': `Remove "${c.title}" from your library`, onclick: () => setChatSaved(c.id, false) }, 'Remove'))));
+      }),
     ];
   }
 
   function libraryPapers() {
-    const q = S.libraryQuery.trim().toLowerCase();
-    const shown = q
-      ? S.library.filter((p) => `${p.title} ${p.venue} ${p.year} ${p.authors.map((a) => a.family).join(' ')}`.toLowerCase().includes(q))
-      : S.library;
+    const shownPapers = () => {
+      const q = S.libraryQuery.trim().toLowerCase();
+      return q ? S.library.filter((p) => `${p.title} ${p.venue} ${p.year} ${p.authors.map((a) => a.family).join(' ')}`.toLowerCase().includes(q)) : S.library;
+    };
     const style = S.app.settings.citeStyle;
-    const list = h('ol', { class: 'papers' }, shown.map((p) => paperRow(p, { turn: null, showNumber: false })));
+    // the exports take the papers the search shows at the moment of the click
+    const exportShown = (run) => { const shown = shownPapers(); exportSome(shown, () => run(shown)); };
     return [
       h('p', { class: 'sub' }, S.library.length
         ? `${S.library.length} saved paper${S.library.length === 1 ? '' : 's'}. Export them as a reference list, or into Zotero, Mendeley or EndNote.`
         : 'Papers you save are kept here, ready to export as a reference list.'),
       S.library.length > 0 && h('div', { class: 'bar' },
         librarySearch('Find in your library'),
-        h('select', { class: 'select', 'aria-label': 'Reference style', onchange: async (e) => { await saveSettings({ citeStyle: e.target.value }); render(); } },
-          Object.entries(Cite.STYLES).filter(([, s]) => s.list).map(([id, s]) => h('option', { value: id, selected: id === style }, s.label))),
-        h('button', { class: 'btn', onclick: () => copyRich(Cite.formatList(shown, style), 'Reference list copied') }, 'Copy reference list'),
-        h('button', { class: 'btn', onclick: () => download('lectern-library.bib', Cite.formatList(shown, 'bibtex').text) }, 'Download .bib'),
-        h('button', { class: 'btn', onclick: () => download('lectern-library.ris', Cite.formatList(shown, 'ris').text, 'application/x-research-info-systems') }, 'Download .ris')),
-      S.library.length === 0
-        ? h('p', { class: 'empty' }, 'Nothing saved yet. Ask a question, then press Save on any paper you want to keep.')
-        : (shown.length ? list : h('p', { class: 'empty' }, 'No saved paper matches that search.')),
+        picker({ label: 'Reference style', cls: 'library-style', value: style,
+          options: Object.entries(Cite.STYLES).filter(([, s]) => s.list).map(([value, s]) => ({ value, label: s.label })),
+          onChange: async (v) => { try { await saveSettings({ citeStyle: v }); render(); } catch (e) { toast(e.message); } } }),
+        h('button', { class: 'btn', onclick: () => exportShown((shown) => copyRich(Cite.formatList(shown, style), 'Reference list copied')) }, 'Copy reference list'),
+        h('button', { class: 'btn', onclick: () => exportShown((shown) => download('lectern-library.bib', Cite.formatList(shown, 'bibtex').text)) }, 'Download .bib'),
+        h('button', { class: 'btn', onclick: () => exportShown((shown) => download('lectern-library.ris', Cite.formatList(shown, 'ris').text, 'application/x-research-info-systems')) }, 'Download .ris')),
+      libraryList(() => {
+        const shown = shownPapers();
+        if (!S.library.length) return h('p', { class: 'empty' }, 'Nothing saved yet. Ask a question, then press Save on any paper you want to keep.');
+        if (!shown.length) return h('p', { class: 'empty' }, 'No saved paper matches that search.');
+        return h('ol', { class: 'papers' }, shown.map((p) => paperRow(p, { turn: null, showNumber: false })));
+      }),
     ];
   }
-
 
   // ------------------------------------------------------------------ cite dialog
   function openDialog(title, body) {
     const d = $('#dialog');
     Motion.animateDialog(d);   // it fades out when closed, Escape included
     Motion.keepDialogOpen(d);  // opened again while it was still fading out: it stays
+    d.setAttribute('aria-labelledby', 'dialog-title'); // the dialog is named by its heading
     d.replaceChildren(
-      h('div', { class: 'dialog-head' }, h('h2', null, title),
+      h('div', { class: 'dialog-head' }, h('h2', { id: 'dialog-title' }, title),
         h('button', { class: 'btn quiet', onclick: () => d.close(), 'aria-label': 'Close' }, 'Close')),
       body);
     if (!d.open) d.showModal();
@@ -2395,8 +2770,78 @@
     }
     btn.addEventListener('click', open);
     btn.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown' && !menu) { e.preventDefault(); open(); } });
-    wrap._set = (v) => { current = v; paint(); }; // the page moved on its own: show where it is
+    wrap._set = (v) => { if (String(v) === String(current)) return; current = v; paint(); }; // the page moved: show where it is (only when that changed)
     paint();
+    return wrap;
+  }
+
+  /**
+   * A button that opens a short menu of actions, drawn like the ask box's menus. It is used where a row would
+   * otherwise hold many buttons of equal weight (an answer's exports). `items`: { label, note?, run(button) } or 'sep'.
+   * Keyboard: Enter, Space or Down open it; Up, Down, Home and End move; Enter runs; Escape or Tab closes.
+   * It shares `closeMenu` with the ask box's menus, so a click elsewhere, Escape or a redraw closes it, and only one
+   * menu is open at a time.
+   */
+  function menuButton({ label, items, cls = '', btnCls = 'btn small', align = 'left' }) {
+    let menu = null;
+    const btn = h('button', { type: 'button', class: `${btnCls} menu-btn cmenu-anchor`, 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
+      label, icon('chev'));
+    const wrap = h('span', { class: `menu-wrap ${cls}` }, btn);
+    const open = () => {
+      if (closeMenu) closeMenu();
+      // The room is measured before the menu exists: a menu that stuck out of a narrow window, even for a moment,
+      // would widen the page (or zoom it out on a phone-sized screen) and move what the reader is looking at.
+      const vw = document.documentElement.clientWidth;
+      const b = btn.getBoundingClientRect();
+      const floor = Math.min(window.innerHeight, $('.dock')?.getBoundingClientRect().top ?? Infinity); // the docked ask box
+      const ceiling = Math.max(0, $('.thread-topbar')?.getBoundingClientRect().bottom ?? 0);
+      menu = h('div', {
+        class: `cmenu ${align === 'right' ? 'right' : 'left'} action-menu`, role: 'menu', 'aria-label': label,
+        onkeydown: (e) => {
+          const rows = [...menu.querySelectorAll('.cmenu-row:not([disabled])')];
+          const at = rows.indexOf(document.activeElement);
+          const go = (i) => { e.preventDefault(); rows[(i + rows.length) % rows.length]?.focus(); };
+          if (e.key === 'ArrowDown') go(at + 1);
+          else if (e.key === 'ArrowUp') go(at < 0 ? rows.length - 1 : at - 1);
+          else if (e.key === 'Home') go(0);
+          else if (e.key === 'End') go(rows.length - 1);
+          else if (e.key === 'Tab') closeMenu();
+        },
+      }, items.filter(Boolean).map((it) => (it === 'sep'
+        ? h('div', { class: 'cmenu-sep', role: 'separator' })
+        : h('button', { type: 'button', class: 'cmenu-row', role: 'menuitem', onclick: () => { closeMenu(true); it.run(btn); } },
+          h('span', { class: 'cmenu-text' }, h('b', null, it.label), it.note && h('small', null, it.note))))));
+      // Added hanging left from the button's right edge, where it cannot widen the page; placed once its size is known.
+      menu.style.left = 'auto';
+      menu.style.right = '0';
+      wrap.append(menu);
+      const w = menu.offsetWidth;
+      // Open towards the room: upwards when the space below it (down to the docked ask box) is too small.
+      const below = floor - b.bottom - 12;
+      const above = b.top - ceiling - 12;
+      const up = below < menu.offsetHeight && above > below;
+      menu.classList.toggle('up', up);
+      menu.style.maxHeight = `${Math.max(120, Math.min(530, up ? above : below))}px`;
+      // Lined up with the button's left edge (or right edge), and kept 12px inside the window.
+      const x = Math.max(12, Math.min(align === 'right' ? b.right - w : b.left, vw - 12 - w));
+      menu.style.left = `${Math.round(x - b.left)}px`;
+      menu.style.right = 'auto';
+      btn.setAttribute('aria-expanded', 'true');
+      // a question on the page is drawn whole while its menu is open (content-visibility would clip the menu)
+      const turnEl = btn.closest('.turn');
+      turnEl?.classList.add('menu-open');
+      closeMenu = (refocus) => {
+        Motion.leave(menu);
+        menu = null;
+        closeMenu = null;
+        btn.setAttribute('aria-expanded', 'false');
+        setTimeout(() => turnEl?.classList.remove('menu-open'), 200); // after the menu's fade
+        if (refocus) btn.focus({ preventScroll: true }); // the page stays where the reader left it
+      };
+      menu.querySelector('.cmenu-row')?.focus({ preventScroll: true });
+    };
+    btn.addEventListener('click', () => { if (menu && closeMenu) closeMenu(true); else open(); });
+    btn.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown' && !menu) { e.preventDefault(); open(); } });
     return wrap;
   }
 
@@ -2407,10 +2852,15 @@
       const out = Cite.format(p, style);
       const mono = style === 'bibtex' || style === 'ris';
       fill(body,
-        Motion.slide(h('div', { class: 'cite-styles', role: 'radiogroup', 'aria-label': 'Reference style' },
+        Motion.slide(h('div', { class: 'cite-styles', role: 'group', 'aria-label': 'Reference style' },
           Object.entries(Cite.STYLES).map(([id, s]) => h('button', {
-            type: 'button', class: `btn small${id === style ? ' primary' : ''}`, role: 'radio', 'aria-checked': String(id === style),
-            onclick: () => { style = id; if (s.list) saveSettings({ citeStyle: id }); draw(); },
+            type: 'button', class: `btn small${id === style ? ' primary on' : ''}`, 'aria-pressed': String(id === style),
+            onclick: () => {
+              style = id;
+              if (s.list) saveSettings({ citeStyle: id }).catch((e) => toast(`The style was not kept for next time: ${e.message}`));
+              draw();
+              body.querySelector('.cite-styles .on')?.focus({ preventScroll: true }); // the redraw keeps the keyboard where it was
+            },
           }, s.label))), 'cite-style'),
         mono ? h('pre', { class: 'cite-out mono' }, out.text) : h('p', { class: 'cite-out', html: out.html }),
         style === 'apa' && h('p', { class: 'help' }, 'In text: ', Cite.apaInText(p)),
@@ -2438,9 +2888,9 @@
     const body = h('div', { class: 'dialog-body' });
 
     // One set of cards where at most one is chosen. Choosing the chosen card again clears it.
-    const choices = (key, label, list, wide) => Motion.slide(h('div', { class: `choices${wide ? ' wide' : ''}`, role: 'radiogroup', 'aria-label': label },
+    const choices = (key, label, list, wide) => Motion.slide(h('div', { class: `choices${wide ? ' wide' : ''}`, role: 'group', 'aria-label': label },
       list.map((o) => h('button', {
-        type: 'button', class: `choice${draft[key] === o.id ? ' on' : ''}`, role: 'radio', 'aria-checked': String(draft[key] === o.id),
+        type: 'button', class: `choice${draft[key] === o.id ? ' on' : ''}`, 'aria-pressed': String(draft[key] === o.id),
         onclick: () => { draft[key] = draft[key] === o.id ? '' : o.id; draw(key, o.id); },
       }, o.label))), `profile-${key}`);
 
@@ -2456,10 +2906,10 @@
         h('p', { class: 'help', style: 'margin-top:14px' }, 'Lectern uses this to pitch each answer: how much it explains, how deep it goes into methods, and which field\'s point of view it takes. The papers it finds stay the same. Both are optional.'),
         h('h3', null, 'What level are you studying at?'),
         choices('level', 'Level of study', S.app.profileOptions.levels, true),
-        h('h3', null, 'What is your field or major?'),
+        h('h3', null, 'What is your field of study?'),
         choices('field', 'Field of study', S.app.profileOptions.fields),
         draft.field === 'other' && h('div', { class: 'engine-row' },
-          h('label', { for: 'fieldOther' }, 'Your field'),
+          h('label', { for: 'fieldOther' }, 'Your field of study'),
           h('input', {
             class: 'input', id: 'fieldOther', maxlength: '60', value: draft.fieldOther, placeholder: 'For example: Architecture',
             oninput: (e) => { draft.fieldOther = e.target.value; $('#profile-save').disabled = !e.target.value.trim(); },
@@ -2516,6 +2966,13 @@
     const results = {};
 
     const collect = () => ({ ...draft, maxPapers: Number(draft.maxPapers) || 16 });
+    // The email goes to Crossref with each search, so it must at least look like one (or be left blank).
+    const emailOk = () => {
+      if (!draft.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email)) return true;
+      toast('Enter a full email address, like name@example.org, or leave it blank.');
+      $('#email')?.focus();
+      return false;
+    };
     // How many papers go into an answer: a slider, with the number beside it counting to the new value as it is dragged.
     const paperSlider = () => {
       const lo = 6, hi = 30;
@@ -2558,7 +3015,9 @@
           k.set && h('small', { class: 'key-saved' }, 'Saved key ending ', h('code', null, k.hint), k.fromEnv ? ' (from your shell environment)' : '')),
         h('span', { class: 'key-actions' },
           link && !k.set && h('a', { href: link, target: '_blank', rel: 'noopener noreferrer' }, 'Get a key'),
-          k.set && !k.fromEnv && h('button', { type: 'button', class: 'btn small key-remove', onclick: async () => { await saveSettings({ keys: { [name]: '' } }); draw(); render(); } }, 'Remove')));
+          k.set && !k.fromEnv && h('button', { type: 'button', class: 'btn small key-remove', onclick: async () => {
+            try { await saveSettings({ keys: { [name]: '' } }); draw(); render(); } catch (e) { toast(e.message); }
+          } }, 'Remove')));
     };
     const modelField = (engine, which, label) => h('div', { class: 'engine-row' },
       h('label', { for: `${which}-${engine}` }, label),
@@ -2571,10 +3030,12 @@
     const engineBlock = (e) => {
       const isDefault = draft.engine === e.id;
       const r = results[e.id];
-      const blurb = {
-        'claude-code': 'Uses your saved Claude sign-in through Claude Code. To sign in, open Claude Code in the Claude app, or run "claude" in Terminal.',
-        codex: 'Uses your saved ChatGPT sign-in through Codex. To sign in, open Codex in the ChatGPT app, or run "codex login" in Terminal. Answers arrive in one piece.',
-      }[e.id];
+      // How it works, then how to sign in. Once the engine is signed in, the sign-in steps are left out.
+      const [works, signIn] = {
+        'claude-code': ['Uses your saved Claude sign-in through Claude Code.', 'To sign in, open Claude Code in the Claude app, or run "claude" in Terminal.'],
+        codex: ['Uses your saved ChatGPT sign-in through Codex. Answers arrive in one piece.', 'To sign in, open Codex in the ChatGPT app, or run "codex login" in Terminal.'],
+      }[e.id] || ['', ''];
+      const blurb = e.signedIn ? works : `${works} ${signIn}`.trim();
       return h('div', { class: `engine${isDefault ? ' active' : ''}` },
         h('div', { class: 'engine-top' },
           h('strong', null, e.label),
@@ -2587,8 +3048,9 @@
         h('datalist', { id: `models-${e.id}` }, e.models.map((m) => h('option', { value: m }))),
         h('div', { class: 'engine-row' },
           h('button', {
-            class: 'btn small',
+            class: 'btn small', disabled: (r && r.pending) || null, // drawn again while it runs: still pressed once only
             onclick: async (ev) => {
+              if (results[e.id]?.pending || !emailOk()) return;
               ev.currentTarget.disabled = true;
               results[e.id] = { pending: true };
               draw();
@@ -2603,7 +3065,7 @@
           r && r.pending && (Motion.age('settings', `test-${e.id}`, 'pending'), h('span', { class: 'test-result' }, 'Asking the model to reply…'))),
         // the result rises in when it arrives (the pending line above is what the memory is told about)
         r && !r.pending && Motion.pop(h('div', { class: `test-result ${r.ok ? 'ok' : 'bad'}` },
-          r.ok ? `Working. ${prettyModel(r.model, e.id)} replied in ${(r.ms / 1000).toFixed(1)} s.` : r.error), 'settings', `test-${e.id}`, r.ok ? 'ok' : `bad:${r.error}`, true, 'enter'));
+          r.ok ? `Connected. ${prettyModel(r.model, e.id)} replied in ${(r.ms / 1000).toFixed(1)} s.` : r.error), 'settings', `test-${e.id}`, r.ok ? 'ok' : `bad:${r.error}`, true, 'enter'));
     };
 
     function draw() {
@@ -2625,7 +3087,7 @@
           h('div', { class: 'engine-row' },
             h('label', { for: 'email' }, 'Your email'),
             h('input', { class: 'input', id: 'email', type: 'email', value: draft.email, placeholder: 'Optional. Crossref gives steadier service to identified requests', oninput: (e) => { draft.email = e.target.value.trim(); } }))),
-        h('p', { class: 'help' }, 'OpenAlex is the broadest database and needs a free key (about a minute to get). Semantic Scholar works without one but is often busy; a free key fixes that.'),
+        h('p', { class: 'help' }, 'OpenAlex is the broadest database and works without a key; a free key (about a minute to get) gives a much larger daily allowance and steadier results. Semantic Scholar also works without one but is often busy; a free key fixes that.'),
 
         h('h3', { class: 'set-h' }, 'What you study'),
         h('p', { class: 'help' }, 'Answers are pitched at this level and framed for this field. The papers Lectern finds stay the same.'),
@@ -2634,12 +3096,12 @@
             picker({ label: 'Level', value: draft.profile.level || '',
               options: [{ value: '', label: 'Not set' }, ...S.app.profileOptions.levels.map((l) => ({ value: l.id, label: l.label }))],
               onChange: (v) => { draft.profile.level = v; } })),
-          h('div', { class: 'row' }, h('label', { for: 'profileField' }, 'Field or major'),
-            picker({ label: 'Field or major', value: draft.profile.field || '',
+          h('div', { class: 'row' }, h('label', { for: 'profileField' }, 'Field of study'),
+            picker({ label: 'Field of study', value: draft.profile.field || '',
               options: [{ value: '', label: 'Not set' }, ...S.app.profileOptions.fields.map((f) => ({ value: f.id, label: f.label }))],
               onChange: (v) => { draft.profile.field = v; draw(); } }),
             draft.profile.field === 'other' && h('input', {
-              class: 'input wide', 'aria-label': 'Your field', maxlength: '60', value: draft.profile.fieldOther, placeholder: 'Your field, for example: Architecture',
+              class: 'input wide', 'aria-label': 'Your field of study', maxlength: '60', value: draft.profile.fieldOther, placeholder: 'Your field of study, for example: Architecture',
               oninput: (e) => { draft.profile.fieldOther = e.target.value; },
             }))),
 
@@ -2659,14 +3121,15 @@
             h('span', { class: 'engine-state' }, 'How each citation is marked inside the answer text.')),
           h('label', { class: 'check' },
             h('input', { type: 'checkbox', checked: draft.insights, onchange: (e) => { draft.insights = e.target.checked; } }),
-            'Read each paper for its finding, design and stance (one extra helper call per question)')),
+            'Read each paper for its finding, design and stance (one extra model call per question)')),
 
-        h('p', { class: 'help set-path' }, `Settings, conversations and your library are stored on this computer in ${S.app.dataDir}`),
+        h('p', { class: 'help set-path' }, `Settings, chats and your library are stored on this computer in ${S.app.dataDir}`),
         h('div', { class: 'set-foot' },
           h('button', { class: 'btn', onclick: () => $('#dialog').close() }, 'Cancel'),
           h('button', {
             class: 'btn primary',
             onclick: async () => {
+              if (!emailOk()) return;
               try { await saveSettings(collect()); $('#dialog').close(); toast('Settings saved'); render(); }
               catch (e) { toast(e.message); }
             },
@@ -2723,12 +3186,21 @@
       papers: [], answer: '', thinking: '', insights: [], figures: [], webSources: [], notices: [], error: null, usage: null,
       engine: S.compose.engine, model: S.compose.model, effort: S.compose.effort, web: S.compose.web,
     };
+    // A follow-up in the conversation on screen adds only its own article; anything else draws the page again.
+    const failed = S.live && !S.live.running && S.live.thread === thread ? S.live : null; // a failed answer it replaces
+    const inPlace = drawnThread(thread) && live.parentId === undefined && !S.editing && !failed;
     S.live = live;
     S.referenceTurn = live;
     S.view = 'thread';
     S.editing = null;
     if (fromBox) { S.compose.draft = ''; S.compose.mode = 'answer'; }
-    render();
+    if (inPlace) {
+      hideCiteCard();
+      S.liveView = buildTurn(live);
+      $('.thread').append(S.liveView.el);
+      watchTurn(S.liveView.el);
+      refreshThreadChrome();
+    } else render();
     requestAnimationFrame(() => { if (S.liveView && S.liveView.turn === live) S.liveView.el.scrollIntoView({ block: 'start', behavior: 'instant' }); });
 
     aborter = new AbortController();
@@ -2750,16 +3222,23 @@
           case 'meta': Object.assign(live, { engine: d.engine, model: d.model, effort: d.effort, web: d.web, mode: d.mode || mode }); break;
           case 'stage': live.stage = d.id; live.status = ''; refreshLive('runline'); break;
           case 'plan': live.queries = d.queries; live.yesNo = d.yesNo; break;
-          case 'source': live.sources.push(d); refreshLive('runline'); break;
-          case 'papers': live.papers = d.papers; refreshLive('summary', 'shelf', 'evidence', 'runline'); break;
+          case 'source':
+            live.sources.push(d);
+            if (d.name === 'openalex' && d.needsKey) S.oaRefused = true; // the home page then suggests a free key
+            refreshLive('runline');
+            break;
+          case 'papers': live.papers = d.papers; refreshLive('text', 'shelf', 'evidence', 'runline'); break;
           case 'status': live.status = d.text; refreshLive('runline'); break;
-          case 'delta':
+          case 'delta': {
+            const first = !live.answer;
             live.answer += d.text;
             if (live.status !== 'Writing the answer' && d.text.trim()) { live.status = 'Writing the answer'; refreshLive('runline'); }
-            refreshLive('summary', 'answer', 'next', live.thinking ? 'reasoning' : 'answer');
+            refreshLive('text');
+            if (first && live.thinking) refreshLive('reasoning'); // its label changes once the answer starts
             break;
+          }
           case 'thinking': live.thinking += d.text; refreshLive('reasoning'); break;
-          case 'insights': live.insights = d.insights; refreshLive('summary', 'answer', 'shelf', 'evidence', 'nav'); break;
+          case 'insights': live.insights = d.insights; refreshLive('text', 'shelf', 'evidence', 'nav'); break;
           case 'figures': live.figures = d.figures; refreshLive('figures', 'nav'); break;
           case 'websource': if (isWebUrl(d.url)) live.webSources[d.n - 1] = { url: d.url, title: d.title }; break;
           case 'notice': live.notices.push(d.text); break;
@@ -2777,18 +3256,66 @@
     live.running = false;
     refreshUsage();
 
+    let saved = null;
     if (finished) {
       // The answer is saved on disk; move it from "live" into the conversation.
       thread.id = finished.threadId;
       thread.title = finished.title;
       const { thread: _t, running: _r, stage: _s, status: _st, parentId: _p, ...turn } = live;
-      thread.turns.push({ id: finished.turnId, parent: finished.parent === undefined ? null : finished.parent, ...turn });
+      saved = { id: finished.turnId, parent: finished.parent === undefined ? null : finished.parent, ...turn };
+      thread.turns.push(saved);
       thread.leaf = finished.turnId;
+      // what the reader set on the answer while it was written carries over: folds, the reference list's filter
+      FOLDS.set(saved, foldsOf(live));
+      S.shelf.set(saved, shelfState(live));
+      if (S.referenceTurn === live) S.referenceTurn = saved;
+      if (lit && lit.turn === live) lit = { turn: saved, key: lit.key };
       S.live = null;
       try { S.threads = (await api('GET', '/api/threads')).threads; } catch { /* list refreshes next time */ }
       if (!(S.view === 'thread' && S.thread === thread)) toast('Your answer is ready');
     }
-    render();
+    // On screen, only this question's article is drawn again (the questions above it stay as they are).
+    const view = S.liveView;
+    if (drawnThread(thread) && view && view.turn === live && view.el.isConnected) {
+      hideCiteCard();
+      const next = buildTurn(saved || live);
+      if (view.reasoning.open && next.reasoning.tagName === 'DETAILS') next.reasoning.open = true;
+      if (lit && lit.turn === (saved || live)) paintLit(next.el, lit.turn, lit.key);
+      if (turnSizes) turnSizes.unobserve(view.el);
+      view.el.replaceWith(next.el);
+      watchTurn(next.el);
+      S.liveView = saved ? null : next;
+      refreshThreadChrome();
+    } else render();
+    if (saved && saved.parent === null && thread.turns.some((x) => x !== saved && x.parent === null)) followTitle(thread);
+  }
+
+  /**
+   * A conversation is titled with its first question unless the reader renamed it. When the first question on the
+   * path shown changes (it was edited, or another version of it is shown), the title follows it.
+   */
+  function clipTitle(s, max = 80) { // the server's clip() in server/util.js, which made the title
+    s = String(s || '');
+    if (s.length <= max) return s;
+    const cut = s.slice(0, max);
+    const lastSpace = cut.lastIndexOf(' ');
+    return `${(lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+  }
+  async function followTitle(t) {
+    const root = t && t.id ? pathTo(t, t.leaf)[0] : null;
+    if (!root) return;
+    const named = !t.turns.some((x) => x.parent === null && clipTitle(x.question) === t.title); // renamed by the reader
+    const want = clipTitle(root.question);
+    if (named || want === t.title) return;
+    try {
+      await api('PUT', '/api/thread', { id: t.id, title: want });
+      t.title = want;
+      const row = S.threads.find((x) => x.id === t.id);
+      if (row) row.title = want;
+      renderRailOnly();
+      const title = S.thread === t ? $('.thread-title') : null;
+      if (title) { title.textContent = want; title.title = want; }
+    } catch { /* the old title stays until the next change */ }
   }
 
   // ------------------------------------------------------------------ navigation
@@ -2814,8 +3341,11 @@
   function goHome() { stopDictation(); S.view = 'home'; S.thread = null; S.editing = null; render(); }
 
   async function openThread(id) {
+    // The conversation already open stays as it is: no new fetch, no jump to its end, no entrance.
+    if (S.view === 'thread' && S.thread && S.thread.id === id) return;
     stopDictation();
-    if (S.live && S.live.thread.id === id) { S.thread = S.live.thread; S.view = 'thread'; return render(); }
+    // Only an answer still being written lives in memory; one that finished or failed is read from disk again.
+    if (S.live && S.live.running && S.live.thread.id === id) { S.thread = S.live.thread; S.view = 'thread'; return render(); }
     try {
       S.thread = await api('GET', `/api/thread?id=${encodeURIComponent(id)}`);
       S.view = 'thread';
@@ -2830,7 +3360,9 @@
     if (!t || !turn) return;
     t.leaf = newestLeaf(t, turn.id);
     render();
-    api('PUT', '/api/thread', { id: t.id, leaf: t.leaf }).catch(() => { /* the view still switched; it resets on reload */ });
+    api('PUT', '/api/thread', { id: t.id, leaf: t.leaf })
+      .then(() => { if (turn.parent === null) followTitle(t); }) // another version of the first question: the title follows
+      .catch(() => { /* the view still switched; it resets on reload */ });
   }
 
   async function refreshThreads() {
@@ -2859,7 +3391,7 @@
       S.view = 'thread';
       await refreshThreads();
       render();
-      toast('Opened as a new conversation');
+      toast('Opened as a new chat');
     } catch (e) { toast(e.message); }
   }
 
@@ -2870,15 +3402,16 @@
       S.view = 'thread';
       await refreshThreads();
       render();
-      toast('Conversation duplicated');
+      toast('Chat duplicated');
     } catch (e) { toast(e.message); }
   }
 
   async function deleteThread(t) {
-    if (!(await confirmDialog({ title: 'Delete this conversation?', name: t.title, message: 'All its questions and answers are deleted. This cannot be undone.', confirmLabel: 'Delete conversation' }))) return;
+    if (answering(t)) { toast('Wait until the answer is written, or stop it, before deleting this chat.'); return; }
+    if (!(await confirmDialog({ title: 'Delete this chat?', name: t.title, message: 'All its questions and answers are deleted. This cannot be undone.', confirmLabel: 'Delete chat' }))) return;
     try {
       const result = await api('DELETE', `/api/thread?id=${encodeURIComponent(t.id)}`);
-      if (!result.ok) throw new Error('The conversation could not be deleted.');
+      if (!result.ok) throw new Error('The chat could not be deleted.');
       S.threads = S.threads.filter((x) => x.id !== t.id);
       if (S.thread && S.thread.id === t.id) { S.thread = null; S.view = 'home'; }
       render();
@@ -2887,6 +3420,23 @@
 
   // ------------------------------------------------------------------ render
   function renderRailOnly() { const old = $('.rail'); if (old) old.replaceWith(renderRail()); }
+  /** Everything the sidebar shows apart from which page is open. While it is unchanged, render() keeps the sidebar. */
+  function railKey() {
+    const active = engineInfo(S.compose.engine);
+    return JSON.stringify([
+      S.threads.map((t) => [t.id, t.title, !!t.saved, (t.prompts || []).length]),
+      S.library.length, S.renaming, S.live && S.live.running ? [S.live.question, S.live.thread.id || ''] : null,
+      !!(S.live && S.live.running && !(S.view === 'thread' && S.thread === S.live.thread)),
+      active && [active.id, active.short, active.ready], S.compose.model, S.compose.effort,
+    ]);
+  }
+  /** Mark the open page and the open conversation in a sidebar that is kept. */
+  function syncRailOn(rail) {
+    const [library, desk] = rail.querySelectorAll('.rail-nav .rail-link');
+    library?.classList.toggle('on', S.view === 'library');
+    desk?.classList.toggle('on', S.view === 'score');
+    for (const li of rail.querySelectorAll('.history > li[data-id]')) li.classList.toggle('on', S.view === 'thread' && !!S.thread && S.thread.id === li.dataset.id);
+  }
 
   /**
    * Opening a conversation shows its end: the latest answer and the follow-up box. The page is still
@@ -2951,7 +3501,11 @@
     if (!preserve) view.classList.add('nav-enter');
     const main = previousMain || h('main', { class: 'main' });
     main.replaceChildren(h('div', { class: 'topstrip' }), view);
-    $('#app').replaceChildren(renderRail(), main);
+    // The sidebar is drawn again only when what it lists changed; going to another page only moves its marks.
+    const oldRail = $('.rail');
+    const rail = oldRail && oldRail._key === railKey() ? oldRail : renderRail();
+    if (rail === oldRail) syncRailOn(rail);
+    if (rail !== oldRail || !main.isConnected) $('#app').replaceChildren(rail, main);
     refreshReferences();
     if (!preserve && S.view === 'thread') stickToEnd(main);
     else { stopStick(); main.scrollTo({ top: scroll, behavior: 'instant' }); }
@@ -2969,7 +3523,9 @@
       S.app = app;
       S.threads = threads.threads;
       S.library = library.papers;
-      if (!localStorage.getItem('lectern.compose')) { S.compose.effort = app.settings.effort; S.compose.web = app.settings.web; }
+      let stored = false; // storage can be blocked (a private window, cleared site data): then the defaults apply
+      try { stored = !!localStorage.getItem('lectern.compose'); } catch { /* not available */ }
+      if (!stored) { S.compose.effort = app.settings.effort; S.compose.web = app.settings.web; }
       render();
       // First launch: ask once what the reader studies. After that it lives on the home page and in Settings.
       refreshUsage();

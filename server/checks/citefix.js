@@ -65,17 +65,20 @@ function quoteAndCite(text, result) {
     const hit = m.exec(text);
     return hit ? hit.index : text.length;
   };
-  const isQuoted = (a, b) => /["“‘]\s*$/.test(text.slice(Math.max(0, a - 2), a)) && /^\s*["”’]/.test(text.slice(b, b + 2));
+  // Already in quotation marks: an opening mark just before the passage and a closing mark just after it, which
+  // may follow the sentence's own punctuation ("…did." or "…did,"). Returns where the closing mark ends, or -1.
+  const closingAt = (b) => { const m = /^[.,;:!?]{0,2}\s*["”’]/.exec(text.slice(b, b + 8)); return m ? b + m[0].length : -1; };
+  const isQuoted = (a, b) => /["“‘]\s*$/.test(text.slice(Math.max(0, a - 2), a)) && closingAt(b) !== -1;
   const citedSentence = new Set();
   for (const sp of [...result.spans].sort((x, y) => x.start - y.start)) {
     const src = sources.get(sp.source);
-    if (!src) { skipped.push({ start: sp.start, why: 'source record missing' }); continue; }
+    if (!src) { skipped.push({ start: sp.start, why: 'its source is missing from the report, so it was left as it was. Run the similarity check again.' }); continue; }
     const { inText } = citationFor(src);
     if (sp.type === 'exact') {
       let a = sp.start, b = sp.end;
       // do not swallow the sentence's final full stop into the quotation
       while (b > a && /[\s.,;:]/.test(text[b - 1])) b--;
-      if (isQuoted(a, b)) { edits.push({ at: b + 1, insert: ` ${inText}` }); cited++; }
+      if (isQuoted(a, b)) { edits.push({ at: closingAt(b), insert: ` ${inText}` }); cited++; }
       else { edits.push({ at: a, insert: '“' }, { at: b, insert: `” ${inText}` }); quoted++; }
       used.add(src.n);
     } else {

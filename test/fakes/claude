@@ -7,6 +7,14 @@ const fx = require(path.join(__dirname, '..', 'fixtures'));
 const args = process.argv.slice(2);
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
 
+// FAKE_HANG: never answer (tests of stopping a run). FAKE_IGNORE_TERM: also ignore a polite SIGTERM.
+if (process.env.FAKE_HANG) {
+  if (process.env.FAKE_IGNORE_TERM) process.on('SIGTERM', () => {});
+  if (process.env.FAKE_PID_FILE) fs.writeFileSync(process.env.FAKE_PID_FILE, String(process.pid));
+  setInterval(() => {}, 1000);
+  return;
+}
+
 // `claude auth status`: the saved-login check. FAKE_SIGNED_OUT pretends nobody is signed in.
 if (args[0] === 'auth' && args[1] === 'status') {
   out({ loggedIn: !process.env.FAKE_SIGNED_OUT, authMethod: 'claude.ai', email: 'student@example.org', subscriptionType: 'pro' });
@@ -21,9 +29,10 @@ process.stdin.setEncoding('utf8');
 process.stdin.on('data', (c) => { input += c; });
 process.stdin.on('end', () => {
   if (process.env.FAKE_LOG) {
-    fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ tool: 'claude', args, cwd: process.cwd(), hasApiKey: 'ANTHROPIC_API_KEY' in process.env, inputLength: input.length, input }) + '\n');
+    fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ tool: 'claude', args, cwd: process.cwd(), hasApiKey: 'ANTHROPIC_API_KEY' in process.env, safeMode: process.env.CLAUDE_CODE_SAFE_MODE || null, inputLength: input.length, input }) + '\n');
   }
-  if (process.env.FAKE_AUTH_FAIL) {
+  // FAKE_SAFE_AUTH_FAIL: a version whose safe mode refuses the saved sign-in (not documented; Lectern copes anyway).
+  if (process.env.FAKE_AUTH_FAIL || (process.env.FAKE_SAFE_AUTH_FAIL && process.env.CLAUDE_CODE_SAFE_MODE)) {
     out({ type: 'result', subtype: 'success', is_error: true, result: 'Not logged in · Please run /login' });
     process.exit(1);
   }
@@ -37,12 +46,21 @@ process.stdin.on('end', () => {
   else if (/proofreading system for English writing/i.test(sys)) text = fx.proofreadJson(input);
   else if (/plagiarism check find web pages/i.test(sys)) text = fx.SOURCE_HUNT_JSON;
   else if (/claim-citation pairs/i.test(sys)) text = process.env.FAKE_NO_CITATIONS ? '{"items": []}' : fx.VERIFY_JSON;
-  // With web search on, cite a web page the way the CLI does: as a markdown link.
-  if (args.includes('WebSearch,WebFetch') && text === fx.ANSWER_TEXT) text += ' See [Sample report](https://example.org/report).';
+  // With web search on, cite a web page the way the CLI does: as a markdown link. The first page was returned by the
+  // search (below); the second link is one the model wrote from memory, which must not become a web source.
+  const web = args.includes('WebSearch,WebFetch');
+  if (web && text === fx.ANSWER_TEXT) text = fx.withWebLinks(text);
 
   // Browser checks of cancellation: FAKE_DELAY_MS makes the writing review slow (a plain blocking wait).
   if (process.env.FAKE_DELAY_MS && /careful writing analyst/i.test(sys)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(process.env.FAKE_DELAY_MS));
   out({ type: 'system', subtype: 'init', model: args[args.indexOf('--model') + 1] || 'default', tools: [] });
+  if (web) {
+    // A WebSearch call and its result, as stream-json shows them: the user message carrying the tool's result has
+    // the structured output in tool_use_result (Agent SDK: SDKUserMessage, WebSearchOutput).
+    out({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_fake1', name: 'WebSearch', input: {} } }, parent_tool_use_id: null });
+    out({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_fake1', content: 'Web search results for query: "remote work productivity"' }] }, parent_tool_use_id: null,
+      tool_use_result: { query: 'remote work productivity', results: [{ tool_use_id: 'srvtoolu_fake1', content: [{ title: 'Sample report', url: 'https://example.org/report' }, { title: 'Another result', url: 'https://example.org/other' }] }, 'A summary of the results.'], durationSeconds: 1 } });
+  }
   const partial = args.includes('--include-partial-messages');
   if (partial) {
     out({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } }, parent_tool_use_id: null });
@@ -55,5 +73,7 @@ process.stdin.on('end', () => {
     }
   }
   out({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] }, parent_tool_use_id: null });
+  // FAKE_MAX_TURNS: the run used its last turn after writing; an error result of this kind carries no result text.
+  if (process.env.FAKE_MAX_TURNS) { out({ type: 'result', subtype: 'error_max_turns', is_error: true, num_turns: 16, errors: ['Reached maximum number of turns (16)'], usage: { input_tokens: 9000, output_tokens: 500 } }); process.exit(1); }
   out({ type: 'result', subtype: 'success', is_error: false, result: text, total_cost_usd: 0.01, usage: { input_tokens: 9000, output_tokens: 500 } });
 });

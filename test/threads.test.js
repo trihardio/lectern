@@ -34,6 +34,17 @@ test('store: an edited question becomes a second version; each keeps its own fol
   assert.equal(t.turns.filter((x) => x.parent === null).length, 2);
 });
 
+test('store: the chat list counts the questions being shown, not every version of them', () => {
+  const store = new Store(tmp());
+  let t = store.saveTurn(null, turn('Q1'));
+  const q1 = t.leaf;
+  t = store.saveTurn(t.id, turn('Q2'));
+  t = store.saveTurn(t.id, turn('Q2 edited'), q1); // a second version of Q2
+  t = store.saveTurn(t.id, turn('Q3'));
+  assert.equal(t.turns.length, 4);
+  assert.equal(store.listThreads().find((x) => x.id === t.id).turns, 3, 'Q1, Q2 edited, Q3');
+});
+
 test('store: delete removes a question and what followed it, then shows a sibling or the parent', () => {
   const store = new Store(tmp());
   let t = store.saveTurn(null, turn('Q1'));
@@ -121,7 +132,9 @@ test('store: a single question can be kept in the library, and a copy of the cha
 test('API: edit and retry add versions; switch, branch and delete routes work', async () => {
   mock.reset();
   const app = createApp({ dataDir: tmp() });
-  const base = await app.listen(0);
+  app.config.update({ engine: 'claude-code', bins: { claude: path.join(__dirname, 'fakes', 'claude'), codex: '/nonexistent/bin' } });
+  const pageUrl = await app.listen(0); // the window's address, with the token
+  const base = pageUrl.slice(0, pageUrl.indexOf('?'));
   const call = async (method, p, body) => {
     const res = await mock.realFetch(base + p.replace(/^\//, ''), {
       method, headers: { 'x-lectern-token': app.token, ...(body ? { 'content-type': 'application/json' } : {}) },
@@ -187,8 +200,10 @@ test('an unreadable library is not silently overwritten on add or remove', () =>
   const file = path.join(dir, 'library.json');
   const original = '{not valid json';
   fs.writeFileSync(file, original);
-  assert.throws(() => store.addToLibrary({ id: 'a', title: 'A' }), /left untouched/);
-  assert.throws(() => store.removeFromLibrary('a'), /left untouched/);
+  // The message names the file and the next step.
+  const said = (e) => e.message.includes(`could not read your library file, ${file}. The file was left as it is. Fix it, or move it`);
+  assert.throws(() => store.addToLibrary({ id: 'a', title: 'A' }), said);
+  assert.throws(() => store.removeFromLibrary('a'), said);
   assert.equal(fs.readFileSync(file, 'utf8'), original);
 });
 
@@ -197,9 +212,26 @@ test('unreadable settings do not get replaced with defaults', () => {
   const dir = tmp();
   const file = path.join(dir, 'settings.json');
   fs.writeFileSync(file, '{broken');
-  assert.throws(() => new Config(dir), /left untouched/);
+  const said = (e) => e.message.includes(`could not read its settings file, ${file}. The file was left as it is. Fix it, or move it`);
+  assert.throws(() => new Config(dir), said);
   assert.equal(fs.readFileSync(file, 'utf8'), '{broken');
   fs.writeFileSync(file, 'null');
-  assert.throws(() => new Config(dir), /left untouched/);
+  assert.throws(() => new Config(dir), said);
   assert.equal(fs.readFileSync(file, 'utf8'), 'null');
+});
+
+test('store: a damaged thread file cannot hang the server or break the list', () => {
+  const { newestLeaf } = require('../server/store');
+  // Turns that point at each other in a loop (a hand-edited or damaged file).
+  const loop = { turns: [{ id: 'a', parent: 'b' }, { id: 'b', parent: 'a' }] };
+  assert.ok(['a', 'b'].includes(newestLeaf(loop, 'a')), 'stops instead of looping forever');
+  const dir = tmp();
+  const store = new Store(dir);
+  const t = store.saveTurn(null, { question: 'A question that is saved normally?', answer: 'An answer.' });
+  fs.writeFileSync(path.join(dir, 'threads', 'abcdef0123.json'), JSON.stringify({ id: 'abcdef0123', title: 42, updatedAt: 17, turns: [] }));
+  fs.writeFileSync(path.join(dir, 'threads', 'abcdef0124.json'), JSON.stringify({ id: 'abcdef0124', updatedAt: { odd: true }, turns: {} }));
+  fs.writeFileSync(path.join(dir, 'threads', 'abcdef0125.json'), 'null');
+  const list = store.listThreads();
+  assert.equal(list[0].id, t.id, 'the readable thread is listed first');
+  assert.ok(list.every((x) => typeof x.updatedAt === 'string' && typeof x.title === 'string'));
 });

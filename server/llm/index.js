@@ -1,6 +1,6 @@
 'use strict';
 // One front door for the two ways Lectern reaches a model. Both use a login already saved
-// on this Mac (the user's Claude or ChatGPT plan), so there is no API key to set up:
+// on this computer (the user's Claude or ChatGPT plan), so there is no API key to set up:
 //   claude-code  Claude, through Claude Code (on its own or inside the Claude app)
 //   codex        ChatGPT, through Codex (on its own or inside the ChatGPT app)
 
@@ -38,7 +38,7 @@ const ENGINE_INFO = {
 };
 const ORDER = ['claude-code', 'codex'];
 
-/** Which engines can run right now (found on this Mac and signed in). */
+/** Which engines can run right now (found on this computer and signed in). */
 async function engineStatus(settings) {
   const [cc, cx] = await Promise.all([
     claudecode.status({ bin: settings.bins.claude }),
@@ -77,7 +77,7 @@ async function complete({ engine, role = 'main', settings, model, effort, system
     switch (engine) {
       case 'claude-code': return claudecode.complete({ ...opts, bin: settings.bins.claude });
       case 'codex': return codex.complete({ ...opts, bin: settings.bins.codex });
-      default: throw new Error('No model is connected yet. Sign in to Claude or ChatGPT on this Mac, then try again.');
+      default: throw new Error('No model is connected yet. Sign in to Claude or ChatGPT on this computer, then try again.');
     }
   };
 

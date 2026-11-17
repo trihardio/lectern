@@ -24,3 +24,8 @@ native/
 /bench/grammar/data/*
 !/bench/grammar/data/manifest.json
 !/bench/grammar/data/splits.json
+
+# Claude Code: agent worktrees (whole copies of the repo) and local settings stay out of git.
+# The release skill (.claude/skills/release/) stays local too: the `release/` line above also matches it.
+/.claude/worktrees/
+/.claude/settings.local.json

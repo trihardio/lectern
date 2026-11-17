@@ -20,6 +20,14 @@ VERSION="$(node -p "require('./package.json').version")"
 # Ship the native speech helper so installed apps do not need a compiler.
 node electron/build-voice.js native
 
+# What goes into the app is a list of what it runs, not a list of what to leave out: the window shell (electron/),
+# the server, the shared code, the interface, the voice helper (native/) and package.json. Everything else stays
+# out: tests, notes, scripts, README, dotfiles, agent worktrees in .claude/, node_modules (Lectern has no runtime
+# dependencies) and the voice helper's sources (electron/voice/, compiled into native/ above). A new top-level
+# file or folder is left out until it is added here. The packager matches these against paths such as
+# "/server/index.js"; scripts/make-release.sh uses the same list for Windows, without native/.
+SHIP='^/(?!(electron|server|shared|ui|native)(/|$)|package\.json$)'
+
 npx --yes "@electron/packager@$PACKAGER_VERSION" . Lectern \
   --platform=darwin --arch="$ARCH" --out=dist --overwrite \
   --app-bundle-id=local.lectern.app \
@@ -27,7 +35,7 @@ npx --yes "@electron/packager@$PACKAGER_VERSION" . Lectern \
   --app-copyright="Lectern $VERSION" \
   --asar.unpackDir=native \
   --icon=build/icon.icns \
-  --ignore='^/(test|dist|release|build|scripts|Lectern|\.git|\.github|\.vscode|\.impeccable|\.scratch|output|bench|CLAUDE\.md|PRODUCT\.md|DESIGN\.md)($|/)'
+  --ignore="$SHIP" --ignore='^/electron/voice($|/)' --ignore='\.DS_Store$'
 
 APP="dist/Lectern-darwin-$ARCH/Lectern.app"
 

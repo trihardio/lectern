@@ -60,14 +60,44 @@ test('answer rendering: citations become marks, bad numbers stay as text', () =>
 });
 
 test('answer rendering: structure and links', () => {
-  const { html } = renderAnswer('Intro line.\n\n## What the research shows\n\n- **Bold** point [1]\n- Second\n\n1. One\n2. Two\n\nSee [the report](https://example.org/r) and [W1].', {
-    paperCount: 2, webSources: [{ url: 'https://example.org/w', title: 'Web page' }],
+  const { html } = renderAnswer('Intro line.\n\n## What the research shows\n\n- **Bold** point [1]\n- Second\n\n1. One\n2. Two\n\nSee [the report](http://www.example.org/r/) and [W1].', {
+    paperCount: 2, webSources: [{ url: 'https://example.org/w', title: 'Web page' }, { url: 'https://example.org/r', title: 'The report' }],
   });
   assert.match(html, /<h3>What the research shows<\/h3>/);
   assert.match(html, /<ul><li><strong>Bold<\/strong> point/);
   assert.match(html, /<ol><li>One<\/li><li>Two<\/li><\/ol>/);
-  assert.match(html, /<a href="https:\/\/example\.org\/r" target="_blank" rel="noopener noreferrer">the report<\/a>/);
-  assert.match(html, /class="cite cite-web" href="https:\/\/example\.org\/w"/);
+  assert.match(html, /<a href="https:\/\/example\.org\/r" target="_blank" rel="noopener noreferrer">the report<\/a>/, 'a web source links to its own address');
+  assert.match(html, /class="cite cite-web" href="https:\/\/example\.org\/w"[^>]* aria-label="Web page 1: Web page">W1</);
+});
+
+test('answer rendering: a link the model wrote is live only if the turn has that page as a web source', () => {
+  const md = 'See [a report](https://example.org/report) and [a page from memory](https://made-up.example/x?a=1&b=2).';
+  const none = renderAnswer(md, { paperCount: 0 }).html;
+  assert.ok(!/<a /.test(none), 'web search off: no live links at all');
+  assert.match(none, /See a report and a page from memory\./);
+  const some = renderAnswer(md, { paperCount: 0, webSources: [{ url: 'https://example.org/report#top', title: 'Report' }] }).html;
+  assert.match(some, /<a href="https:\/\/example\.org\/report#top"[^>]*>a report<\/a>/);
+  assert.ok(!/made-up\.example/.test(some), 'the page from memory is plain text, not a link');
+});
+
+test('answer rendering: a stash marker the model writes itself prints nothing odd', () => {
+  const { html } = renderAnswer('Odd \u00000\u0000 and \u00001\u0000 marks with `code`.', { paperCount: 0 });
+  assert.ok(!/undefined/.test(html), html);
+  assert.match(html, /<code>code<\/code>/);
+});
+
+test('BibTeX: braces, backslashes and TeX specials cannot break an entry; DOIs stay balanced', () => {
+  const odd = { title: 'Braces } and \\input{x}: 50% & more_~^', year: 2020, venue: 'J. {Odd}', kind: 'Article',
+    authors: [{ given: 'A', family: 'O\\Brien}' }], doi: '10.1000/a{b}' };
+  const bib = Cite.format(odd, 'bibtex').text;
+  assert.match(bib, /title = \{\{Braces \\\} and \\textbackslash\{\}input\\\{x\\\}: 50\\% \\& more\\_\\textasciitilde\{\}\\textasciicircum\{\}\}\}/);
+  assert.match(bib, /author = \{O\\textbackslash\{\}Brien\\\}, A\}/);
+  assert.match(bib, /doi = \{10\.1000\/a%7Bb%7D\}/);
+  // Every entry's braces balance once escaped braces are left out.
+  const plain = bib.replace(/\\[{}]/g, '');
+  let depth = 0;
+  for (const ch of plain) { if (ch === '{') depth++; if (ch === '}') depth--; assert.ok(depth >= 0); }
+  assert.equal(depth, 0);
 });
 
 test('answer rendering: nothing the model writes can inject HTML or scripts', () => {

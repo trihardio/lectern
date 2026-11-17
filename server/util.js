@@ -1,9 +1,11 @@
 'use strict';
-// Small shared helpers. No dependencies: everything here runs on plain Node 20+.
+// Small shared helpers. No dependencies: everything here runs on plain Node 20.3+ (AbortSignal.any).
 
 const crypto = require('crypto');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// How Lectern names itself to the paper databases: its real version, from package.json.
+const APP_UA = `Lectern/${require('../package.json').version} (local research app)`;
 const uid = (n = 8) => crypto.randomBytes(n).toString('hex');
 
 function clip(s, max) {
@@ -49,6 +51,17 @@ function httpUrl(u) {
   return /^https?:\/\//i.test(u.trim()) ? u.trim() : '';
 }
 
+/**
+ * A web address in a form for telling whether two links name the same page: http and https, "www.", a trailing
+ * slash and the #fragment do not count. '' for anything that is not a web address. ui/render.js has the same rule.
+ */
+function urlKey(u) {
+  let x;
+  try { x = new URL(String(u || '').trim()); } catch { return ''; }
+  if (x.protocol !== 'http:' && x.protocol !== 'https:') return '';
+  return `${x.host.replace(/^www\./, '')}${x.pathname.replace(/\/+$/, '')}${x.search}`;
+}
+
 /** Combine a caller's AbortSignal with a timeout. */
 function withTimeout(signal, ms) {
   const signals = [AbortSignal.timeout(ms)];
@@ -73,7 +86,7 @@ async function fetchJson(url, { headers = {}, signal, timeout = 15000, retries =
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await fetch(url, {
-        headers: { accept: 'application/json', 'user-agent': 'Lectern/0.1 (local research app)', ...headers },
+        headers: { accept: 'application/json', 'user-agent': APP_UA, ...headers },
         signal: withTimeout(signal, timeout),
       });
       if (res.ok) return await res.json();
@@ -159,6 +172,6 @@ function extractJson(text) {
 }
 
 module.exports = {
-  sleep, uid, clip, stripTags, clean, cleanAbstract, normDoi, normTitle, httpUrl,
+  sleep, uid, clip, stripTags, clean, cleanAbstract, normDoi, normTitle, httpUrl, urlKey, APP_UA,
   withTimeout, HttpError, fetchJson, sseEvents, parseSseBlock, extractJson,
 };

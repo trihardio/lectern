@@ -19,7 +19,7 @@ const figureSource = require('./sources/figures');
 const { describe: describeFilters } = require('./filters');
 const { modeOf } = require('./modes');
 const { pathTo } = require('./store');
-const { extractJson, clip } = require('./util');
+const { extractJson, clip, urlKey } = require('./util');
 
 const STOPWORDS = new Set('a an and are as at be by can could did do does for from has have how in is it its of on or should than that the their there these this to was were what when where which who why will with would about into between among effect effects impact affect'.split(' '));
 
@@ -267,7 +267,7 @@ async function runAsk({ question, mode = 'answer', threadId, parentId, filters =
   const settings = config.get();
   if (typeof overrides.model === 'string' && overrides.engine) settings.models[overrides.engine] = overrides.model;
   const engine = await llm.pickEngine(settings, overrides.engine);
-  if (!engine) throw new Error('No model is connected yet. Sign in to Claude or ChatGPT on this Mac, then open Settings.');
+  if (!engine) throw new Error('No model is connected yet. Sign in to Claude or ChatGPT on this computer, then open Settings.');
   const effort = overrides.effort || settings.effort;
   const web = overrides.web != null ? !!overrides.web : settings.web;
   const model = settings.models[engine] || '';
@@ -276,9 +276,12 @@ async function runAsk({ question, mode = 'answer', threadId, parentId, filters =
   // parentId: undefined = follow on from the branch on screen; null = a new first question
   // (an edit of the opening question); otherwise the turn this question follows.
   const thread = threadId ? store.getThread(threadId) : null;
-  if (threadId && !thread) throw new Error('That conversation no longer exists. Reload the conversation.');
-  if (thread && parentId && !thread.turns.some((t) => t.id === parentId)) throw new Error('That earlier question no longer exists. Reload the conversation.');
-  const before = thread ? pathTo(thread, parentId === undefined ? thread.leaf : parentId) : [];
+  if (threadId && !thread) throw new Error('That chat no longer exists. Reload the window.');
+  if (thread && parentId && !thread.turns.some((t) => t.id === parentId)) throw new Error('That earlier question no longer exists. Reload the chat.');
+  // The turn this answer follows is fixed now, once: the branch on screen can change while the answer is
+  // written (another version shown, another answer saved), and the answer belongs where it was asked.
+  const parent = parentId === undefined ? (thread ? thread.leaf : null) : parentId;
+  const before = thread ? pathTo(thread, parent) : [];
   const history = before.slice(-3).map((t) => ({ question: clip(t.question, 600), answer: t.answer }));
 
   emit('meta', { engine, model, effort, web, mode });
@@ -337,8 +340,9 @@ async function runAsk({ question, mode = 'answer', threadId, parentId, filters =
       return i + 1;
     };
 
+    let out;
     try {
-      const out = await llm.complete({
+      out = await llm.complete({
         engine, role: 'main', settings, effort, web, signal, system,
         prompt: job.prompt,
         onEvent: (ev) => {
@@ -358,11 +362,18 @@ async function runAsk({ question, mode = 'answer', threadId, parentId, filters =
       throw e;
     }
 
-    // Web pages cited as markdown links (the CLI engines) also belong in the source list.
+    // Web pages cited as markdown links (the CLI engines) belong in the source list only when the web tools really
+    // returned that page in this run (out.webResults). A link the model wrote from memory is not a source, and the
+    // window shows it as plain text (ui/render.js links only the turn's web sources).
     if (web) {
+      const found = new Map();
+      for (const w of (out && out.webResults) || []) if (w && w.url && !found.has(urlKey(w.url))) found.set(urlKey(w.url), w);
       const re = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
       let m;
-      while ((m = re.exec(turn.answer))) addWebSource(m[2], m[1]);
+      while ((m = re.exec(turn.answer))) {
+        const hit = found.get(urlKey(m[2]));
+        if (hit) addWebSource(hit.url, hit.title || clip(m[1], 300));
+      }
     }
 
     // The answer is already visible. Structured excerpts need longer than the old short reading.
@@ -375,7 +386,7 @@ async function runAsk({ question, mode = 'answer', threadId, parentId, filters =
   }
 
   turn.thinking = clip(turn.thinking, 20000);
-  const saved = store.saveTurn(threadId, turn, parentId);
+  const saved = store.saveTurn(threadId, turn, parent);
   const savedTurn = saved.turns[saved.turns.length - 1];
   emit('done', { threadId: saved.id, turnId: savedTurn.id, parent: savedTurn.parent, title: saved.title, usage: turn.usage });
   return saved;

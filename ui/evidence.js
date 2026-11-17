@@ -48,7 +48,7 @@
     return { compare: relevant.length >= 2, direction, design, coverage, readings, relevant, charted };
   }
 
-  function build(turn, { h, label, inspect }) {
+  function build(turn, { h, label, inspect, readingOn = false }) {
     const papers = turn.papers || [];
     const views = plan(turn);
     const readings = views.readings;
@@ -63,9 +63,13 @@
 
     const heading = (title, note) => h('div', { class: 'evidence-heading' }, h('h3', null, title), note && h('p', null, note));
     if (!readings.length) {
+      // "Read each paper" is a setting in Settings, not a control here, so the note says where it is. When it is
+      // already on, the reading failed for this answer, and asking again is the way to try once more.
       section.append(h('div', { class: 'evidence-empty' }, heading('Compare the evidence', turn.running
         ? 'Reading abstracts to extract study designs, populations and findings…'
-        : 'Structured study details are unavailable for this answer. Retry with “Read each paper” enabled to build the comparison and evidence map.')));
+        : readingOn
+          ? 'Structured study details could not be read for this answer. Ask again to build the comparison and evidence map.'
+          : 'Structured study details are unavailable for this answer. Turn on “Read each paper” in Settings, then ask again, to build the comparison and evidence map.')));
       return section;
     }
 
@@ -159,11 +163,13 @@
         h('tbody', null, map.groups.map((g) => h('tr', null, h('th', { scope: 'row' }, g.label),
           cols.map((c) => {
             const ids = g.cells[c.i];
+            // An empty cell shows only a faint dash (the caption under the map says what an empty cell means);
+            // its name still says it in words.
             return h('td', null, h('button', { type: 'button', class: `coverage-cell${ids.length ? '' : ' empty'}`,
               style: `--density:${ids.length / map.max}`, disabled: !ids.length || null,
               'aria-label': `${g.label}, ${c.label}: ${countLabel(ids.length)}${ids.length ? '. Show references' : ' tagged in this set'}`,
               onclick: () => inspect(ids, `${g.label} · ${c.label}`) },
-              h('span', null, ids.length ? countLabel(ids.length) : 'No tagged papers'), !ids.length && h('small', null, 'Not established here')));
+              ids.length ? h('span', null, countLabel(ids.length)) : h('span', { class: 'coverage-dash', 'aria-hidden': 'true' }, '–')));
           })))));
       coverage.append(h('div', { class: 'evidence-scroll', tabindex: '0', 'aria-label': 'Evidence coverage; scroll horizontally on a small screen' }, grid));
       coverage.append(h('p', { class: 'evidence-caption' }, `${countLabel(map.total)} judged relevant; ${map.unclassified} without an extracted population. ${map.excluded ? `${map.excluded} simulated/proposed papers excluded. ` : ''}Cells can overlap. Empty cells indicate missing tags in this search, not proof of a gap across all research.`));

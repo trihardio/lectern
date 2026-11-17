@@ -5,18 +5,19 @@
 Ask a research question in plain words. Lectern searches academic paper databases, reads the
 abstracts, and writes an answer where every citation links to a real paper you can open and check.
 
-It runs on your Mac or Windows PC. Your conversations and saved papers stay on your computer.
+It runs on your Mac or Windows PC. Your chats and saved papers stay on your computer.
 
 ## What you need
 
-- A Mac with Apple Silicon (M1 or newer) running macOS 13 Ventura or later, **or** a Windows 10/11 PC (64-bit).
+- A Mac with Apple Silicon (M1 or newer) running macOS 13 Ventura or later, **or** a Windows 10/11 PC (64-bit;
+  Windows is a preview: it has not yet been tested on a real Windows PC).
 - A **Claude** or **ChatGPT** plan, signed in on this computer through **Claude Code** or **Codex**
   (either on its own, or inside the Claude or ChatGPT desktop app). Lectern uses that sign-in,
   so there is no API key to buy or paste. Questions count against that plan.
 
 ## Install on a Mac
 
-1. Open the [latest release](../../releases/latest) and download **Lectern-0.2.0.dmg**.
+1. Open the [latest release](../../releases/latest) and download **Lectern-0.2.1.dmg**.
 2. Open the downloaded file and drag **Lectern** onto **Applications**.
 3. Open Lectern from Applications. The first time, macOS says it cannot check the app for
    malicious software. Click **Done**, then open **System Settings > Privacy & Security**, scroll
@@ -25,9 +26,9 @@ It runs on your Mac or Windows PC. Your conversations and saved papers stay on y
    This happens because Lectern is a free app that is not registered with Apple. You can read
    all of its code in this repository.
 
-## Install on Windows
+## Install on Windows (preview)
 
-1. From the [latest release](../../releases/latest), download **Lectern-0.2.0-windows-x64.zip**.
+1. From the [latest release](../../releases/latest), download **Lectern-0.2.1-windows-x64.zip**.
 2. Right-click the file, choose **Extract All**, and put the **Lectern** folder somewhere that suits you
    (for example your Documents folder).
 3. Open the folder and double-click **Lectern.exe**. The first time, Windows SmartScreen may say it
@@ -82,7 +83,7 @@ suggestions are wrong, so read each one before you accept it. Method and numbers
 **AI writing** highlights writing patterns
 and gives sentence-level reasons and writing suggestions. Its experimental score is not a validated
 probability of AI authorship. Select a connected review model above the text box; the initial
-selection is GPT-6.1 Sol, and the choice is remembered. **Plagiarism / similarity** compares passages against paper abstracts,
+selection is GPT-6.1 Sol, and the choice is remembered. **Similarity** compares passages against paper abstracts,
 your saved Library and readable public web pages, then shows source links and matching excerpts.
 A similarity match needs citation review; it is not itself a finding of plagiarism. **Rewrite** rephrases a passage of up to 12,000 characters for clarity and natural expression. Compare it with the original, verify its facts and citations, and keep attribution for borrowed ideas. Rewriting does not guarantee a lower score. You can send the editable rewrite to either check.
 
@@ -123,7 +124,7 @@ desktop app it asks where to save the file; in a browser it opens the print dial
 - Reference details come from the databases, which contain mistakes. Check author names and page
   numbers before you submit.
 - **Cite** on any paper gives APA 7, Harvard, MLA 9, AGLC4, BibTeX or RIS. **Library** keeps the
-  papers you save, the chats you save (press **Save chat** at the top of a conversation, or the bookmark in the sidebar) and single questions (hover a question and press **Save**); export papers to Zotero, Mendeley or EndNote.
+  papers you save, the chats you save (press **Save chat** at the top of a chat, or the bookmark in the sidebar) and single questions (hover a question and press **Save**); export papers to Zotero, Mendeley or EndNote.
 - Follow your course's rules on using AI tools.
 
 ## If something goes wrong
@@ -146,7 +147,7 @@ Needs Node.js 20 or newer.
 ```
 npm install
 npm start          # run the desktop app
-npm run web        # or run it in your browser at http://127.0.0.1:4319
+npm run web        # or run it in your browser: open the address it prints
 npm test           # offline tests
 npm run make-app   # build dist/Lectern-darwin-arm64/Lectern.app
 ```

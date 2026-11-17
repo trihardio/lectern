@@ -5,11 +5,70 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawn, execFile } = require('child_process');
+const { spawn, execFile, spawnSync } = require('child_process');
 
 let cachedPath = null;
 let isWin = process.platform === 'win32';
 const SEP = () => (isWin ? ';' : ':'); // PATH separator; a Windows path itself contains ':' (C:\…)
+
+// ---------------------------------------------------------------- running tools are stopped when Lectern quits
+
+// Every tool started here and still running. A model that is still writing when Lectern quits would otherwise
+// keep running on its own, using the plan, for up to the 20-minute limit.
+const running = new Set();
+
+/** Stop one tool, and on Windows everything it started (taskkill /T), since cmd.exe and node shims start children. */
+function stopChild(child, signal = 'SIGTERM', { wait = false } = {}) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  if (isWin && child.pid) {
+    const args = ['/T', '/F', '/PID', String(child.pid)];
+    try {
+      if (wait) spawnSync('taskkill', args, { windowsHide: true, stdio: 'ignore', timeout: 5000 });
+      else spawn('taskkill', args, { windowsHide: true, stdio: 'ignore' }).on('error', () => child.kill());
+    } catch { child.kill(); }
+    return;
+  }
+  try { child.kill(signal); } catch { /* already gone */ }
+}
+
+/** Stop gently, then for certain after `grace` ms if the tool is still there. */
+function stopSoon(child, grace = 2000) {
+  stopChild(child, 'SIGTERM');
+  if (!isWin) setTimeout(() => stopChild(child, 'SIGKILL'), grace).unref();
+}
+
+function track(child) {
+  running.add(child);
+  const forget = () => running.delete(child);
+  child.once('exit', forget);
+  child.once('error', forget);
+  return child;
+}
+
+/** Stop every tool still running (the desktop app calls this when it quits; it also runs as the process exits). */
+function stopAll() {
+  for (const child of running) stopChild(child, 'SIGKILL', { wait: true });
+  running.clear();
+}
+process.once('exit', stopAll);
+
+// ---------------------------------------------------------------- tests never start the real tools
+
+// npm test runs every test file under `node --test`, which sets NODE_TEST_CONTEXT for them. Under the test
+// runner only the stand-ins in test/fakes (or a script a test wrote to the temp folder) may be found and
+// started: a test that forgot to pin an engine must fail, not quietly run the real Claude Code or Codex with
+// the owner's sign-in.
+const FAKES = path.join(__dirname, '..', '..', 'test', 'fakes');
+function guardTests(bin) {
+  if (!bin || !process.env.NODE_TEST_CONTEXT) return bin;
+  const real = (f) => { try { return fs.realpathSync(f); } catch { return path.resolve(f); } };
+  const file = real(bin);
+  if ([real(FAKES), real(os.tmpdir())].some((dir) => file.startsWith(dir + path.sep))) return bin;
+  const message = `A test tried to use ${bin}. Tests may only run the stand-ins in test/fakes: pin settings.bins first.`;
+  process.exitCode = 1; // fail the test file even if the test itself catches the error
+  console.error(`\n*** ${message}\n`);
+  throw new Error(message);
+}
 
 /** Places the Windows installers put the tools (native installer, npm, winget, scoop, Volta). */
 function windowsExtras(home) {
@@ -49,7 +108,9 @@ function shellPath() {
   if (isWin) return Promise.resolve(finish(''));
   return new Promise((resolve) => {
     const shell = process.env.SHELL || '/bin/zsh';
-    execFile(shell, ['-ilc', 'printf "__LP__%s__LP__" "$PATH"'], { timeout: 5000, env: process.env }, (err, stdout) => {
+    // fish keeps PATH as a list and would print it joined with spaces; join it with ':' there.
+    const print = path.basename(shell) === 'fish' ? 'printf "__LP__%s__LP__" (string join : $PATH)' : 'printf "__LP__%s__LP__" "$PATH"';
+    execFile(shell, ['-ilc', print], { timeout: 5000, killSignal: 'SIGKILL', env: process.env }, (err, stdout) => {
       const m = /__LP__(.*?)__LP__/s.exec(stdout || '');
       resolve(finish(m ? m[1] : ''));
     });
@@ -101,16 +162,16 @@ function bundledBins(name) {
  * the user's PATH, otherwise the copy inside the desktop app.
  */
 async function findBin(name, explicit) {
-  if (explicit) return isExec(explicit) ? explicit : null;
+  if (explicit) return isExec(explicit) ? guardTests(explicit) : null;
   // Windows: the native installer gives claude.exe; npm gives claude.cmd (a small script that runs node).
   const names = isWin ? [`${name}.exe`, `${name}.cmd`, `${name}.bat`, name] : [name];
   for (const dir of (await shellPath()).split(SEP())) {
     for (const n of names) {
       const full = path.join(dir, n);
-      if (isExec(full)) return full;
+      if (isExec(full)) return guardTests(full);
     }
   }
-  return bundledBins(name).find(isExec) || null;
+  return guardTests(bundledBins(name).find(isExec) || null);
 }
 
 /**
@@ -137,17 +198,22 @@ async function launch(bin, args) {
 }
 
 /** Run a short command (such as a login check) and resolve { code, stdout, output }. Never rejects.
- *  `output` is stdout and stderr together: some tools (Codex) print their status on stderr. */
+ *  `output` is stdout and stderr together: some tools (Codex) print their status on stderr.
+ *  A command still running after `timeout` ms is stopped (SIGTERM, then SIGKILL two seconds later). */
 async function runQuick(bin, args, { dropEnv = [], timeout = 8000 } = {}) {
   const env = { ...process.env, PATH: await shellPath() };
   for (const k of dropEnv) delete env[k];
   let how;
   try { how = await launch(bin, args); } catch (e) { return { code: 1, stdout: '', output: e.message }; }
   return new Promise((resolve) => {
-    const child = execFile(how.file, how.args, { cwd: scratchDir(), env, timeout, shell: how.shell, windowsHide: true }, (err, stdout, stderr) => {
+    let timedOut = false;
+    const child = track(execFile(how.file, how.args, { cwd: scratchDir(), env, shell: how.shell, windowsHide: true }, (err, stdout, stderr) => {
+      clearTimeout(timer);
       const out = String(stdout || '');
-      resolve({ code: err ? (typeof err.code === 'number' ? err.code : 1) : 0, stdout: out, output: `${out}\n${stderr || ''}` });
-    });
+      const code = timedOut ? 1 : err ? (typeof err.code === 'number' ? err.code : 1) : 0;
+      resolve({ code, stdout: out, output: `${out}\n${stderr || ''}${timedOut ? '\n(timed out)' : ''}` });
+    }));
+    const timer = setTimeout(() => { timedOut = true; stopSoon(child); }, timeout);
     if (child.stdin) child.stdin.end();
   });
 }
@@ -155,16 +221,25 @@ async function runQuick(bin, args, { dropEnv = [], timeout = 8000 } = {}) {
 /**
  * Remember an engine's status for a while: checking a login spawns a process, and the
  * status is read on every question. A signed-out result is kept only briefly so that
- * signing in shows up almost at once.
+ * signing in shows up almost at once. While a check is running, everyone who asks waits
+ * for that same check instead of starting another process.
  */
 function statusCache() {
   const memo = new Map();
+  const pending = new Map();
   return async (key, compute) => {
     const hit = memo.get(key);
     if (hit && Date.now() - hit.at < (hit.value.ready ? 60000 : 4000)) return hit.value;
-    const value = await compute();
-    memo.set(key, { at: Date.now(), value });
-    return value;
+    if (pending.has(key)) return pending.get(key);
+    const job = (async () => {
+      try {
+        const value = await compute();
+        memo.set(key, { at: Date.now(), value });
+        return value;
+      } finally { pending.delete(key); }
+    })();
+    pending.set(key, job);
+    return job;
   };
 }
 
@@ -186,14 +261,14 @@ async function runCli({ bin, args, input, env = {}, dropEnv = [], signal, onLine
 
   return new Promise((resolve, reject) => {
     if (signal && signal.aborted) return reject(new Error('Stopped'));
-    const child = spawn(how.file, how.args, { cwd: scratchDir(), env: childEnv, stdio: ['pipe', 'pipe', 'pipe'], shell: how.shell, windowsHide: true });
+    const child = track(spawn(how.file, how.args, { cwd: scratchDir(), env: childEnv, stdio: ['pipe', 'pipe', 'pipe'], shell: how.shell, windowsHide: true }));
     let stderr = '';
     let buf = '';
     let done = false;
 
     const finish = (fn, v) => { if (!done) { done = true; clearTimeout(timer); if (signal) signal.removeEventListener('abort', onAbort); fn(v); } };
-    const onAbort = () => { child.kill('SIGTERM'); setTimeout(() => child.kill('SIGKILL'), 2000).unref(); finish(reject, new Error('Stopped')); };
-    const timer = setTimeout(() => { child.kill('SIGKILL'); finish(reject, new Error('The command-line tool took too long and was stopped.')); }, timeout);
+    const onAbort = () => { stopSoon(child); finish(reject, new Error('Stopped')); };
+    const timer = setTimeout(() => { stopChild(child, 'SIGKILL'); finish(reject, new Error('The command-line tool took too long and was stopped.')); }, timeout);
     if (signal) signal.addEventListener('abort', onAbort, { once: true });
 
     child.stdout.setEncoding('utf8');
@@ -203,12 +278,15 @@ async function runCli({ bin, args, input, env = {}, dropEnv = [], signal, onLine
       while ((i = buf.indexOf('\n')) !== -1) {
         const line = buf.slice(0, i).trim();
         buf = buf.slice(i + 1);
-        if (line) { try { onLine(line); } catch (e) { child.kill('SIGTERM'); finish(reject, e); } }
+        if (line) { try { onLine(line); } catch (e) { stopSoon(child); finish(reject, e); } }
       }
     });
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (c) => { stderr = (stderr + c).slice(-4000); });
-    child.on('error', (e) => finish(reject, new Error(`Could not start ${path.basename(bin)}: ${e.message}`)));
+    child.on('error', (e) => {
+      console.error(`Lectern: could not start ${bin}:`, e.message); // the details (with paths) stay in the log
+      finish(reject, new Error(`Lectern could not start ${path.basename(bin)}. Check that it is installed, or set its location in Settings.`));
+    });
     child.on('close', (code) => {
       if (buf.trim()) { try { onLine(buf.trim()); } catch (e) { return finish(reject, e); } }
       finish(resolve, { code, stderr });
@@ -224,6 +302,25 @@ function unknownFlag(stderr) {
   return m ? m[1] : null;
 }
 
+/**
+ * A provider's own short error message, safe to show: one line, no file paths, no email addresses. The full text
+ * stays in the log. '' when nothing useful is left.
+ */
+function shortReason(s) {
+  const line = String(s || '').replace(/\s+/g, ' ').trim()
+    .replace(/(?:[A-Za-z]:)?(?:[\\/][^\s'"\\/]+){2,}[\\/]?/g, '…')
+    .replace(/[^\s@'"]+@[^\s@'"]+\.[a-z]{2,}/gi, '…');
+  return line.length > 160 ? `${line.slice(0, 159).trimEnd()}…` : line;
+}
+
+/**
+ * The error for a CLI that rejects one of the options that keep a run safe (no tools, no MCP servers, sandbox, no
+ * saved session). Lectern never retries without such an option: it asks for an update instead.
+ */
+function tooOld(label, flag) {
+  return Object.assign(new Error(`This version of ${label} is too old for Lectern's safety settings. Update it, then try again.`), { code: 'CLI_TOO_OLD', flag });
+}
+
 /** Remove a flag (and its value, if it takes one) from an argv array. */
 function withoutFlag(args, flag, takesValue) {
   const out = [];
@@ -235,7 +332,9 @@ function withoutFlag(args, flag, takesValue) {
 }
 
 module.exports = {
-  shellPath, findBin, bundledBins, launch, runQuick, statusCache, scratchDir, runCli, unknownFlag, withoutFlag,
+  shellPath, findBin, bundledBins, launch, runQuick, statusCache, scratchDir, runCli, unknownFlag, withoutFlag, tooOld, shortReason,
+  stopAll, track, stopChild,
+  _running: running,
   _resetPathCache: () => { cachedPath = null; },
   _setPlatformForTest: (win) => { isWin = win; cachedPath = null; },
 };

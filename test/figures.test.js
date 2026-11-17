@@ -76,7 +76,9 @@ test('an answer carries at most two chosen figures, saved with the turn', async 
   mock.reset();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lectern-figures-'));
   const app = createApp({ dataDir });
-  const base = await app.listen(0);
+  app.config.update({ bins: { claude: path.join(__dirname, 'fakes', 'claude'), codex: '/nonexistent/bin' } });
+  const pageUrl = await app.listen(0); // the window's address, with the token
+  const base = pageUrl.slice(0, pageUrl.indexOf('?'));
   const headers = { 'x-lectern-token': app.token, 'content-type': 'application/json' };
   const call = (method, p, body) => mock.realFetch(base + p, { method, headers, body: body ? JSON.stringify(body) : undefined }).then((r) => r.json());
   const ask = async (body) => (await (await mock.realFetch(`${base}api/ask`, { method: 'POST', headers, body: JSON.stringify(body) })).text())
@@ -120,9 +122,11 @@ test('an answer carries at most two chosen figures, saved with the turn', async 
 
 test('the window may load figure images from the open bucket and nowhere else', async () => {
   const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'lectern-csp-')) });
-  const base = await app.listen(0);
+  app.config.update({ bins: { claude: '/nonexistent/bin', codex: '/nonexistent/bin' } });
+  const pageUrl = await app.listen(0); // the window's address, with the token
+  const base = pageUrl.slice(0, pageUrl.indexOf('?'));
   try {
-    const csp = (await mock.realFetch(base)).headers.get('content-security-policy');
+    const csp = (await mock.realFetch(pageUrl)).headers.get('content-security-policy');
     assert.match(csp, /img-src 'self' data: https:\/\/pmc-oa-opendata\.s3\.amazonaws\.com;/);
     assert.match(csp, /connect-src 'self'/, 'the page still cannot fetch from anywhere else');
   } finally { await app.close(); }
@@ -210,4 +214,17 @@ test('an opening that describes the answer is not shown as the brief answer', ()
     assert.ok(parts.body.startsWith(opening), 'the sentence stays in the answer');
   }
   assert.equal(Render.splitLead('Below-average sleep predicts later symptoms [2].').lead, '', 'a rare false positive only moves the sentence into the body');
+});
+
+test('a failed bucket request releases its connection (the unread body is cancelled)', async () => {
+  let cancelled = false;
+  const saved = globalThis.fetch;
+  globalThis.fetch = async () => new Response(new ReadableStream({
+    pull(c) { c.enqueue(new TextEncoder().encode('<Error>Slow down</Error>')); },
+    cancel() { cancelled = true; },
+  }), { status: 503 });
+  try {
+    await assert.rejects(figures.listArticle('PMC9001'), (e) => e.status === 503);
+    assert.equal(cancelled, true);
+  } finally { globalThis.fetch = saved; }
 });

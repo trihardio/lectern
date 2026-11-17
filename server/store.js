@@ -31,10 +31,14 @@ function pathTo(thread, id) {
   return out;
 }
 
-/** From `id`, keep following the newest child to the end of that branch. */
+/** From `id`, keep following the newest child to the end of that branch. A damaged file whose turns point at
+ *  each other in a loop stops at the first turn seen twice instead of running forever. */
 function newestLeaf(thread, id) {
   let cur = id;
+  const seen = new Set();
   for (;;) {
+    if (seen.has(cur)) return cur;
+    seen.add(cur);
     const kids = thread.turns.filter((t) => t.parent === cur);
     if (!kids.length) return cur;
     cur = kids[kids.length - 1].id;
@@ -56,7 +60,7 @@ class Store {
 
   // ---- threads ----
   _threadFile(id) {
-    if (!ID.test(String(id))) throw new Error('Bad thread id');
+    if (!ID.test(String(id))) throw Object.assign(new Error('That chat could not be found. Reload the window and try again.'), { status: 404 });
     return path.join(this.threadsDir, `${id}.json`);
   }
 
@@ -68,19 +72,22 @@ class Store {
 
   listThreads() {
     const out = [];
+    const text = (v) => (typeof v === 'string' ? v : ''); // a damaged file must not break the whole list
     for (const f of fs.readdirSync(this.threadsDir)) {
       if (!f.endsWith('.json')) continue;
       try {
         const t = JSON.parse(fs.readFileSync(path.join(this.threadsDir, f), 'utf8'));
+        if (!t || typeof t !== 'object' || !Array.isArray(t.turns || [])) continue;
         out.push({
-          id: t.id, title: t.title, updatedAt: t.updatedAt, createdAt: t.createdAt, turns: (t.turns || []).length,
+          // questions on the path being shown, so other versions of an edited question are not counted twice
+          id: t.id, title: text(t.title) || 'Untitled chat', updatedAt: text(t.updatedAt), createdAt: text(t.createdAt), turns: pathTo(normalize(t), t.leaf).length,
           saved: !!t.saved, savedAt: t.saved ? (t.savedAt || null) : null,
           // single questions kept in the library, with the opening of their answer for the list
           prompts: (t.turns || []).filter((x) => x.saved).map((x) => ({ id: x.id, question: clip(String(x.question || ''), 400), savedAt: x.savedAt || null, preview: leadOf(x.answer) })),
         });
       } catch { /* skip unreadable file */ }
     }
-    return out.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
   getThread(id) {
@@ -94,7 +101,7 @@ class Store {
   saveTurn(threadId, turn, parentId) {
     const now = new Date().toISOString();
     let thread = threadId ? this.getThread(threadId) : null;
-    if (threadId && !thread) throw new Error('That conversation no longer exists. The answer was not saved.');
+    if (threadId && !thread) throw new Error('That chat no longer exists. The answer was not saved.');
     if (!thread) {
       thread = { id: uid(8), title: clip(turn.question, 80), createdAt: now, updatedAt: now, turns: [], leaf: null };
     }
@@ -146,7 +153,7 @@ class Store {
    */
   deleteTurn(threadId, turnId) {
     const t = this.getThread(threadId);
-    if (!t) throw Object.assign(new Error('That conversation no longer exists.'), { status: 404 });
+    if (!t) throw Object.assign(new Error('That chat no longer exists.'), { status: 404 });
     const target = t.turns.find((x) => x.id === turnId);
     if (!target) throw Object.assign(new Error('That question no longer exists.'), { status: 404 });
 
@@ -171,7 +178,7 @@ class Store {
   /** A new thread holding the conversation from the first question down to `turnId`. */
   branchThread(threadId, turnId) {
     const t = this.getThread(threadId);
-    if (!t) throw Object.assign(new Error('That conversation no longer exists.'), { status: 404 });
+    if (!t) throw Object.assign(new Error('That chat no longer exists.'), { status: 404 });
     const turns = pathTo(t, turnId || t.leaf);
     if (!turns.length) throw Object.assign(new Error('That question no longer exists.'), { status: 404 });
     const now = new Date().toISOString();
@@ -191,18 +198,18 @@ class Store {
   getLibrary() {
     try {
       const data = JSON.parse(fs.readFileSync(this.libraryFile, 'utf8'));
-      if (!data || !Array.isArray(data.papers)) throw new Error('Invalid library format');
+      if (!data || !Array.isArray(data.papers)) throw new Error('The library file does not hold a list of papers.');
       return data.papers;
     } catch (e) {
       if (e.code === 'ENOENT') return [];
-      throw new Error('The library could not be read. Its file was left untouched.');
+      throw new Error(`Lectern could not read your library file, ${this.libraryFile}. The file was left as it is. Fix it, or move it out of that folder (Lectern then starts a new, empty library), and try again.`);
     }
   }
 
   _saveLibrary(papers) { writeAtomic(this.libraryFile, JSON.stringify({ papers })); }
 
   addToLibrary(paper) {
-    if (!paper || !paper.id || !paper.title) throw new Error('Not a paper');
+    if (!paper || !paper.id || !paper.title) throw Object.assign(new Error('That paper could not be saved: it has no title or id. Reload the answer and try again.'), { status: 400 });
     const papers = this.getLibrary().filter((p) => p.id !== paper.id);
     const { n, score, ...keep } = paper; // drop per-answer fields
     papers.unshift({ ...keep, savedAt: new Date().toISOString() });

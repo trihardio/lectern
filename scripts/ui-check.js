@@ -7,7 +7,9 @@
 //   --mock      replace fetch with the test fixtures (offline, instant). Without it the real paper databases are used
 //               (the model is still the fake CLI in test/fakes, so no plan usage).
 //   --ask       the question to run before the steps (default: a remote-work question). --no-ask starts on the home page.
-//   --steps     a module exporting async ({ ev, send, sleep, until, shot, clip, dark, motion, errors, OUT, port, fs, path }) => {...}
+//   --steps     a module exporting async ({ ev, send, sleep, until, shot, clip, dark, motion, errors, OUT, port, url, fs, path }) => {...}
+//               `url` is the window's address as the server printed it, with this run's access token (?t=…):
+//               the page is only served at that address, so navigate to `url`, never to a hand-built one.
 //   --settings  a JSON file merged into the scratch settings (for example saved keys).
 //
 // Needs Node 22+ (global WebSocket) and Google Chrome (set CHROME=/path/to/chrome elsewhere than the macOS default).
@@ -49,7 +51,21 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   fs.writeFileSync(path.join(OUT, 'data', 'settings.json'), JSON.stringify(settings));
 
   const serverArgs = arg('mock', false) ? ['-r', './test/mock-fetch.js', 'server/start.js'] : ['server/start.js'];
-  const server = spawn(process.execPath, serverArgs, { cwd: ROOT, env: { ...process.env, LECTERN_DATA_DIR: path.join(OUT, 'data'), LECTERN_PORT: String(PORT), LECTERN_NO_OPEN: '1' }, stdio: 'ignore' });
+  const server = spawn(process.execPath, serverArgs, { cwd: ROOT, env: { ...process.env, LECTERN_DATA_DIR: path.join(OUT, 'data'), LECTERN_PORT: String(PORT), LECTERN_NO_OPEN: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  // The window's address carries the server's access token, so it is read from what the server prints.
+  let serverOut = '';
+  let serverErr = '';
+  server.stderr.on('data', (c) => { serverErr = (serverErr + c).slice(-4000); });
+  const pageUrl = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`The server did not print its address within 30 s. ${serverErr.trim()}`)), 30000);
+    server.stdout.on('data', (c) => {
+      serverOut += c;
+      const m = /Lectern is running at (http:\/\/\S+)/.exec(serverOut);
+      if (m) { clearTimeout(timer); resolve(m[1]); }
+    });
+    server.on('exit', (code) => { clearTimeout(timer); reject(new Error(`The server stopped (exit ${code}). ${serverErr.trim()}`)); });
+  });
+  pageUrl.catch(() => { /* reported where it is awaited */ });
   const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${CDP}`, `--user-data-dir=${path.join(OUT, 'chrome')}`, '--no-first-run', '--window-size=1440,900', 'about:blank'], { stdio: 'ignore' });
   const errors = [];
   try {
@@ -75,7 +91,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const save = (name, b64) => fs.writeFileSync(path.join(OUT, 'shots', `${name}.png`), Buffer.from(b64, 'base64'));
     const shot = async (name) => save(name, (await send('Page.captureScreenshot', { format: 'png' })).result.data);
     const clip = async (name, selector, pad = 0) => {
-      const r = await ev(`const e=document.querySelector(${JSON.stringify(selector)}); if(!e) return null; const b=e.getBoundingClientRect(); return {x:b.x,y:b.y,w:b.width,h:b.height}`);
+      // A screenshot clip is in page coordinates; getBoundingClientRect() is in window coordinates, so add the
+      // page's own scroll (it scrolls as a whole in the narrow layout, and a clip without it comes out blank).
+      const r = await ev(`const e=document.querySelector(${JSON.stringify(selector)}); if(!e) return null; const b=e.getBoundingClientRect(); return {x:b.x+scrollX,y:b.y+scrollY,w:b.width,h:b.height}`);
       if (!r) { console.log(`clip ${name}: no element for ${selector}`); return; }
       save(name, (await send('Page.captureScreenshot', { format: 'png', clip: { x: Math.max(0, r.x - pad), y: Math.max(0, r.y - pad), width: r.w + pad * 2, height: r.h + pad * 2, scale: 2 } })).result.data);
     };
@@ -85,8 +103,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const motion = async (value) => { reduced = value; await media(); };
 
     await send('Runtime.enable'); await send('Page.enable'); await send('Log.enable'); await media();
-    for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://127.0.0.1:${PORT}/`)).ok) break; } catch { /* not up yet */ } await sleep(250); }
-    await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
+    const url = await pageUrl;
+    await send('Page.navigate', { url });
     if (!(await until(`document.querySelector('.ask')`, 15000))) throw new Error('The window did not draw the ask box.');
     await sleep(500);
 
@@ -98,7 +116,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       await sleep(900);
     }
     const steps = require(path.resolve(stepsFile));
-    await steps({ ev, send, sleep, until, shot, clip, dark, motion, errors, OUT, port: PORT, fs, path });
+    await steps({ ev, send, sleep, until, shot, clip, dark, motion, errors, OUT, port: Number(new URL(url).port), url, fs, path });
   } catch (e) {
     console.log('ERROR:', e.message);
     process.exitCode = 1;

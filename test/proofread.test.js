@@ -179,3 +179,18 @@ test('the spelling variant reaches the prompt; an unknown variant falls back to 
   await P.runProofread({ text: 'The colour is fine.', config: config(), engine: 'claude-code', variant: 'klingon', complete: modelFrom({}, calls) });
   assert.match(calls[1].prompt, /never change a word from one variant to another/);
 });
+
+test('a correction far longer than its sentence is dropped before the word-by-word comparison', () => {
+  const P = require('../server/checks/proofread');
+  const src = Array.from({ length: 200 }, (_, i) => `word${i}`).join(' ') + '.';
+  const unit = { src, start: 0, heading: false };
+  const huge = { text: Array.from({ length: 100000 }, (_, i) => `other${i}`).join(' '), changes: [] };
+  const t = Date.now();
+  const r = P.suggestionsFor(src, unit, huge, []);
+  assert.ok(Date.now() - t < 50, `${Date.now() - t} ms`);
+  assert.equal(r.dropped.misaligned, 1);
+  assert.deepEqual(r.suggestions, []);
+  // A real correction of the same sentence still comes through.
+  const fixed = P.suggestionsFor(src, unit, { text: src.replace('word7 ', 'word7, '), changes: [] }, []);
+  assert.equal(fixed.suggestions.length, 1);
+});

@@ -10,7 +10,9 @@ cd "$(dirname "$0")/.."
 VERSION="$(node -p "require('./package.json').version")"
 PACKAGER_VERSION=20.3.0
 DMGBUILD_VERSION=1.6.5
-IGNORE='^/(test|dist|release|build|scripts|Lectern|\.git|\.github|\.vscode|\.impeccable|\.scratch|output|bench|native|CLAUDE\.md|PRODUCT\.md|DESIGN\.md)($|/)'
+# The Windows app ships the same list of what it runs as the Mac app (scripts/make-app.sh), without the Mac voice
+# helper (native/): electron/, server/, shared/, ui/ and package.json. Everything else stays out.
+SHIP_WIN='^/(?!(electron|server|shared|ui)(/|$)|package\.json$)'
 mkdir -p release
 
 echo "== tests"
@@ -34,7 +36,7 @@ npx --yes "@electron/packager@$PACKAGER_VERSION" . Lectern \
   --app-version="$VERSION" --build-version="$VERSION" --app-copyright="Lectern $VERSION" \
   --win32metadata.CompanyName=Lectern --win32metadata.ProductName=Lectern --win32metadata.FileDescription=Lectern \
   --icon=build/icon.ico \
-  --ignore="$IGNORE"
+  --ignore="$SHIP_WIN" --ignore='^/electron/voice($|/)' --ignore='\.DS_Store$'
 # Smaller download: keep only Chromium's English built-in messages (Lectern's window is English).
 find dist/Lectern-win32-x64/locales -name '*.pak' ! -name 'en-US.pak' ! -name 'en-GB.pak' -delete
 ZIP="release/Lectern-$VERSION-windows-x64.zip"

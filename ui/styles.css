@@ -31,6 +31,11 @@
   --cab-line: #3B5D53;
   --cab-ink: #EAF1EC;
   --cab-ink-2: #A8C1B7;
+  /* the rail's own layers: its field, a hovered row, the open row, its hairlines (lifted a step in the dark) */
+  --rail-bg: var(--cab);
+  --rail-2: var(--cab-2);
+  --rail-3: var(--cab-3);
+  --rail-line: var(--cab-line);
   /* the accession stamp: citations only */
   --stamp: #5B3FA8;
   --stamp-soft: #EEE8FB;
@@ -83,6 +88,11 @@
     --cab-line: #21302A;
     --cab-ink: #DDE8E2;
     --cab-ink-2: #8FA79C;
+    /* the rail is lifted one step off the desk, with a hairline edge, so it does not melt into it */
+    --rail-bg: var(--cab-2);
+    --rail-2: #22332C;
+    --rail-3: #2A3E35;
+    --rail-line: #2E4038;
     --stamp: #B9A6F5;
     --stamp-soft: #2A2247;
     --stamp-ink: #160F2E;
@@ -138,6 +148,8 @@ a { color: inherit; }
 .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--desk); font-weight: 600; padding: 8px 18px; }
 .btn.primary:hover { filter: brightness(1.15); }
 .btn.primary:disabled { opacity: .45; cursor: default; filter: none; }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .5; cursor: default; }
+.btn:disabled:hover, .btn[aria-disabled="true"]:hover { border-color: var(--line); }
 .btn.stop { background: var(--brick); border-color: var(--brick); color: #fff; }
 .btn.quiet { border-color: transparent; background: transparent; color: var(--ink-2); padding: 6px 8px; }
 .btn.quiet:hover { background: var(--line-soft); color: var(--ink); }
@@ -162,9 +174,10 @@ a { color: inherit; }
 }
 .history li.on .history-item { color: var(--ink); font-weight: 500; }
 /* rename / duplicate / delete: shown on hover or keyboard focus */
-.history-acts { display: flex; visibility: hidden; }
+.history-acts { display: flex; gap: 2px; visibility: hidden; }
 .history li:hover .history-acts, .history-acts:focus-within { visibility: visible; }
-.history-act { border: 0; background: transparent; color: var(--ink-3); padding: 4px 6px; border-radius: 6px; }
+.history-act { display: grid; place-items: center; width: 28px; height: 28px; border: 0; background: transparent; color: var(--ink-3); padding: 0; border-radius: 6px; }
+.history-act:disabled { opacity: .45; cursor: default; }
 .history-act:hover { color: var(--ink); background: var(--slate-soft); }
 .history-act.del:hover { color: var(--brick); }
 .history-rename { flex: 1; margin: 2px; padding: 5px 7px; }
@@ -225,7 +238,10 @@ a { color: inherit; }
 .setup { margin-top: 26px; border: 1px solid var(--line); border-radius: 12px; background: var(--sheet); padding: 18px 20px; }
 .setup h2 { font: 600 16px var(--sans); margin: 0 0 4px; }
 .setup p { margin: 0 0 12px; color: var(--ink-2); max-width: 64ch; }
-.hint { margin-top: 12px; color: var(--ink-3); font-size: 13px; }
+/* The home notes under the ask box sit together: the page is a flex column, where a paragraph's own bottom margin
+   would add to the next one's top margin instead of collapsing into it. */
+.hint { margin: 12px 0 0; color: var(--ink-3); font-size: 13px; }
+.hint + .hint { margin-top: 6px; }
 .hint button { border: 0; background: none; padding: 0; text-decoration: underline; color: var(--ink-2); }
 
 /* ---------- composer ---------- */
@@ -281,6 +297,7 @@ a { color: inherit; }
 .cmenu-row { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; border-radius: 7px; padding: 9px 10px; background: transparent; text-align: left; }
 .cmenu-row:hover { background: var(--line-soft); }
 .cmenu-row[aria-checked="true"] { background: var(--slate-soft); }
+.cmenu-row[aria-checked="true"] .cmenu-text small { color: var(--ink-2); }
 .cmenu-row.back { border-bottom: 1px solid var(--line-soft); border-radius: 0; margin-bottom: 4px; }
 .cmenu-text { flex: 1; min-width: 0; }
 .cmenu-text b, .cmenu-text small { display: block; }
@@ -297,13 +314,6 @@ a { color: inherit; }
 .linkish { display: inline; border: 0; padding: 0; background: none; color: var(--ink-2); text-decoration: underline; }
 @container (max-width: 700px) { .under-note { display: none; } }
 .composer-wrap { container-type: inline-size; }
-.select {
-  appearance: none; border: 1px solid var(--line); border-radius: 8px; background: var(--sheet);
-  padding: 5px 26px 5px 9px; max-width: 190px; text-overflow: ellipsis;
-  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
-  background-position: calc(100% - 13px) 55%, calc(100% - 9px) 55%; background-size: 4px 4px; background-repeat: no-repeat;
-}
-.select:hover { border-color: var(--ink-3); }
 
 .check { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); cursor: pointer; }
 .check input { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
@@ -331,7 +341,7 @@ a { color: inherit; }
 .fsec { border-bottom: 1px solid var(--line-soft); }
 .fsec summary { display: flex; flex-direction: column; gap: 2px; padding: 14px 26px 14px 0; cursor: pointer; list-style: none; position: relative; }
 .fsec summary::-webkit-details-marker { display: none; }
-.fsec summary::after { content: '⌄'; position: absolute; right: 4px; top: 12px; color: var(--ink-3); font-size: 18px; transition: transform .15s; }
+.fsec summary::after { content: '⌄'; position: absolute; right: 4px; top: 12px; color: var(--ink-3); font-size: 18px; }
 .fsec[open] summary::after { transform: rotate(180deg); }
 .fsec-title { font: 600 15px var(--sans); }
 .fsec summary small { color: var(--ink-3); font-size: 13px; }
@@ -341,7 +351,6 @@ a { color: inherit; }
 .fnote { margin: -4px 0 0; color: var(--ink-3); font-size: 12.5px; line-height: 1.5; max-width: 68ch; }
 .fchecks { display: grid; gap: 8px 18px; }
 .fchecks.cols { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
-.select.wide { max-width: none; }
 .input.wide { flex: 1; min-width: 200px; }
 
 .input {
@@ -353,10 +362,14 @@ a { color: inherit; }
 .filter-switch { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; color: var(--ink); font-weight: 500; cursor: pointer; }
 .filter-switch input { appearance: none; position: relative; flex: none; width: 36px; height: 22px; margin: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--line); cursor: pointer; }
 .filter-switch input::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--sheet); }
-.filter-switch input:checked { background: var(--ink); border-color: var(--ink); }
+.filter-switch input:checked { background: var(--sel); border-color: var(--sel); }
 .filter-switch input:checked::after { transform: translateX(14px); } /* a move, not a jump of `left`, so the motion section can ease it */
 .filter-foot { position: sticky; bottom: 0; z-index: 1; flex-wrap: wrap; background: var(--sheet); border-top: 1px solid var(--line); padding: 14px 0; }
-.filter-foot small { flex-basis: 200px; }
+/* `.cite-foot small` further down sets `flex: 1`, so this rule must outrank it. Otherwise the status line never wraps
+   and is squeezed into a narrow column beside the buttons. On a narrow window the status takes its own line. */
+.cite-foot.filter-foot small { flex: 1 1 200px; }
+.cite-foot.filter-foot small + .btn { margin-left: auto; }
+@media (max-width: 560px) { .cite-foot.filter-foot small { flex-basis: 100%; } }
 .badge-count { background: var(--mark); color: #16233F; border-radius: 999px; padding: 0 6px; font-size: 12px; font-weight: 600; margin-left: 4px; }
 
 /* ---------- thread ---------- */
@@ -393,7 +406,7 @@ a { color: inherit; }
 .edit-row .spacer { flex: 1; }
 
 .runline { color: var(--ink-3); min-height: 22px; margin-bottom: 16px; }
-.runline .live::after { content: ''; display: inline-block; width: 1.1em; text-align: left; animation: dots 1.4s steps(4, end) infinite; }
+.runline .live::after { content: ''; display: inline-block; width: 1.1em; text-align: left; }
 @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
 /* while answering: the three steps on one line, so the page does not jump when it finishes */
 .steps { list-style: none; padding: 0; margin-top: 0; display: flex; align-items: center; font-size: 13px; white-space: nowrap; }
@@ -412,11 +425,7 @@ a { color: inherit; }
 .searched li { margin: 2px 0; }
 .searched .bad { color: var(--brick); }
 
-/* the tally: one tab per paper, coloured by where its findings point */
-.tally { margin: 0 0 22px; padding: 14px 16px; background: var(--sheet); border: 1px solid var(--line-soft); border-radius: 12px; }
-.tally-title { font-weight: 600; margin: 0 0 10px; }
-.tally-title small { font-weight: 400; color: var(--ink-3); margin-left: 6px; font-size: 13px; }
-.tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+/* a paper's number tab in the reference list, coloured by where its findings point */
 .tab {
   width: 30px; height: 26px; border-radius: 5px; border: 1.5px solid transparent; display: grid; place-items: center;
   font: 600 12.5px/1 var(--sans); font-variant-numeric: tabular-nums; padding: 0;
@@ -428,10 +437,6 @@ a { color: inherit; }
 .tab.na { background: var(--slate-soft); color: var(--ink-3); }
 .tab.plain { background: var(--mark); color: #16233F; }
 button.tab:hover { transform: translateY(-1px); }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--ink-2); font-size: 13px; }
-.legend span { display: inline-flex; align-items: center; gap: 6px; }
-.legend .tab { width: 14px; height: 14px; border-radius: 3px; }
-.tally-note { color: var(--ink-3); font-size: 12.5px; margin: 8px 0 0; }
 
 .reasoning { margin: 0 0 16px; color: var(--ink-3); }
 .reasoning summary { cursor: pointer; }
@@ -529,9 +534,9 @@ a.paper-title:hover { text-decoration: underline; text-decoration-color: var(--m
 .badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 .badge { font-size: 12px; padding: 1px 7px; border-radius: 4px; background: var(--slate-soft); color: var(--ink-2); }
 .badge.oa { background: var(--spruce-soft); color: var(--spruce); }
-.badge.strong { background: var(--ink); color: var(--desk); }
+.badge.strong { background: var(--slate-soft); color: var(--ink); font-weight: 700; }
 .badge.link { background: var(--mark-soft); color: var(--ink); }
-.badge.link.strong { background: var(--ink); color: var(--desk); }
+.badge.link.strong { background: var(--mark-soft); color: var(--ink); font-weight: 700; }
 .finding { font: 14.5px/1.5 var(--serif); margin: 9px 0 0; color: var(--ink); }
 .finding .stance { font: 600 12px var(--sans); margin-right: 6px; }
 .stance.supports { color: var(--spruce); } .stance.against { color: var(--brick); }
@@ -636,7 +641,7 @@ a.paper-title:hover { text-decoration: underline; text-decoration-color: var(--m
   .history-acts { visibility: visible; }
 }
 @media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 
 /* ---------- a slider: papers per answer ---------- */
@@ -736,7 +741,8 @@ a.paper-title:hover { text-decoration: underline; text-decoration-color: var(--m
   @keyframes pop-in { from { opacity: 0; transform: scale(.88); } }
 
   /* ---- the answer while it streams: each new stretch of text fades in (the delay is set by Motion.stream) */
-  .tok-in { animation: tok-in .52s var(--ease) both; }
+  /* no forwards fill: a stretch that has finished fading holds no animation (a streamed answer keeps its blocks) */
+  .tok-in { animation: tok-in .52s var(--ease) backwards; }
   @keyframes tok-in { from { opacity: 0; } }
 
   /* ---- a word that changes: the old letters leave one after another, the new ones come in (Flow's RollWord) */
@@ -747,6 +753,9 @@ a.paper-title:hover { text-decoration: underline; text-decoration-color: var(--m
   .rw-out { opacity: 0; animation: rwOut .15s ease-in backwards; }
   @keyframes rwIn { from { opacity: 0; transform: translateY(var(--ry)); } }
   @keyframes rwOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(calc(var(--ry) * -1)); } }
+
+  /* ---- progress while answering: the dots after the step under way (a redrawn line carries on their rhythm) */
+  .runline .live::after { animation: dots 1.4s steps(4, end) infinite; animation-delay: calc(var(--dots-age, 0) * -1ms); }
 
   /* ---- progress while answering: each step fills in, and the line to it draws across */
   .steps li + li { position: relative; }
@@ -800,5 +809,14 @@ a.paper-title:hover { text-decoration: underline; text-decoration-color: var(--m
       transition: block-size .38s var(--ease-soft), opacity .3s ease, content-visibility .38s allow-discrete;
     }
     :is(.fsec, .searched, .reasoning)[open]::details-content { block-size: auto; opacity: 1; }
+    /* A Filters section holds a drop-down (journal impact) whose menu reaches past the section's edge. The section
+       clips only while it folds: it stops clipping once it has finished opening, and clips again as it starts to close. */
+    .fsec::details-content {
+      transition: block-size .38s var(--ease-soft), opacity .3s ease, content-visibility .38s allow-discrete, overflow 0s allow-discrete;
+    }
+    .fsec[open]::details-content {
+      overflow: visible;
+      transition: block-size .38s var(--ease-soft), opacity .3s ease, content-visibility .38s allow-discrete, overflow 0s .38s allow-discrete;
+    }
   }
 }

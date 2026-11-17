@@ -80,7 +80,7 @@ async function runRewrite({ text, config, signal, emit = () => {}, engine, selec
     if (check.ok) break;
     feedback = `Your previous rewrite changed facts. ${check.missing.length ? `It dropped: ${check.missing.join(', ')}. ` : ''}${check.added.length ? `It added, which is not allowed: ${check.added.join(', ')}. ` : ''}Rewrite again and keep every number, name and acronym exactly as in the passage.\n\n`;
   }
-  emit('step', { id: 'rewrite', state: 'done', detail: last.check.ok ? 'every number, name and citation kept' : 'some facts changed: see the check' });
+  emit('step', { id: 'rewrite', state: 'done', detail: last.check.ok ? 'every number, name, acronym, quotation and citation kept' : 'some facts changed: see the check' });
   return last;
 }
 module.exports = { runRewrite, protect, facts, preservation, MAX_CHARS };

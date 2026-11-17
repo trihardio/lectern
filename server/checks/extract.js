@@ -6,6 +6,12 @@
 const zlib = require('zlib');
 
 const MAX_BYTES = 12 * 1024 * 1024;
+// Unpacked data allowed from one document, all parts together. A real thesis is a few megabytes of XML or
+// content streams; a "bomb" (a small file that unpacks to gigabytes) stops here instead of filling the memory.
+const ZIP_BUDGET = 64 * 1024 * 1024;
+const PDF_BUDGET = 128 * 1024 * 1024;
+const PDF_STREAM_MAX = 48 * 1024 * 1024;
+const TYPES = 'Use a PDF, Word (.docx), OpenDocument (.odt), rich text (.rtf), web page (.html), Markdown (.md) or plain text (.txt) file, or paste the text.';
 
 class ExtractError extends Error { constructor(msg) { super(msg); this.status = 422; } }
 
@@ -19,17 +25,18 @@ function extractText({ name = '', data }) {
   let kind;
   if (head.startsWith('%PDF')) { text = pdfText(data); kind = 'PDF'; }
   else if (head.startsWith('PK\u0003\u0004')) {
-    const files = unzip(data);
-    if (files['word/document.xml']) { text = docxText(files); kind = 'Word document'; }
+    const { names, files } = unzip(data);
+    if (files['word/document.xml']) { text = docxText(files['word/document.xml'].toString('utf8')); kind = 'Word document'; }
     else if (files['content.xml']) { text = odtText(files['content.xml'].toString('utf8')); kind = 'OpenDocument text'; }
-    else if (files['ppt/presentation.xml']) throw new ExtractError('Slides are not supported. Save the text as a Word document or PDF.');
-    else throw new ExtractError('This zip file is not a Word or OpenDocument file.');
+    else if (names.has('word/document.xml') || names.has('content.xml')) throw new ExtractError('The text of this document could not be unpacked; the file looks damaged. Save it again from your word processor, or paste the text.');
+    else if (names.has('ppt/presentation.xml')) throw new ExtractError(`Slides (.pptx) are not supported. ${TYPES}`);
+    else throw new ExtractError(`This zip file is not a Word (.docx) or OpenDocument (.odt) document. ${TYPES}`);
   } else if (head.startsWith('{\\rtf')) { text = rtfText(data.toString('latin1')); kind = 'Rich text'; }
   else if (data.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))) {
     throw new ExtractError('Old Word files (.doc) are not supported. Save it as .docx or PDF, or paste the text.');
   } else {
     const s = decodeText(data);
-    if (/[\u0000-\u0008\u000e-\u001f]/.test(s.slice(0, 4000))) throw new ExtractError('This file type is not supported. Use a PDF, Word (.docx), OpenDocument (.odt), text or web page file.');
+    if (/[\u0000-\u0008\u000e-\u001f]/.test(s.slice(0, 4000))) throw new ExtractError(`This file type is not supported. ${TYPES}`);
     if (ext === 'html' || ext === 'htm' || /^\s*<(!doctype html|html)/i.test(s)) { text = htmlText(s); kind = 'Web page'; }
     else { text = s; kind = ext === 'md' ? 'Markdown' : 'Text'; }
   }
@@ -52,16 +59,24 @@ function decodeText(buf) {
 
 // ------------------------------------------------------------------ zip (.docx, .odt)
 
-/** Read a zip archive's files into { name: Buffer }. Only "stored" and "deflate" entries are supported. */
-function unzip(buf) {
+/**
+ * Read a zip archive (.docx, .odt): { names: every part's name, files: { name: Buffer } for the `wanted` parts only }.
+ * Only "stored" and "deflate" parts are supported. Only the wanted parts are unpacked, each once, within one total
+ * budget, so neither a part that unpacks to gigabytes nor many directory entries pointing at one compressed body
+ * can fill the memory.
+ */
+function unzip(buf, wanted = ['word/document.xml', 'content.xml']) {
   let eocd = -1;
   for (let i = buf.length - 22; i >= Math.max(0, buf.length - 66000); i--) {
     if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
   }
-  if (eocd === -1) throw new ExtractError('The file looks damaged (zip directory not found).');
+  if (eocd === -1) throw new ExtractError('This file could not be opened: it looks damaged or incomplete. Save it again from your word processor, or paste the text.');
   const count = buf.readUInt16LE(eocd + 10);
   let p = buf.readUInt32LE(eocd + 16);
+  const names = new Set();
   const files = {};
+  let left = ZIP_BUDGET;
+  const tooBig = () => new ExtractError('This document unpacks to more text than Lectern can read at once (over 64 MB). Split it into smaller files, or paste the text.');
   for (let n = 0; n < count && p + 46 <= buf.length; n++) {
     if (buf.readUInt32LE(p) !== 0x02014b50) break;
     const method = buf.readUInt16LE(p + 10);
@@ -72,21 +87,28 @@ function unzip(buf) {
     const local = buf.readUInt32LE(p + 42);
     const name = buf.subarray(p + 46, p + 46 + nameLen).toString('utf8');
     p += 46 + nameLen + extraLen + commentLen;
-    if (!/\.xml$|\.rels$/.test(name)) continue;
+    names.add(name);
+    if (!wanted.includes(name) || files[name]) continue;
     if (local + 30 > buf.length || buf.readUInt32LE(local) !== 0x04034b50) continue;
     const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
     const raw = buf.subarray(start, start + compSize);
-    try {
-      if (method === 0) files[name] = raw;
-      else if (method === 8) files[name] = zlib.inflateRawSync(raw, { maxOutputLength: 64 * 1024 * 1024 });
-    } catch { /* one unreadable part is skipped */ }
+    if (method === 0) {
+      if (raw.length > left) throw tooBig();
+      files[name] = raw;
+    } else if (method === 8) {
+      try { files[name] = zlib.inflateRawSync(raw, { maxOutputLength: Math.max(1, left) }); } catch (e) {
+        if (e.code === 'ERR_BUFFER_TOO_LARGE') throw tooBig();
+        continue; // a damaged part is reported by the caller
+      }
+    } else continue;
+    left -= files[name].length;
   }
-  return files;
+  return { names, files };
 }
 
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '–', mdash: '—', lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', hellip: '…', copy: '©', reg: '®', deg: '°', middot: '·', bull: '•', eacute: 'é', egrave: 'è', aacute: 'á', uuml: 'ü', ouml: 'ö', auml: 'ä', szlig: 'ß', ccedil: 'ç', ntilde: 'ñ', times: '×', minus: '−', shy: '' };
 function decodeEntities(s) {
-  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+  return s.replace(/&(#x[0-9a-f]{1,8}|#\d{1,9}|[a-z]{1,32});/gi, (m, e) => {
     if (e[0] === '#') {
       const code = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
       try { return String.fromCodePoint(code); } catch { return ''; }
@@ -95,52 +117,155 @@ function decodeEntities(s) {
   });
 }
 
-function docxText(files) {
-  const parts = ['word/document.xml'];
+/**
+ * Paragraph text of word/document.xml, read in one pass over its tags (a missing closing tag cannot make it slow).
+ * Deleted tracked changes and field codes are not part of the text.
+ */
+function docxText(xml) {
   const out = [];
-  for (const part of parts) {
-    const xml = files[part].toString('utf8');
-    const body = xml.replace(/<w:del\b[\s\S]*?<\/w:del>/g, '') // deleted tracked changes are not part of the text
-      .replace(/<w:instrText[\s\S]*?<\/w:instrText>/g, '');
-    for (const p of body.match(/<w:p[ >][\s\S]*?<\/w:p>|<w:p\/>/g) || []) {
-      let line = '';
-      for (const t of p.match(/<w:t(?:\s[^>]*)?>[\s\S]*?<\/w:t>|<w:tab\/>|<w:br\/>|<w:cr\/>/g) || []) {
-        if (t === '<w:tab/>') line += '\t';
-        else if (t === '<w:br/>' || t === '<w:cr/>') line += '\n';
-        else line += decodeEntities(t.replace(/<[^>]+>/g, ''));
-      }
-      out.push(line);
+  const outer = []; // a paragraph inside a paragraph (a text box) is read on its own
+  let line = null;  // the paragraph being read; null between paragraphs
+  let inText = false;
+  let skip = 0;     // depth inside <w:del> and <w:instrText>
+  const re = /<(\/?)([A-Za-z_][\w:.-]*)[^<>]*?(\/?)>|([^<]+)/g;
+  let m;
+  while ((m = re.exec(xml))) {
+    if (m[4] !== undefined) { if (inText && !skip && line !== null) line += decodeEntities(m[4]); continue; }
+    const close = !!m[1];
+    const name = m[2];
+    const self = !!m[3];
+    if (name === 'w:p') {
+      if (self) out.push('');
+      else if (!close) { if (line !== null) outer.push(line); line = ''; }
+      else if (line !== null) { out.push(line); line = outer.length ? outer.pop() : null; }
+    } else if (name === 'w:t') inText = !close && !self;
+    else if (name === 'w:del' || name === 'w:instrText') { if (!self) skip = close ? Math.max(0, skip - 1) : skip + 1; }
+    else if (!skip && line !== null && self) {
+      if (name === 'w:tab' && /^<w:tab\s*\/>$/.test(m[0])) line += '\t'; // a tab; <w:tab w:pos=…/> is a tab stop setting
+      else if (name === 'w:br' || name === 'w:cr') line += '\n';
     }
   }
+  if (line !== null) out.push(line);
   return out.join('\n\n');
 }
 
 function odtText(xml) {
   return decodeEntities(xml
     .replace(/<text:tab\/>/g, '\t').replace(/<text:line-break\/>/g, '\n')
-    .replace(/<text:s(?: text:c="(\d+)")?\/>/g, (m, c) => ' '.repeat(+c || 1))
+    .replace(/<text:s(?: text:c="(\d+)")?\/>/g, (m, c) => ' '.repeat(Math.min(+c || 1, 200)))
     .replace(/<\/text:(p|h)>/g, '\n\n')
-    .replace(/<[^>]+>/g, ''));
+    .replace(/<[^<>]+>/g, ''));
 }
 
+// Groups whose words are settings, not text (fonts, colours, styles, document details, pictures, headers).
+const RTF_SKIP = new Set(['fonttbl', 'colortbl', 'stylesheet', 'info', 'pict', 'object', 'header', 'headerl', 'headerr', 'headerf',
+  'footer', 'footerl', 'footerr', 'footerf', 'listtable', 'listoverridetable', 'revtbl', 'rsidtbl', 'generator', 'xmlnstbl',
+  'themedata', 'colorschememapping', 'latentstyles', 'datastore', 'filetbl', 'expandedcolortbl', 'fldinst']);
+const RTF_CHARS = { par: '\n', line: '\n', sect: '\n\n', page: '\n\n', row: '\n', cell: '\t', tab: '\t', emdash: '—', endash: '–',
+  lquote: '‘', rquote: '’', ldblquote: '“', rdblquote: '”', bullet: '•', emspace: ' ', enspace: ' ', qmspace: ' ' };
+
+/**
+ * Plain text of an RTF file, read character by character. Font, colour and style tables and other settings
+ * groups are skipped, \'hh bytes are read in the file's code page, and after a \uN character the N fallback
+ * characters that follow it (\ucN, 1 by default) are skipped.
+ */
 function rtfText(s) {
-  return s.replace(/\{\\\*[^{}]*\}/g, '').replace(/\\par[d]?\b/g, '\n').replace(/\\'([0-9a-f]{2})/gi, (m, h) => Buffer.from([parseInt(h, 16)]).toString('latin1'))
-    .replace(/\\u(-?\d+)\??/g, (m, n) => String.fromCharCode(n < 0 ? 65536 + +n : +n))
-    .replace(/\\[a-z]+-?\d* ?/gi, '').replace(/[{}]/g, '');
+  let page = 1252;
+  const cp = /\\ansicpg(\d{3,5})/.exec(s.slice(0, 2000));
+  if (cp) page = Number(cp[1]);
+  let decoder = null;
+  if (page !== 1252) { try { decoder = new TextDecoder(`windows-${page}`); } catch { decoder = null; } }
+  const byte = (b) => (decoder ? decoder.decode(Uint8Array.of(b)) : (b >= 0x80 && b <= 0x9f ? WIN[b] || '' : String.fromCharCode(b)));
+  let out = '';
+  const stack = [];
+  let skip = false;
+  let uc = 1;        // fallback characters after each \uN
+  let fallback = 0;  // fallback characters still to skip
+  const emit = (t) => { if (fallback > 0) { fallback--; return; } if (!skip) out += t; };
+  const word = /\\([a-zA-Z]{1,32})(-?\d{1,10})? ?/y;
+  for (let i = 0; i < s.length;) {
+    const c = s[i];
+    if (c === '{') { stack.push([skip, uc]); fallback = 0; i++; continue; }
+    if (c === '}') { const top = stack.pop(); if (top) [skip, uc] = top; fallback = 0; i++; continue; }
+    if (c === '\r' || c === '\n') { i++; continue; } // line breaks in the file are not text
+    if (c !== '\\') { emit(c); i++; continue; }
+    const n = s[i + 1];
+    if (n === '\\' || n === '{' || n === '}') { emit(n); i += 2; continue; }
+    if (n === "'") { const h = s.substr(i + 2, 2); if (/^[0-9a-fA-F]{2}$/.test(h)) emit(byte(parseInt(h, 16))); i += 4; continue; }
+    if (n === '*') { skip = true; i += 2; continue; } // an optional destination this reader does not know
+    if (n === '~') { emit(' '); i += 2; continue; }
+    if (n === '_') { emit('-'); i += 2; continue; }
+    if (n === '-') { i += 2; continue; } // optional hyphen
+    if (n === '\n' || n === '\r') { emit('\n'); i += 2; continue; } // "\" + line break = \par
+    word.lastIndex = i;
+    const m = word.exec(s);
+    if (!m) { i += 2; continue; }
+    i = word.lastIndex;
+    const w = m[1];
+    const arg = m[2] === undefined ? null : Number(m[2]);
+    if (RTF_SKIP.has(w)) skip = true;
+    else if (w === 'u' && arg !== null) { emit(String.fromCharCode(arg < 0 ? arg + 65536 : arg)); fallback = uc; }
+    else if (w === 'uc' && arg !== null) uc = Math.max(0, Math.min(arg, 10));
+    else if (Object.prototype.hasOwnProperty.call(RTF_CHARS, w)) emit(RTF_CHARS[w]);
+  }
+  return out;
 }
 
-/** Readable text of a web page: no scripts, styles, menus or footers. */
+const DROPPED = 'script|style|noscript|svg|template|iframe|nav|header|footer|form|button|select';
+
+/**
+ * Find <name …>…</name> elements of the given names, first to last, in one pass. An element without a closing tag is
+ * left alone (once a closing tag is known to be missing it is not looked for again), so unclosed tags cannot make this
+ * slow. Calls visit(start, end) for each element found; visit returns false to stop.
+ */
+function eachElement(s, names, visit) {
+  const open = new RegExp(`<(${names})\\b`, 'gi');
+  const closers = new Map();
+  let m;
+  while ((m = open.exec(s))) {
+    const name = m[1].toLowerCase();
+    let close = closers.get(name);
+    if (close === null) continue;
+    if (!close) { close = new RegExp(`</${name}\\s*>`, 'gi'); closers.set(name, close); }
+    close.lastIndex = open.lastIndex;
+    const end = close.exec(s);
+    if (!end) { closers.set(name, null); continue; }
+    if (visit(m.index, close.lastIndex) === false) return;
+    open.lastIndex = close.lastIndex;
+  }
+}
+
+function dropElements(s, names, once = false) {
+  let out = '';
+  let at = 0;
+  eachElement(s, names, (start, end) => { out += `${s.slice(at, start)} `; at = end; return !once; });
+  return out + s.slice(at);
+}
+
+/** Comments out; an unclosed comment hides the rest of the page, as it does in a browser. */
+function dropComments(s) {
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const i = s.indexOf('<!--', at);
+    if (i === -1) return out + s.slice(at);
+    out += `${s.slice(at, i)} `;
+    const j = s.indexOf('-->', i + 4);
+    if (j === -1) return out;
+    at = j + 3;
+  }
+}
+
+/** Readable text of a web page: no scripts, styles, menus or footers. Every step is linear in the page's length. */
 function htmlText(html) {
-  let s = String(html)
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<head\b[\s\S]*?<\/head\s*>/i, ' ')
-    .replace(/<(script|style|noscript|svg|template|iframe|nav|header|footer|form|button|select)\b[\s\S]*?<\/\1\s*>/gi, ' ');
-  const main = s.match(/<(article|main)\b[\s\S]*?<\/\1\s*>/i);
-  if (main && main[0].length > 1500) s = main[0];
-  s = s.replace(/<(br|hr)\b[^>]*>/gi, '\n')
+  let s = dropElements(dropElements(dropComments(String(html)), 'head', true), DROPPED);
+  let main = null;
+  eachElement(s, 'article|main', (start, end) => { main = s.slice(start, end); return false; });
+  if (main && main.length > 1500) s = main;
+  s = s.replace(/<(br|hr)\b[^<>]*>/gi, '\n')
     .replace(/<\/(p|div|section|article|li|h[1-6]|tr|blockquote|pre|figcaption|dd|dt)>/gi, '\n\n')
-    .replace(/<li\b[^>]*>/gi, '\n- ')
-    .replace(/<[^>]+>/g, ' ');
+    .replace(/<li\b[^<>]*>/gi, '\n- ')
+    .replace(/<[^<>]+>/g, ' ');
   return decodeEntities(s).replace(/[ \t\f\v]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -156,15 +281,34 @@ function pdfText(buf) {
   if (/\/Encrypt\s+\d+\s+\d+\s+R/.test(raw.slice(-4096)) || /trailer[\s\S]{0,400}\/Encrypt\b/.test(raw)) {
     throw new ExtractError('This PDF is password-protected or encrypted. Save an unprotected copy, or paste the text.');
   }
-  const objs = pdfObjects(buf, raw);
-  const doc = new PdfDoc(objs);
+  const budget = { left: PDF_BUDGET }; // unpacked bytes still allowed for this file
+  const objs = pdfObjects(buf, raw, budget);
+  const doc = new PdfDoc(objs, budget);
   const pages = doc.pages();
   if (!pages.length) throw new ExtractError('No pages were found in this PDF.');
   const out = [];
   for (const page of pages.slice(0, 400)) {
-    try { out.push(doc.pageText(page)); } catch { out.push(''); }
+    try { out.push(doc.pageText(page)); } catch (e) {
+      if (e instanceof ExtractError) throw e; // too large: say so rather than return part of the text
+      out.push('');
+    }
   }
   return tidyPdf(out.join('\n\n'));
+}
+
+/**
+ * indexOf for searches that move forward through one string: it remembers where the next match is, so many
+ * searches (one per PDF object) stay linear even when the word is far away or missing.
+ */
+function forwardFinder(s, word) {
+  let from0 = Infinity;
+  let at = -1;
+  return (from) => {
+    if (from >= from0 && (at === -1 || at >= from)) return at;
+    from0 = from;
+    at = s.indexOf(word, from);
+    return at;
+  };
 }
 
 function tidyPdf(s) {
@@ -179,15 +323,18 @@ function tidyPdf(s) {
 }
 
 /** All objects: number -> { dict: string, stream: Buffer|null }. Later definitions win (incremental saves). */
-function pdfObjects(buf, raw) {
+function pdfObjects(buf, raw, budget) {
   const objs = new Map();
   const re = /(\d+)\s+(\d+)\s+obj\b/g;
+  const nextStream = forwardFinder(raw, 'stream');
+  const nextEndobj = forwardFinder(raw, 'endobj');
+  const nextEndstream = forwardFinder(raw, 'endstream');
   let m;
   while ((m = re.exec(raw))) {
     const num = +m[1];
     const start = m.index + m[0].length;
-    const streamAt = raw.indexOf('stream', start);
-    const endObj = raw.indexOf('endobj', start);
+    const streamAt = nextStream(start);
+    const endObj = nextEndobj(start);
     if (endObj === -1) break;
     let dict = raw.slice(start, endObj);
     let stream = null;
@@ -199,11 +346,11 @@ function pdfObjects(buf, raw) {
       const lenM = dict.match(/\/Length\s+(\d+)(?!\s+\d+\s+R)/);
       let dataEnd = lenM ? dataStart + +lenM[1] : -1;
       if (dataEnd === -1 || raw.slice(dataEnd, dataEnd + 20).indexOf('endstream') === -1) {
-        dataEnd = raw.indexOf('endstream', dataStart);
+        dataEnd = nextEndstream(dataStart);
         if (dataEnd === -1) dataEnd = endObj;
       }
       stream = buf.subarray(dataStart, dataEnd);
-      const after = raw.indexOf('endobj', dataEnd);
+      const after = nextEndobj(dataEnd);
       re.lastIndex = after === -1 ? dataEnd : after;
     } else {
       re.lastIndex = endObj;
@@ -213,12 +360,12 @@ function pdfObjects(buf, raw) {
   // Objects packed inside object streams.
   for (const [, o] of [...objs]) {
     if (!o.stream || !/\/Type\s*\/ObjStm/.test(o.dict)) continue;
-    const data = decodeStream(o);
+    const data = decodeStream(o, budget);
     if (!data) continue;
     const s = data.toString('latin1');
-    const n = +(o.dict.match(/\/N\s+(\d+)/) || [])[1] || 0;
     const first = +(o.dict.match(/\/First\s+(\d+)/) || [])[1] || 0;
     const nums = s.slice(0, first).trim().split(/\s+/).map(Number);
+    const n = Math.min(+(o.dict.match(/\/N\s+(\d+)/) || [])[1] || 0, Math.floor(nums.length / 2));
     for (let k = 0; k < n; k++) {
       const num = nums[2 * k];
       const off = first + nums[2 * k + 1];
@@ -229,16 +376,27 @@ function pdfObjects(buf, raw) {
   return objs;
 }
 
-function decodeStream(o) {
+/**
+ * A stream's data with its filters undone. Unpacking draws on the file's budget (and at most PDF_STREAM_MAX per
+ * stream), so a small PDF that unpacks to gigabytes is refused instead of filling the memory.
+ */
+function decodeStream(o, budget = { left: PDF_BUDGET }) {
   if (!o.stream) return null;
   const filter = (o.dict.match(/\/Filter\s*(\[[^\]]*\]|\/\w+)/) || [, ''])[1];
   const filters = filter.match(/\/\w+/g) || [];
   let data = o.stream;
   for (const f of filters) {
     if (f === '/FlateDecode' || f === '/Fl') {
-      try { data = zlib.inflateSync(data); } catch {
-        try { data = zlib.inflateSync(data, { finishFlush: zlib.constants.Z_SYNC_FLUSH }); } catch { return null; }
+      const limit = { maxOutputLength: Math.max(1, Math.min(PDF_STREAM_MAX, budget.left)) };
+      const tooBig = (e) => e && e.code === 'ERR_BUFFER_TOO_LARGE';
+      try { data = zlib.inflateSync(data, limit); } catch (e) {
+        if (tooBig(e)) throw new ExtractError('This PDF unpacks to more than Lectern can read at once. Save the pages you need as a smaller PDF, or paste the text.');
+        try { data = zlib.inflateSync(data, { ...limit, finishFlush: zlib.constants.Z_SYNC_FLUSH }); } catch (e2) {
+          if (tooBig(e2)) throw new ExtractError('This PDF unpacks to more than Lectern can read at once. Save the pages you need as a smaller PDF, or paste the text.');
+          return null;
+        }
       }
+      budget.left -= data.length;
       const pred = +(o.dict.match(/\/Predictor\s+(\d+)/) || [])[1] || 1;
       if (pred >= 10) data = unpredict(data, +(o.dict.match(/\/Columns\s+(\d+)/) || [])[1] || 1);
     } else if (f === '/ASCIIHexDecode' || f === '/AHx') {
@@ -305,7 +463,7 @@ const WIN = { 128: '€', 130: '‚', 131: 'ƒ', 132: '„', 133: '…', 134: '�
 const GLYPHS = { space: ' ', quoteright: '’', quoteleft: '‘', quotedblleft: '“', quotedblright: '”', quotesingle: "'", endash: '–', emdash: '—', hyphen: '-', minus: '−', bullet: '•', fi: 'fi', fl: 'fl', ff: 'ff', ffi: 'ffi', ffl: 'ffl', ellipsis: '…', period: '.', comma: ',', colon: ':', semicolon: ';', exclam: '!', question: '?', parenleft: '(', parenright: ')', bracketleft: '[', bracketright: ']', slash: '/', percent: '%', ampersand: '&', zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', dollar: '$', numbersign: '#', at: '@', plus: '+', equal: '=', less: '<', greater: '>', asterisk: '*', underscore: '_', degree: '°', dieresis: '¨', acute: '´', grave: '`', copyright: '©', registered: '®', section: '§', paragraph: '¶', dagger: '†' };
 
 class PdfDoc {
-  constructor(objs) { this.objs = objs; this.fonts = new Map(); }
+  constructor(objs, budget = { left: PDF_BUDGET }) { this.objs = objs; this.fonts = new Map(); this.budget = budget; }
   get(v) {
     if (v == null) return null;
     const m = String(v).match(/^(\d+)\s+\d+\s+R/);
@@ -335,7 +493,7 @@ class PdfDoc {
     const contents = dictValue(node.dict, 'Contents');
     if (!contents) return '';
     const refs = contents.startsWith('[') ? contents.match(/\d+\s+\d+\s+R/g) || [] : [contents];
-    const data = Buffer.concat(refs.map((r) => decodeStream(this.get(r) || {}) || Buffer.alloc(0)).map((b) => Buffer.concat([b, Buffer.from('\n')])));
+    const data = Buffer.concat(refs.map((r) => decodeStream(this.get(r) || {}, this.budget) || Buffer.alloc(0)).map((b) => Buffer.concat([b, Buffer.from('\n')])));
     return this.runContent(data.toString('latin1'), this.resolveDict(res), 0);
   }
   font(resDict, name) {
@@ -348,7 +506,7 @@ class PdfDoc {
     const font = { bytes: 1, map: null, enc: {} };
     const tu = dictValue(fd, 'ToUnicode');
     if (tu && /^\d/.test(tu)) {
-      const data = decodeStream(this.get(tu) || {});
+      const data = decodeStream(this.get(tu) || {}, this.budget);
       if (data) Object.assign(font, parseCMap(data.toString('latin1')));
     }
     if (/\/Subtype\s*\/Type0/.test(fd) || /Identity-H|Identity-V/.test(fd)) font.bytes = 2;
@@ -378,10 +536,11 @@ class PdfDoc {
       dflt = +(dictValue(cf, 'DW') || 1000);
       const w = arr(dictValue(cf, 'W'));
       const toks = w.replace(/^\[|\]$/g, '').match(/\[[^\]]*\]|[\d.]+/g) || [];
-      for (let k = 0; k < toks.length;) {
+      let left = 200000; // widths set for one font: enough for any real font, and a bound for a hostile one
+      for (let k = 0; k < toks.length && left > 0;) {
         const c = +toks[k];
-        if (toks[k + 1] && toks[k + 1][0] === '[') { (toks[k + 1].match(/[\d.]+/g) || []).forEach((x, j) => map.set(c + j, +x)); k += 2; }
-        else { const c2 = +toks[k + 1]; const x = +toks[k + 2]; for (let q = c; q <= c2 && q - c < 65536; q++) map.set(q, x); k += 3; }
+        if (toks[k + 1] && toks[k + 1][0] === '[') { (toks[k + 1].match(/[\d.]+/g) || []).forEach((x, j) => { map.set(c + j, +x); left--; }); k += 2; }
+        else { const c2 = +toks[k + 1]; const x = +toks[k + 2]; for (let q = c; q <= c2 && q - c < 65536 && left > 0; q++, left--) map.set(q, x); k += 3; }
       }
     } else {
       const first = +(dictValue(fd, 'FirstChar') || 0);
@@ -409,6 +568,10 @@ class PdfDoc {
   runContent(src, resDict, depth) {
     const toks = tokenize(src);
     let out = '';
+    // Whether the text so far ends in white space. Kept here because reading the end of a long string that was
+    // built piece by piece makes V8 copy all of it, which on a long page would happen thousands of times.
+    let spaced = true;
+    const add = (t) => { if (t) { out += t; spaced = /\s$/.test(t); } };
     let font = { bytes: 1, map: null, enc: {}, widths: { get: () => 500 } };
     let fs = 10, tc = 0, tw = 0, leading = 0;
     let tm = [1, 0, 0, 1, 0, 0];
@@ -424,15 +587,15 @@ class PdfDoc {
         const h = scaleY();
         const dy = Math.abs(tm[5] - end.y);
         const dx = tm[4] - end.x;
-        if (dy > h * 0.6) out += dy > h * 1.9 ? '\n\n' : '\n';
-        else if (dx > h * 0.18 && !/\s$/.test(out)) out += ' ';
-        else if (dx < -h * 2 && !/\s$/.test(out)) out += ' ';
+        if (dy > h * 0.6) add(dy > h * 1.9 ? '\n\n' : '\n');
+        else if (dx > h * 0.18 && !spaced) add(' ');
+        else if (dx < -h * 2 && !spaced) add(' ');
       }
     };
     const show = (bytes) => {
       gap();
       const n = font.bytes === 2 || font.codeLen === 2 ? 2 : 1;
-      out += this.decodeString(bytes, font);
+      add(this.decodeString(bytes, font));
       for (let i = 0; i + n <= bytes.length; i += n) {
         const code = n === 2 ? (bytes[i] << 8) | bytes[i + 1] : bytes[i];
         advance((font.widths.get(code) / 1000) * fs + tc + (n === 1 && code === 32 ? tw : 0));
@@ -467,9 +630,9 @@ class PdfDoc {
         const xo = dictEntries((() => { const v = dictValue(resDict, 'XObject'); return v && /^\d/.test(v) ? this.resolveDict(v) : v; })());
         const obj = nm && nm.name && xo[nm.name] ? this.get(xo[nm.name]) : null;
         if (obj && /\/Subtype\s*\/Form/.test(obj.dict)) {
-          const data = decodeStream(obj);
+          const data = decodeStream(obj, this.budget);
           const r = dictValue(obj.dict, 'Resources');
-          if (data) { out += '\n'; out += this.runContent(data.toString('latin1'), r ? (/^\d/.test(r) ? this.resolveDict(r) : r) : resDict, depth + 1); out += '\n'; end = null; }
+          if (data) { add('\n'); add(this.runContent(data.toString('latin1'), r ? (/^\d/.test(r) ? this.resolveDict(r) : r) : resDict, depth + 1)); add('\n'); end = null; }
         }
       }
       stack.length = 0;
@@ -488,18 +651,32 @@ function hexToUnicode(h) {
   return s;
 }
 
+/** The text between each open and close keyword, found with indexOf (an unclosed block cannot make it slow). */
+function between(s, open, close) {
+  const out = [];
+  for (let at = 0; ;) {
+    const i = s.indexOf(open, at);
+    if (i === -1) return out;
+    const j = s.indexOf(close, i + open.length);
+    if (j === -1) return out;
+    out.push(s.slice(i + open.length, j));
+    at = j + close.length;
+  }
+}
+
 function parseCMap(s) {
   const map = new Map();
   let codeLen = 1;
   const cs = s.match(/begincodespacerange\s*<([0-9a-f]+)>/i);
   if (cs) codeLen = cs[1].length > 2 ? 2 : 1;
-  for (const block of s.match(/beginbfchar([\s\S]*?)endbfchar/g) || []) {
+  for (const block of between(s, 'beginbfchar', 'endbfchar')) {
     for (const m of block.matchAll(/<([0-9a-f]+)>\s*<([0-9a-f]*)>/gi)) {
       if (m[1].length > 2) codeLen = 2;
       map.set(parseInt(m[1], 16), hexToUnicode(m[2]));
     }
   }
-  for (const block of s.match(/beginbfrange([\s\S]*?)endbfrange/g) || []) {
+  let left = 1000000; // codes mapped from ranges: a bound for a hostile map
+  for (const block of between(s, 'beginbfrange', 'endbfrange')) {
     for (const m of block.matchAll(/<([0-9a-f]+)>\s*<([0-9a-f]+)>\s*(<[0-9a-f]*>|\[[^\]]*\])/gi)) {
       const lo = parseInt(m[1], 16);
       const hi = Math.min(parseInt(m[2], 16), lo + 65535);
@@ -510,7 +687,7 @@ function parseCMap(s) {
       } else {
         const base = hexToUnicode(m[3].slice(1, -1));
         const last = base.charCodeAt(base.length - 1);
-        for (let c = lo; c <= hi; c++) map.set(c, base.slice(0, -1) + String.fromCharCode(last + (c - lo)));
+        for (let c = lo; c <= hi && left > 0; c++, left--) map.set(c, base.slice(0, -1) + String.fromCharCode(last + (c - lo)));
       }
     }
   }
@@ -569,8 +746,9 @@ function tokenize(src) {
     const word = src.slice(i, j);
     i = j;
     if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(word)) { push({ v: parseFloat(word) }); continue; }
-    if (word === 'BI') { // inline image: skip its binary data
-      const end = src.indexOf('EI', src.indexOf('ID', i));
+    if (word === 'BI') { // inline image: skip its binary data (always forward: a missing ID or EI ends the stream)
+      const id = src.indexOf('ID', i);
+      const end = id === -1 ? -1 : src.indexOf('EI', id + 2);
       i = end === -1 ? n : end + 2;
       continue;
     }

@@ -275,7 +275,9 @@ test('similarity check: papers and web pages are compared word by word; model UR
 test('server: extract, AI check and similarity check over the API', async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lectern-test-'));
   const app = createApp({ dataDir });
-  const base = await app.listen(0);
+  app.config.update({ bins: { claude: CLAUDE, codex: NO_BIN } });
+  const pageUrl = await app.listen(0); // the window's address, with the token
+  const base = pageUrl.slice(0, pageUrl.indexOf('?'));
   const post = (p, body) => mock.realFetch(base + p, { method: 'POST', headers: { 'x-lectern-token': app.token, 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const events = async (res) => (await res.text()).split('\n\n').filter((b) => b.startsWith('event:')).map((b) => { const [e, d] = b.split('\n'); return { event: e.slice(7), data: JSON.parse(d.slice(6)) }; });
   try {
@@ -297,7 +299,7 @@ test('server: extract, AI check and similarity check over the API', async () => 
     assert.ok(sim.some((e) => e.event === 'step' && e.data.id === 'web' && e.data.state === 'skipped'));
     const empty = await post('api/checks/ai', { text: '  ' });
     assert.equal(empty.status, 400);
-    const page = await (await mock.realFetch(base)).text();
+    const page = await (await mock.realFetch(pageUrl)).text();
     assert.ok(page.includes('/checks.js') && page.includes('/checks.css'));
   } finally { await app.close(); }
 });
@@ -307,7 +309,10 @@ test('PDF export: the desktop hook gets a safe file name; without it the window 
   const pdf = { save: async ({ name }) => { saved.push(name); return { ok: true, path: `/tmp/${name}` }; } };
   const run = async (opts) => {
     const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'lectern-test-')), ...opts });
-    const base = await app.listen(0);
+    // Pinned before the first request: GET api/state looks for the engines, which must never find the real tools.
+    app.config.update({ bins: { claude: NO_BIN, codex: NO_BIN } });
+    const pageUrl = await app.listen(0); // the window's address, with the token
+    const base = pageUrl.slice(0, pageUrl.indexOf('?'));
     const call = async (m, p, body) => (await mock.realFetch(base + p, { method: m, headers: { 'x-lectern-token': app.token, 'content-type': 'application/json' }, body: body && JSON.stringify(body) })).json();
     try { return { state: await call('GET', 'api/state'), out: await call('POST', 'api/checks/pdf', { name: '../../etc/essay: "draft"?.pdf' }) }; } finally { await app.close(); }
   };
@@ -388,4 +393,156 @@ test('quote and cite: exact matches are quoted, paraphrases cited, sources liste
   const second = await Sim.runSimilarityCheck({ text: fixed.text, config, store, lookup: PUBLIC_DNS, options: { web: false, quotes: true } });
   assert.ok(second.score < first.score, `after ${second.score} vs before ${first.score}`);
   assert.throws(() => quoteAndCite(text + ' changed', first), /changed since it was checked/);
+});
+
+// ---------------------------------------------------------------- 2026-11-17: hostile documents and pages, safe fetching
+const { htmlText, pdfText } = require('../server/checks/extract');
+
+/** A zip whose directory lists `names`, every entry pointing at one deflated body (the "shared body" zip bomb). */
+function sharedBodyZip(names, body) {
+  const comp = zlib.deflateRawSync(body, { level: 9 });
+  const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(8, 8); local.writeUInt32LE(comp.length, 18); local.writeUInt16LE(5, 26);
+  const head = Buffer.concat([local, Buffer.from('a.xml'), comp]);
+  const cens = names.flatMap((name) => {
+    const nb = Buffer.from(name);
+    const cen = Buffer.alloc(46); cen.writeUInt32LE(0x02014b50, 0); cen.writeUInt16LE(8, 10); cen.writeUInt32LE(comp.length, 20); cen.writeUInt16LE(nb.length, 28); cen.writeUInt32LE(0, 42);
+    return [cen, nb];
+  });
+  const cd = Buffer.concat(cens);
+  const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(names.length, 8); end.writeUInt16LE(names.length, 10); end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(head.length, 16);
+  return Buffer.concat([head, cd, end]);
+}
+
+/** A one-page PDF with `content` as its (deflated) content stream. */
+function pdfWith(content) {
+  const comp = zlib.deflateSync(content, { level: 9 });
+  return Buffer.concat([Buffer.from('%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources << >> >> endobj\n'
+    + `4 0 obj << /Length ${comp.length} /Filter /FlateDecode >> stream\n`), comp, Buffer.from('\nendstream endobj\ntrailer << /Root 1 0 R >>\n%%EOF')]);
+}
+
+const quick = (label, fn, ms) => { const t = Date.now(); const out = fn(); assert.ok(Date.now() - t < ms, `${label}: ${Date.now() - t} ms`); return out; };
+
+test('documents: zip and PDF bombs are refused within a fixed budget', () => {
+  // 3000 directory entries share one 1 MB body: only word/document.xml is unpacked, once.
+  const names = ['word/document.xml', ...Array.from({ length: 3000 }, (_, i) => `part${i}.xml`)];
+  const shared = sharedBodyZip(names, Buffer.from(`<w:body><w:p><w:t>${'x'.repeat(1024 * 1024)}</w:t></w:p></w:body>`));
+  const text = quick('shared-body zip', () => extractText({ name: 'bomb.docx', data: shared }).text, 3000);
+  assert.equal(text.length, 1024 * 1024);
+  // One part that unpacks past the 64 MB budget.
+  const big = sharedBodyZip(['word/document.xml'], Buffer.alloc(65 * 1024 * 1024, 0x20));
+  assert.throws(() => extractText({ name: 'big.docx', data: big }), /more text than Lectern can read at once/);
+  // A PDF content stream that unpacks past the per-stream limit.
+  const pdf = pdfWith(Buffer.concat([Buffer.from('BT (Some readable words here) Tj ET\n'), Buffer.alloc(49 * 1024 * 1024, 0x20)]));
+  assert.throws(() => extractText({ name: 'bomb.pdf', data: pdf }), /This PDF unpacks to more than Lectern can read at once/);
+});
+
+test('documents and web pages: unclosed tags and markers cannot make reading slow', () => {
+  const kb = 300 * 1024;
+  quick('unclosed comments', () => htmlText('<p>Words before.</p>' + '<!--x'.repeat(kb / 5)), 300);
+  assert.equal(htmlText('<p>Kept text.</p><!-- an unclosed comment hides the rest <p>hidden</p>'), 'Kept text.');
+  quick('unclosed scripts', () => htmlText('<p>text</p>' + '<script>'.repeat(kb / 8)), 300);
+  quick('tags with no end', () => htmlText('<p>text</p>' + '<a'.repeat(kb / 2)), 300);
+  quick('unclosed articles', () => htmlText('<p>text</p>' + '<article '.repeat(kb / 9)), 300);
+  quick('unclosed head', () => htmlText('<head>'.repeat(kb / 6) + '<p>text</p>'), 300);
+  assert.equal(htmlText('<html><head><title>T</title></head><body><nav>Menu</nav><article><p>Main part.</p></article><footer>F</footer></body></html>'), 'Main part.');
+  const docx = (xml) => makeZip({ 'word/document.xml': xml });
+  const t1 = quick('unclosed w:del', () => extractText({ name: 'a.docx', data: docx('<w:body><w:p><w:t>Words that stay in the text.</w:t></w:p>' + '<w:del '.repeat(kb / 7)) }).text, 500);
+  assert.equal(t1, 'Words that stay in the text.');
+  const t2 = quick('unclosed w:p', () => extractText({ name: 'a.docx', data: docx('<w:body><w:p><w:t>Words that stay in the text.</w:t></w:p>' + '<w:p '.repeat(kb / 5)) }).text, 500);
+  assert.equal(t2, 'Words that stay in the text.');
+  // Tab stops in paragraph settings are not tabs in the text; a real tab and a break are.
+  assert.equal(extractText({ name: 'a.docx', data: docx('<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="720"/></w:tabs></w:pPr><w:r><w:t>One</w:t><w:tab/><w:t>two</w:t><w:br/><w:t>three words here.</w:t></w:r></w:p>') }).text, 'One\ttwo\nthree words here.');
+});
+
+test('PDF: an inline image with no data marker ends the stream instead of looping forever', () => {
+  const text = quick('BI after EI', () => pdfText(pdfWith(Buffer.from('BT (Some readable words for the reader to find) Tj ET EI BI /W 1'))), 1000);
+  assert.match(text, /Some readable words for the reader to find/);
+});
+
+test('RTF: font, colour and style tables stay out of the text, and \\uN is read once', () => {
+  const B = '\\';
+  const rtf = `{${B}rtf1${B}ansi${B}ansicpg1252${B}cocoartf2761{${B}fonttbl${B}f0${B}fswiss${B}fcharset0 Helvetica;${B}f1${B}froman Times New Roman;}`
+    + `{${B}colortbl;${B}red255${B}green255${B}blue255;}{${B}*${B}expandedcolortbl;;}{${B}stylesheet{${B}s0 Normal;}}{${B}info{${B}title Draft}{${B}author Someone}}`
+    + `${B}paperw11900${B}pard${B}f0${B}fs24 The student${B}uc1${B}u8217${B}'92s essay argues that ${B}'93remote work${B}'94 raises output.${B}par Second paragraph${B}u8212 ?ends here.}`;
+  const { text, kind } = extractText({ name: 'essay.rtf', data: Buffer.from(rtf, 'latin1') });
+  assert.equal(kind, 'Rich text');
+  assert.equal(text, 'The student’s essay argues that “remote work” raises output.\nSecond paragraph—ends here.');
+});
+
+test('similarity: a site answering 204, 205, 304 or 999 cannot stop the app', async () => {
+  const http = require('http');
+  const srv = http.createServer((q, r) => { const code = Number(q.url.slice(1)); r.writeHead(code, { 'content-type': 'text/plain' }); r.end(code === 200 ? 'User-agent: *\nDisallow: /x\n' : undefined); });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  try {
+    const port = srv.address().port;
+    // The connection is pinned to a checked address; a local test server stands in for the site here.
+    const get = (code) => Sim.publicRequest(new URL(`http://lectern-test.example:${port}/${code}`), { headers: {}, signal: AbortSignal.timeout(3000) }, [{ address: '127.0.0.1', family: 4 }]);
+    for (const code of [204, 205, 304]) {
+      const res = await get(code);
+      assert.equal(res.status, code);
+      assert.equal(res.body, null, `${code} has no body`);
+    }
+    await assert.rejects(get(999), (e) => e.status === 999 && /answered 999/.test(e.message), 'LinkedIn-style 999 is an error, not a crash');
+    assert.equal(await (await get(200)).text(), 'User-agent: *\nDisallow: /x\n');
+  } finally { srv.close(); }
+});
+
+test('similarity: robots.txt rules match in linear time, with * and $', () => {
+  const m = Sim.robotsMatch;
+  assert.equal(m('/private', '/private/x'), true);
+  assert.equal(m('/private', '/public'), false);
+  assert.equal(m('/*.pdf$', '/files/a.pdf'), true);
+  assert.equal(m('/*.pdf$', '/files/a.pdf?x=1'), false);
+  assert.equal(m('/a*b*c', '/a-x-b-y-c-z'), true);
+  assert.equal(m('/a*b*c', '/a-x-c-y-b'), false);
+  assert.equal(m('/fish$', '/fish'), true);
+  assert.equal(m('/fish$', '/fish/'), false);
+  assert.equal(m('*', '/anything'), true);
+  assert.equal(m('/a$b', '/a$b/c'), true, 'a "$" inside the rule is a plain character');
+  const hostile = `/${'*a'.repeat(200)}*b`;
+  quick('hostile rule', () => { for (let i = 0; i < 200; i++) m(hostile, `/${'a'.repeat(5000)}`); }, 500);
+  const rules = Sim.parseRobots(`User-agent: *\nDisallow: /${'x'.repeat(600)}\nDisallow: /ok\n`);
+  assert.deepEqual(rules.map((r) => r.path), ['/ok'], 'an overlong rule is ignored');
+});
+
+test('similarity: IPv6 forms that carry a local IPv4 address, and local IPv6 ranges, are refused', () => {
+  for (const ip of ['fe80::1', 'febf::1', 'fec0::1', 'feff::1', '::1', '::', '::127.0.0.1', '::10.0.0.1', '::ffff:192.168.0.1', '::ffff:c0a8:1',
+    '::ffff:0:10.0.0.1', '64:ff9b::7f00:1', '64:ff9b::10.1.2.3', '64:ff9b:1::a00:1', '2002:7f00:1::', '2002:c0a8:101::1', 'ff02::1', 'fd12:3456::1', 'fe80::1%en0']) {
+    assert.equal(Sim.privateAddress(ip), true, ip);
+  }
+  for (const ip of ['2606:4700::1111', '::8.8.8.8', '64:ff9b::8.8.8.8', '2002:808:808::1', '2a00:1450:4009::200e', '93.184.216.34']) {
+    assert.equal(Sim.privateAddress(ip), false, ip);
+  }
+});
+
+test('similarity: the selected provider and model search the web, or the check says why it did not', async () => {
+  mock.reset();
+  const { config, store } = scratchConfig({ claude: CLAUDE, codex: NO_BIN });
+  const text = 'Remote work has become a defining feature of the modern workplace since the pandemic, and in a randomised trial at a Chinese travel agency the call-centre employees who worked from home were thirteen percent more productive than colleagues in the office.';
+  const notConnected = await Sim.runSimilarityCheck({ text, config, store, lookup: PUBLIC_DNS, engine: 'codex', options: { papers: false } });
+  assert.ok(notConnected.notes.some((n) => /selected model provider is not connected/.test(n)), notConnected.notes.join(' | '));
+  assert.equal(notConnected.searched.pages, 0, 'no other provider searched instead');
+
+  const log = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'lectern-sim-model-')), 'runs.jsonl');
+  process.env.FAKE_LOG = log;
+  try {
+    await Sim.runSimilarityCheck({ text, config, store, lookup: PUBLIC_DNS, engine: 'claude-code', selectedModel: 'claude-sonnet-5-5', options: { papers: false } });
+    const run = JSON.parse(fs.readFileSync(log, 'utf8').trim().split('\n').pop());
+    assert.equal(run.args[run.args.indexOf('--model') + 1], 'claude-sonnet-5-5', 'the chosen model searched');
+  } finally { delete process.env.FAKE_LOG; mock.reset(); }
+});
+
+test('quote and cite: a passage already in quotes, ending in punctuation, is not quoted twice', () => {
+  const src = [{ n: 1, kind: 'paper', title: 'Working from home', authors: ['Noor Rahman', 'Peter Aldous'], year: 2019 }];
+  for (const [text, close] of [
+    ['As one study put it, "remote workers completed thirteen percent more calls than office staff did." That was big.', '."'],
+    ['He wrote “remote workers completed thirteen percent more calls than office staff did,” and moved on.', ',”'],
+  ]) {
+    const span = { start: text.indexOf('remote'), end: text.indexOf(close) + 1, source: 1, type: 'exact' };
+    const out = quoteAndCite(text, { text, sources: src, spans: [span] });
+    assert.equal(out.quoted, 0);
+    assert.equal(out.cited, 1);
+    assert.ok(!/["“]["“]/.test(out.text), out.text);
+    assert.ok(out.text.includes(`${close} (Rahman & Aldous, 2019)`), out.text);
+  }
 });

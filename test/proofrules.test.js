@@ -67,7 +67,8 @@ test('API: POST /api/checks/proofread streams parts and a result from the fake m
   P._cache.clear();
   const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'lectern-proof-api-')) });
   app.config.update({ bins: { claude: path.join(__dirname, 'fakes', 'claude'), codex: '/nonexistent/codex' } });
-  const base = await app.listen(0);
+  const pageUrl = await app.listen(0); // the window's address, with the token
+  const base = pageUrl.slice(0, pageUrl.indexOf('?'));
   try {
     const text = 'She have finished her homeworks.\n\nWhen the samples arrived we stored them. The results was clear.';
     const response = await fetch(base + 'api/checks/proofread', { method: 'POST', headers: { 'x-lectern-token': app.token, 'content-type': 'application/json' }, body: JSON.stringify({ text, engine: 'claude-code', model: 'claude-opus-5-5', variant: 'uk' }) });
@@ -79,7 +80,7 @@ test('API: POST /api/checks/proofread streams parts and a result from the fake m
     assert.equal(r.variant, 'uk');
     assert.deepEqual(r.suggestions.map((s) => [text.slice(s.start, s.end), s.to]), [['have', 'has'], ['homeworks', 'homework'], ['arrived', 'arrived,'], ['was', 'were']]);
     assert.equal(P.applySuggestions(text, r.suggestions), 'She has finished her homework.\n\nWhen the samples arrived, we stored them. The results were clear.');
-    const page = await (await fetch(base, { headers: { 'x-lectern-token': app.token } })).text();
+    const page = await (await fetch(pageUrl)).text();
     for (const f of ['/proofread.js', '/proofrules.js', '/misspellings.js', '/proofread.css']) assert.ok(page.includes(f), f);
     for (const f of ['proofread.js', 'proofrules.js', 'misspellings.js', 'proofread.css']) assert.equal((await fetch(base + f)).status, 200, f);
   } finally {

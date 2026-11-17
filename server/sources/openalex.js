@@ -1,6 +1,6 @@
 'use strict';
-// OpenAlex: ~250M works across every discipline. Since February 2026 the API wants a
-// free key (openalex.org/settings/api); without one only a tiny daily test allowance works.
+// OpenAlex: ~250M works across every discipline. Queries work without a key on a small daily allowance;
+// a free key (openalex.org/settings/api) gives ten times more (help.openalex.org, checked 2026-11-17).
 
 const { fetchJson } = require('../util');
 const { makePaper } = require('./common');
@@ -94,7 +94,7 @@ async function request(url, opts = {}) {
       const hasKey = !!(opts.settings && opts.settings.keys && opts.settings.keys.openalex);
       e.message = hasKey
         ? 'OpenAlex refused the request. Check the key in Settings, or today\'s free allowance may be used up.'
-        : 'OpenAlex needs a free API key. Add one in Settings.';
+        : 'OpenAlex turned this search away: the daily allowance without a key is used up. A free API key in Settings gives ten times more.';
       e.needsKey = !hasKey;
     }
     throw e;

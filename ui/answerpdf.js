@@ -34,7 +34,7 @@
     ].filter(Boolean).join(' · ');
     const section = (title, ...kids) => h('section', { class: 'apdf-sec' }, h('h2', null, title), kids);
 
-    const figures = (turn.figures || []).filter((f) => f && f.img);
+    const figures = (turn.figures || []).filter((f) => f && /^https?:\/\//i.test(f.img || '')); // images only from web addresses
     const findings = papers.map((p) => {
       const r = insightFor(turn, p.n) || {};
       const facts = Object.entries(r.facts || {}).filter(([k]) => FACT_LABEL[k]);
@@ -62,13 +62,19 @@
       return h('li', null, h('span', { class: 'apdf-num' }, String(p.n)), h('div', { html: ref.html }));
     });
 
-    const abstracts = papers.map((p) => h('article', { class: 'apdf-abstract' },
-      h('p', { class: 'apdf-title' }, h('span', { class: 'apdf-num' }, String(p.n)), p.title || 'Untitled'),
-      h('p', { class: 'apdf-meta' }, [authorLine(p), p.venue, p.year].filter(Boolean).join(' · ')),
-      p.abstract ? h('p', { class: 'apdf-abstract-text' }, p.abstract)
-        : p.tldr ? h('p', { class: 'apdf-abstract-text' }, h('i', null, 'No abstract in the database. Short summary: '), p.tldr)
-          : h('p', { class: 'apdf-note' }, 'The databases have no abstract for this paper.'),
-      (p.doi || p.url) && h('p', { class: 'apdf-link' }, h('a', { href: p.doi ? Cite.doiUrl(p.doi) : p.url }, p.doi ? Cite.doiUrl(p.doi) : p.url))));
+    // One wording for a missing abstract, with or without the database's short summary after it.
+    const NO_ABSTRACT = 'The databases have no abstract for this paper.';
+    const webOnly = (u) => (/^https?:\/\//i.test(u || '') ? u : ''); // links only ever point at web addresses
+    const abstracts = papers.map((p) => {
+      const link = webOnly(Cite.doiUrl(p)); // the DOI link, else the record's own link; it takes the paper, not the DOI
+      return h('article', { class: 'apdf-abstract' },
+        h('p', { class: 'apdf-title' }, h('span', { class: 'apdf-num' }, String(p.n)), p.title || 'Untitled'),
+        h('p', { class: 'apdf-meta' }, [authorLine(p), p.venue, p.year].filter(Boolean).join(' · ')),
+        p.abstract ? h('p', { class: 'apdf-abstract-text' }, p.abstract)
+          : p.tldr ? h('p', { class: 'apdf-abstract-text' }, h('i', null, `${NO_ABSTRACT} Short summary: `), p.tldr)
+            : h('p', { class: 'apdf-note' }, NO_ABSTRACT),
+        link && h('p', { class: 'apdf-link' }, h('a', { href: link }, link)));
+    });
 
     const web = turn.webSources || [];
     return h('div', { class: 'apdf-print', 'aria-hidden': 'true' },
@@ -93,7 +99,7 @@
       section(`References (${Cite.STYLES[style] ? Cite.STYLES[style].label : style})`,
         h('ol', { class: 'apdf-refs' }, references)),
       web.length > 0 && section('Web pages used', h('ol', { class: 'apdf-refs' }, web.map((w, i) => h('li', null,
-        h('span', { class: 'apdf-num' }, `W${i + 1}`), h('div', null, w.title || '', ' ', w.url ? h('a', { href: w.url }, w.url) : ''))))),
+        h('span', { class: 'apdf-num' }, `W${i + 1}`), h('div', null, w.title || '', ' ', webOnly(w.url) ? h('a', { href: w.url }, w.url) : ''))))),
       section('Abstracts', h('p', { class: 'apdf-note' }, 'As published in the paper databases. Lectern reads abstracts, not full papers.'), abstracts),
       h('footer', { class: 'apdf-foot' }, 'Made with Lectern. Papers, abstracts and links come from the paper databases; the answer and findings are a model’s reading of the abstracts. Check what you cite.'));
   }

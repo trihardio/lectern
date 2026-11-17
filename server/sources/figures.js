@@ -11,18 +11,21 @@
 // label, caption, licence and links always come from the article record, never from a model.
 // Only biomedical and life-science open-access papers are covered: other papers have no figures.
 
-const { fetchJson, withTimeout, stripTags, clip, normDoi } = require('../util');
+const { fetchJson, withTimeout, stripTags, clip, normDoi, APP_UA } = require('../util');
 
 const BUCKET = 'https://pmc-oa-opendata.s3.amazonaws.com';
 const EPMC = 'https://www.ebi.ac.uk/europepmc/webservices/rest/search';
-const UA = { 'user-agent': 'Lectern/0.1 (local research app)' };
+const UA = { 'user-agent': APP_UA };
 
 /** Figures that rarely help a reader understand a finding: how studies were selected, and the like. */
 const LOW_VALUE = /\b(prisma|flow ?(chart|diagram)|study selection|search strategy|selection process|screening process|risk of bias|consort|graphical abstract|photograph|logo)\b/i;
 
 async function getText(url, { signal, timeout = 20000 } = {}) {
   const res = await fetch(url, { headers: UA, signal: withTimeout(signal, timeout) });
-  if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+  if (!res.ok) {
+    await res.body?.cancel().catch(() => {}); // release the connection instead of leaving the body unread
+    throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+  }
   return res.text();
 }
 

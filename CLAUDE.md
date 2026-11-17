@@ -6,12 +6,13 @@ abstracts, and writes an answer in which every citation links to a real paper.
 ## Commands
 
 - `npm start` — run the desktop app (Electron)
-- `npm run web` — run without Electron and use it in a browser (http://127.0.0.1:4319)
+- `npm run web` — run without Electron and use it in a browser: open the address it prints (it carries `?t=<token>`; the bare address only shows a note)
 - `npm test` — run the tests (offline; they use canned responses in `test/`)
 - `npm run make-app` — build `dist/…/Lectern.app`
 - `node -r ./test/mock-fetch.js server/start.js` — click through the UI offline with sample data
 - `node scripts/ui-check.js --steps <file> --mock` — look at the window in headless Chrome: measure elements, record state changes, take pictures (see `Lectern/Playbooks/Check the UI in a browser.md`)
 - `bash scripts/make-release.sh` — build the Mac DMG, the Windows zip and checksums (publishing needs the owner's OK)
+- `bash scripts/release.sh --notes <file>` — what the owner's word **"release"** runs: next patch version (0.2.0 → 0.2.1), build, check, commit, push, publish (steps: `.claude/skills/release/SKILL.md`)
 
 ## How it fits together
 
@@ -62,6 +63,7 @@ bench/, bench/grammar/  AI-writing benchmark, and the proofreader benchmark (CWE
   picture. Check dark mode, 390 px wide and Reduce motion. Say what was tested and what could not be (real
   microphone, real Windows PC, packaged app). `npm test` does not cover the window.
 - **Ask before anything public.** Commit, push and release only when asked; one approval does not carry over.
+  The owner's one-word message **"release"** is that ask for one patch release: follow `.claude/skills/release/SKILL.md`.
   Checklist: `Lectern/Playbooks/Release a version.md`.
 - **UI rules** (full list in `Lectern/Playbooks/Change the UI.md`): no near-black outlines (selected = soft green
   `--sel`); violet only for citations; words are sans, mono only for numbers, stamps and tiny caps; never a system

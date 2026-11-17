@@ -24,6 +24,8 @@
 
 .view.score.checks { max-width: 1240px; }
 .chk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* the hidden text box copyText() uses when the Clipboard API is missing: in view (so nothing scrolls), never seen */
+.chk-copy-buffer { position: fixed; top: 0; left: 0; width: 1px; height: 1px; margin: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; }
 
 /* ---------------------------------------------------------------- header and the two-tool switch */
 .chk-head { display: flex; align-items: center; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; margin-bottom: 18px; }
@@ -37,7 +39,9 @@
 }
 .chk-tool:hover { color: var(--ink); }
 .chk-tool[aria-checked="true"] { color: var(--ink); background: var(--slate-soft); border-color: var(--sel); }
-.chk-switch.slide-ready .chk-tool[aria-checked="true"] { background: transparent; border-color: transparent; }
+/* the sliding box (Motion.slide) draws the picked look; with Reduce motion the box is hidden (world.css), so the
+   button keeps its own look */
+@media (prefers-reduced-motion: no-preference) { .chk-switch.slide-ready .chk-tool[aria-checked="true"] { background: transparent; border-color: transparent; } }
 .chk-switch .slide-box { border: 1px solid var(--sel); border-radius: 7px; background: var(--slate-soft); }
 .chk-tool-score { font: 600 12px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-3); }
 .chk-busy { width: 7px; height: 7px; border-radius: 50%; background: var(--cab-3); }
@@ -74,14 +78,56 @@
 .chk-opt-name { font: 600 14.5px/1.3 var(--sans); color: var(--ink); }
 .chk-opt-help { font: 400 13px/1.4 var(--sans); color: var(--ink-3); }
 .chk-opt input { margin-top: 2px; }
+/* a switch that cannot be used here (web search when the selected model is not connected): its help line says why */
+.chk-opt.is-off { cursor: default; }
+.chk-opt.is-off .chk-opt-name { color: var(--ink-3); }
+.chk-opt input:disabled { opacity: .5; cursor: not-allowed; }
 
 .chk-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 18px; }
 .chk-run { padding: 10px 20px; font-weight: 600; font-size: 15px; }
 .chk-run[disabled] { opacity: .45; cursor: not-allowed; }
 .chk-count { font: 500 14px/1.3 var(--sans); font-variant-numeric: tabular-nums; color: var(--ink-2); }
 .chk-who { margin-left: auto; font: 400 13px/1.4 var(--sans); color: var(--ink-3); }
-.chk-limits { max-width: 74ch; margin: 14px 0 0; font: 400 13.5px/1.55 var(--sans); color: var(--ink-3); }
-.chk-limits + .chk-limits { margin-top: 6px; }
+
+/* ---------------------------------------------------------------- fine print (about() in ui/checks.js)
+   The same on every tool: one line that carries the meaning on its own, then a small arrow that opens the rest.
+   The opened text hangs from a hairline rule, like a note in the margin. */
+.chk-about { margin: 14px 0 0; font: 400 13px/1.55 var(--sans); color: var(--ink-3); }
+.chk-about > summary { display: block; width: fit-content; max-width: 100%; list-style: none; cursor: pointer; }
+.chk-about > summary::-webkit-details-marker { display: none; }
+.chk-about-say { color: var(--ink-2); }
+.chk-about-more { white-space: nowrap; font-weight: 600; color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.chk-about-more::after {
+  content: ''; display: inline-block; width: 5px; height: 5px; margin: 0 2px 1px 7px; vertical-align: middle;
+  border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(-45deg);
+}
+.chk-about[open] .chk-about-more::after { transform: translateY(-2px) rotate(45deg); }
+.chk-about > summary:hover .chk-about-more { color: var(--ink); text-decoration-color: var(--ink-2); }
+.chk-about-body { max-width: 74ch; margin: 8px 0 2px 1px; padding: 0 0 0 12px; border-left: 1px solid var(--rule); }
+.chk-about-body p { margin: 0; }
+.chk-about-body > * + * { margin-top: 8px; }
+.chk-about-body .chk-limits-list { margin: 0; padding: 0 0 0 16px; border-radius: 0; background: none; font: inherit; color: inherit; }
+.chk-score .chk-about { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+
+/* What to compare (similarity): the same fold, the switches inside */
+.chk-opts-fold { margin-top: 14px; }
+.chk-opts-fold .chk-opts { margin-top: 10px; }
+
+/* ---------------------------------------------------------------- More: a report's less frequent actions (moreMenu())
+   Lectern's own menu, opened on the side with room; the rows share the composer menu's look (.cmenu in styles.css). */
+.chk-more { position: relative; display: inline-flex; }
+.chk-more-btn { display: inline-flex; align-items: center; gap: 8px; }
+.chk-more-btn::after {
+  content: ''; width: 6px; height: 6px; margin: -4px 1px 0 0; opacity: .7;
+  border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
+}
+.chk-more-btn[aria-expanded="true"]::after { transform: translateY(3px) rotate(225deg); }
+.chk-more-menu { width: max-content; min-width: 200px; max-width: min(300px, calc(100vw - 32px)); padding: 5px; }
+.chk-more-menu.up { top: auto; bottom: calc(100% + 6px); }
+.chk-more-menu .cmenu-row { padding: 8px 10px; color: var(--ink); font: 500 14px/1.3 var(--sans); white-space: nowrap; }
+.chk-more-menu .cmenu-row:focus-visible { outline: none; background: var(--line-soft); box-shadow: inset 0 0 0 2px var(--focus); }
+.chk-more-menu .cmenu-head { padding: 8px 10px 4px; }
+.chk-more-menu .cmenu-row + .cmenu-head { margin-top: 5px; padding-top: 11px; border-top: 1px solid var(--line-soft); }
 
 /* ---------------------------------------------------------------- running */
 .chk-running { max-width: 640px; }
@@ -99,13 +145,12 @@
 
 /* ---------------------------------------------------------------- report frame */
 .chk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
-.chk-cross { margin-left: auto; }
+.chk-bar .btn.primary { padding-top: 7px; padding-bottom: 7px; } /* one height for the whole row */
 .chk-body { container: checks / inline-size; }
 .chk-report { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 390px); gap: 24px; align-items: start; }
 @container checks (max-width: 940px) {
   .chk-report { grid-template-columns: minmax(0, 1fr); }
   .chk-report .chk-slip { position: static; max-height: none; order: -1; }
-  .chk-cross { margin-left: 0; }
 }
 
 .chk-ms-wrap { border: 1px solid var(--line); border-radius: 4px; background: var(--sheet); min-width: 0; }
@@ -195,7 +240,7 @@
 .chk-tab { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 7px 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ink-2); font: 600 13.5px/1.2 var(--sans); cursor: pointer; transition: color .15s ease; }
 .chk-tab:hover { color: var(--ink); }
 .chk-tab[aria-selected="true"] { color: var(--ink); background: var(--slate-soft); border-color: var(--sel); }
-.chk-tabs.slide-ready .chk-tab[aria-selected="true"] { background: transparent; border-color: transparent; }
+@media (prefers-reduced-motion: no-preference) { .chk-tabs.slide-ready .chk-tab[aria-selected="true"] { background: transparent; border-color: transparent; } }
 .chk-tabs .slide-box { border: 1px solid var(--sel); border-radius: 6px; background: var(--slate-soft); }
 .chk-tab-n { font: 600 11.5px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-3); }
 
@@ -258,6 +303,15 @@
   .chk-busy { animation: chk-breathe 1.4s ease-in-out infinite; }
   @keyframes chk-turn { to { transform: rotate(360deg); } }
   @keyframes chk-breathe { 50% { opacity: .35; } }
+  /* the small arrows turn, and a fold opens smoothly (the same curve as the filter sections) */
+  .chk-about-more::after, .chk-more-btn::after { transition: transform .22s var(--ease); }
+  @supports selector(details::details-content) {
+    .chk-about::details-content {
+      block-size: 0; opacity: 0; overflow: clip;
+      transition: block-size .38s var(--ease-soft), opacity .3s ease, content-visibility .38s allow-discrete;
+    }
+    .chk-about[open]::details-content { block-size: auto; opacity: 1; }
+  }
 }
 
 @media (max-width: 560px) {
@@ -301,10 +355,12 @@
 
 /* Rewrite: keep the source visible while the writer reviews and edits the result. */
 .chk-rewrite-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 20px; }
-.chk-rewrite-panel { min-width: 0; }
+/* Both panels are as tall as the taller one, and the rewrite box grows with its own text (field-sizing), so the end
+   of a long rewrite is never hidden behind a scroll bar next to a full-height original. */
+.chk-rewrite-panel { min-width: 0; display: flex; flex-direction: column; }
 .chk-rewrite-panel h2 { margin: 0 0 10px; font: 600 18px/1.3 var(--serif); }
-.chk-rewrite-original, .chk-rewrite-output { box-sizing: border-box; width: 100%; min-height: 360px; padding: 20px; border: 1px solid var(--line); border-radius: 4px; background: var(--sheet); color: var(--ink); font: 400 16px/1.7 var(--serif); white-space: pre-wrap; overflow-wrap: anywhere; }
-.chk-rewrite-output { resize: vertical; }
+.chk-rewrite-original, .chk-rewrite-output { flex: 1 0 auto; box-sizing: border-box; width: 100%; min-height: 360px; padding: 20px; border: 1px solid var(--line); border-radius: 4px; background: var(--sheet); color: var(--ink); font: 400 16px/1.7 var(--serif); white-space: pre-wrap; overflow-wrap: anywhere; }
+.chk-rewrite-output { resize: none; field-sizing: content; }
 @container checks (max-width: 700px) { .chk-rewrite-grid { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---------------------------------------------------------------- PDF export (exportPdf in ui/checks.js)

@@ -160,7 +160,9 @@ test('citation trail: seeds are found by DOI or title, and links are tagged from
 async function start(opts = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lectern-tools-'));
   const app = createApp({ dataDir, ...opts });
-  const base = await app.listen(0);
+  app.config.update({ bins: { claude: CLAUDE, codex: '/nonexistent/bin' } }); // before any request looks for engines
+  const pageUrl = await app.listen(0); // the window's address, with the token
+  const base = pageUrl.slice(0, pageUrl.indexOf('?'));
   const headers = { 'x-lectern-token': app.token, 'content-type': 'application/json' };
   const call = async (method, p, body) => {
     const res = await mock.realFetch(base + p.replace(/^\//, ''), { method, headers, body: body ? JSON.stringify(body) : undefined });

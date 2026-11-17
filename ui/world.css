@@ -27,39 +27,44 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
 /* ---------- the cabinet: the rail is a green field, and its own tokens follow it ---------- */
 .rail {
   --ink: var(--cab-ink); --ink-2: var(--cab-ink-2); --ink-3: var(--cab-ink-2);
-  --line: var(--cab-line); --line-soft: var(--cab-2); --slate-soft: var(--cab-3); --sheet: var(--cab-2);
-  background: var(--cab); color: var(--ink); border-right: 0;
+  --line: var(--rail-line); --line-soft: var(--rail-2); --slate-soft: var(--rail-3); --sheet: var(--rail-2);
+  background: var(--rail-bg); color: var(--ink); border-right: 0;
 }
+/* In the dark the rail is a step lighter than the desk and ends in a hairline, so its edge can be seen. */
+@media (prefers-color-scheme: dark) { .rail { border-right: 1px solid var(--rail-line); } }
 .wordmark { font: 600 23px/1 var(--serif); letter-spacing: -0.015em; padding: 2px 8px 18px; }
 /* The highlighter is drawn under the word, below the baseline, so no letter ever sits on yellow. */
 .wordmark span, :root .wordmark span { display: inline-block; border: 0; padding: 0 1px 6px;
   background: linear-gradient(var(--mark), var(--mark)) left bottom / 100% 4px no-repeat; }
-.rail .btn.new { background: var(--cab-2); border-color: var(--cab-line); color: var(--cab-ink); font-weight: 600; padding: 9px 12px; border-radius: 8px; }
-.rail .btn.new:hover { background: var(--cab-3); border-color: var(--cab-ink-2); }
+.rail .btn.new { background: var(--rail-2); border-color: var(--rail-line); color: var(--cab-ink); font-weight: 600; padding: 9px 12px; border-radius: 8px; }
+.rail .btn.new:hover { background: var(--rail-3); border-color: var(--cab-ink-2); }
 .rail-link { border-radius: 7px; }
-.rail-link:hover, .rail-link.on { background: var(--cab-2); color: var(--cab-ink); }
+.rail-link:hover, .rail-link.on { background: var(--rail-2); color: var(--cab-ink); }
 .rail-label { font: 700 10.5px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; padding: 18px 8px 8px; }
 .history li { border-radius: 7px; }
-.history li:hover { background: var(--cab-2); }
-.history li.on { background: var(--cab-3); }
+.history li:hover { background: var(--rail-2); }
+.history li.on { background: var(--rail-3); }
 .history li.on .history-item { color: #fff; font-weight: 600; }
 .history-item { color: var(--cab-ink-2); }
-.history-act:hover { background: var(--cab-3); }
+.history-act:hover { background: var(--rail-3); }
+/* on the open row the actions are light (the row's tint is too close to their usual colour), and their hover darkens */
+.history li.on .history-act { color: var(--cab-ink); }
+.history li.on .history-act:hover { background: var(--rail-2); }
 /* The title uses the whole row. Save, rename, duplicate and delete float over its right end on hover or
    keyboard focus, on a fade of the row's own colour, instead of keeping 94px empty in every row. */
-.history li { position: relative; --row: var(--cab-2); }
-.history li.on { --row: var(--cab-3); }
+.history li { position: relative; --row: var(--rail-2); }
+.history li.on { --row: var(--rail-3); }
 .history-acts { position: absolute; top: 0; right: 0; bottom: 0; align-items: center; padding: 0 2px 0 22px;
   border-radius: 0 7px 7px 0; background: linear-gradient(90deg, transparent, var(--row) 20px); }
 @media (max-width: 760px) { .history-acts { position: static; padding: 0; background: none; } }
-.glide-box { background: var(--cab-2); }
-.rail-foot { border-top-color: var(--cab-line); }
+.glide-box { background: var(--rail-2); }
+.rail-foot { border-top-color: var(--rail-line); }
 .rail .dot { background: #8FD49A; }
 .rail .dot.off { background: #F29DBB; }
 .rail .usage-claude-code { --usage-color: #F3AE86; }
 .rail .usage-codex { --usage-color: #A9C8F3; }
-.rail .usage-track { stroke: var(--cab-3); }
-.rail .usage-meter:hover { background: var(--cab-2); }
+.rail .usage-track { stroke: var(--rail-3); }
+.rail .usage-meter:hover { background: var(--rail-2); }
 .is-desktop .topstrip { background: var(--desk); }
 
 /* ---------- home ---------- */
@@ -77,6 +82,7 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
   font: 16px/1.42 var(--serif); color: var(--ink);
 }
 .examples .example::before { content: ''; position: absolute; top: -1px; left: 14px; width: 30px; height: 4px; background: var(--cab); border-radius: 0 0 2px 2px; }
+@media (prefers-color-scheme: dark) { .examples .example::before { background: var(--cab-ink-2); } }
 .examples .example:hover { border-color: var(--ink-3); background: var(--sheet); }
 .setup { border-radius: 4px; }
 
@@ -101,6 +107,7 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
 .steps { font-family: var(--sans); }
 .steps .pip { border-radius: 1px; }
 .steps .done .pip { background: var(--cab); border-color: var(--cab); }
+@media (prefers-color-scheme: dark) { .steps .done .pip { background: var(--cab-ink-2); border-color: var(--cab-ink-2); } } /* the cabinet colour vanishes on the dark desk */
 
 /* The determination slip: the answer in brief, typed on its own slip with a ruled header. */
 .answer-summary { background: var(--sheet); border: 1px solid var(--ink); border-radius: 3px; box-shadow: none; padding: 0; margin: 16px 0 20px; }
@@ -171,8 +178,9 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
 .sp-no { font: 400 10.5px/1.2 var(--mono); letter-spacing: .06em; color: var(--ink-3); text-transform: uppercase; }
 .sp-name { font-weight: 700; font-size: 13px; overflow-wrap: anywhere; }
 .sp-det { font: 500 12px/1.35 var(--sans); color: var(--ink-2); overflow-wrap: anywhere; }
-.sp-n { font: 500 11.5px/1.35 var(--mono); color: var(--ink-3); }
-.sp-more { font: 400 11px var(--mono); color: var(--ink-3); padding-left: 2px; }
+.sp-n { font: 500 12px/1.35 var(--sans); color: var(--ink-3); overflow-wrap: anywhere; }
+.sp-more { font: 400 11.5px var(--sans); color: var(--ink-3); padding-left: 2px; }
+.sp-num { font: 500 11.5px/1.35 var(--mono); }
 .specimen:hover, .specimen.hot, .specimen:focus-visible { border-color: var(--stamp); box-shadow: inset 0 0 0 1px var(--stamp); }
 .specimen:hover .sp-no, .specimen.hot .sp-no { color: var(--stamp); }
 [data-folder="meta"] { --folder: var(--f-meta); }
@@ -186,6 +194,8 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
 .references-panel { background: var(--sheet); }
 .references-panel-head h2 { font: 600 18px var(--serif); }
 .reference-count { font-family: var(--mono); letter-spacing: .04em; }
+.shelf-count { margin-left: auto; color: var(--ink-3); font: 12px var(--sans); } /* "papers" is a word: sans; its number stays mono */
+.shelf-count .reference-count { margin-left: 0; }
 .paper { position: relative; }
 .paper::before { content: ''; position: absolute; top: -1px; left: 0; width: 28px; height: 4px; border-radius: 0 0 2px 2px; background: var(--folder, transparent); }
 .paper .tab { font: 700 11.5px/1 var(--mono); border-radius: 3px; }
@@ -243,8 +253,9 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
 }
 .picker-btn::after {
   content: ''; position: absolute; right: 14px; top: 50%; width: 7px; height: 7px; margin-top: -6px;
-  border: solid var(--ink-3); border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); transition: transform .22s var(--ease);
+  border: solid var(--ink-3); border-width: 0 1.6px 1.6px 0; transform: rotate(45deg);
 }
+@media (prefers-reduced-motion: no-preference) { .picker-btn::after { transition: transform .22s var(--ease); } }
 .picker-btn[aria-expanded="true"]::after { transform: translateY(3px) rotate(225deg); }
 .picker-btn:hover, .picker-btn[aria-expanded="true"] { border-color: var(--ink-3); }
 .picker-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -257,7 +268,7 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
 .picker-opt:hover, .picker-opt:focus-visible { background: var(--line-soft); }
 .picker-opt.on { background: var(--slate-soft); font-weight: 600; }
 .picker-opt:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
-.picker-check { flex: none; width: 18px; align-self: center; color: var(--stamp); }
+.picker-check { flex: none; width: 18px; align-self: center; color: var(--sel); } /* the soft green of "selected"; violet is for citations */
 .picker-check svg { display: block; width: 16px; height: 16px; }
 .picker-text { flex: 1; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .picker.sort .picker-text { display: block; white-space: nowrap; }
@@ -298,7 +309,6 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
 .input::placeholder { color: var(--ink-3); }
 .input:hover { border-color: var(--ink-3); }
 .input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--focus); }
-.select { min-height: 38px; border-radius: 6px; font: 500 14px var(--sans); }
 .btn.small { padding: 5px 11px; border-radius: 6px; }
 .check { gap: 9px; }
 
@@ -393,6 +403,8 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
 @media (prefers-reduced-motion: no-preference) { .usage-card:not([hidden]) { animation: card-in .12s var(--ease) both; } }
 
 /* ---------- fold arrows: a small chevron after a heading hides what is under it ---------- */
+.fold-tail { white-space: nowrap; }
+.fold-hide { display: none !important; } /* what a folded heading hides (app.js foldAway) */
 .fold { display: inline-grid; place-items: center; width: 24px; height: 24px; margin-left: 6px; padding: 0; vertical-align: .08em;
   border: 0; border-radius: 5px; background: transparent; color: var(--ink-3); }
 .fold svg { width: 16px; height: 16px; transition: transform .22s var(--ease); }
@@ -404,7 +416,7 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
 
 /* ---------- New question: the shortcut shown on the button ---------- */
 .rail .btn.new { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.kbd { flex: none; padding: 2px 6px; border: 1px solid var(--cab-line); border-radius: 4px; color: var(--cab-ink-2); font: 600 11px/1.3 var(--mono); letter-spacing: .02em; }
+.kbd { flex: none; padding: 2px 6px; border: 1px solid var(--rail-line); border-radius: 4px; color: var(--cab-ink-2); font: 600 11px/1.3 var(--mono); letter-spacing: .02em; }
 @media (max-width: 760px) { .kbd { display: none; } }
 
 /* sidebar: New question and Library sit close together */
@@ -489,8 +501,7 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
 .rail .btn.new, .rail-nav .rail-link { min-height: 44px; padding: 9px 12px; border-radius: 8px; }
 .rail-nav .rail-link { border: 1px solid transparent; }
 .rail-keys { display: inline-flex; align-items: center; gap: 8px; }
-.rail-nav .kbd { opacity: .75; }
-.rail-nav .rail-link:hover .kbd, .rail-nav .rail-link.on .kbd { opacity: 1; }
+.rail-nav .rail-link:hover .kbd, .rail-nav .rail-link.on .kbd { color: var(--cab-ink); }
 .score { max-width: 900px; }
 .score h1 { font: 500 34px/1.1 var(--serif); letter-spacing: -.02em; margin: 6px 0; }
 @media (prefers-reduced-motion: no-preference) { .score.nav-enter { animation: enter .46s var(--ease) backwards; } }
@@ -502,7 +513,7 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
 .save-chat { display: inline-flex; align-items: center; gap: 8px; flex: none; border-radius: 8px; padding: 8px 14px; }
 .save-chat svg { width: 17px; height: 17px; }
 .save-chat.on { border-color: var(--sel); background: var(--slate-soft); }
-.save-chat.on svg { color: var(--stamp); }
+.save-chat.on svg { color: var(--sel); }
 .save-chat.on svg path, .history-act.save.on svg path, .saved-mark svg path { fill: currentColor; }
 .saved-mark { display: grid; place-items: center; flex: none; margin-right: 4px; color: var(--cab-ink-2); }
 .saved-mark svg { width: 14px; height: 14px; }
@@ -520,7 +531,7 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
 .chats { list-style: none; margin: 4px 0 0; padding: 0; }
 .chat { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line-soft); }
 .chat-open { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; padding: 15px 4px; border: 0; background: transparent; text-align: left; color: var(--ink); }
-.chat-open > svg { flex: none; width: 18px; height: 18px; color: var(--stamp); }
+.chat-open > svg { flex: none; width: 18px; height: 18px; color: var(--sel); }
 .chat-open > svg path { fill: currentColor; }
 .chat-text { display: grid; gap: 3px; min-width: 0; }
 .chat-title { font: 600 16.5px/1.3 var(--serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -540,11 +551,47 @@ body { font-size: 14.5px; font-feature-settings: "kern"; text-rendering: optimiz
 .cite-foot, .set-foot, .filter-foot { gap: 10px; }
 
 /* ---------- saved single questions ---------- */
-.prompt-saved { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 7px; border-radius: 999px; background: var(--stamp-soft); color: var(--stamp); font: 600 12.5px/1.3 var(--sans); }
-.prompt-saved svg { width: 14px; height: 14px; }
+/* Saved things use the soft green of "selected" (the bookmark in the thread bar, the Library and here), never the
+   citation violet. */
+.prompt-saved { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 7px; border-radius: 999px; background: var(--slate-soft); color: var(--ink-2); font: 600 12.5px/1.3 var(--sans); }
+.prompt-saved svg { width: 14px; height: 14px; color: var(--sel); }
 .prompt-saved svg path { fill: currentColor; }
-.prompt-actions .save-prompt.on { color: var(--stamp); }
 .chat-title.wrap { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .chat-preview { color: var(--ink-2); font: 14px/1.45 var(--serif); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .prompts .chat-open { align-items: flex-start; }
 .prompts .chat-open > svg { margin-top: 3px; }
+
+/* ---------- a button that opens a menu of actions (Export under an answer and in References) ---------- */
+/* The menu is drawn like the ask box's menus (.cmenu rows), sized to its words, and opens upwards near the docked ask box. */
+.menu-wrap { position: relative; display: inline-flex; }
+.menu-btn { display: inline-flex; align-items: center; gap: 5px; }
+.menu-btn svg { width: 14px; height: 14px; color: var(--ink-3); }
+.menu-btn[aria-expanded="true"] { border-color: var(--ink-3); }
+.btn.quiet.menu-btn[aria-expanded="true"] { border-color: transparent; background: var(--line-soft); color: var(--ink); }
+.menu-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.action-menu { width: max-content; min-width: 236px; max-width: min(320px, calc(100vw - 24px)); }
+.action-menu.up { top: auto; bottom: calc(100% + 6px); }
+@media (prefers-reduced-motion: no-preference) { .menu-btn svg { transition: transform .22s var(--ease); } }
+
+/* ---------- the drop-downs that replaced the last system menus (Filters: journal impact; Library: reference style) ---------- */
+.picker.journal { flex: 0 1 300px; }
+.picker.library-style { flex: none; }
+.picker.library-style .picker-btn { width: auto; min-width: 128px; }
+.picker.library-style .picker-menu { width: max-content; min-width: 180px; }
+
+/* ---------- usage details: the same room under the header as other dialogs, and every rule the full width ---------- */
+.usage-details > .help:first-child { margin-top: 18px; }
+.dialog-body .usage-updated { max-width: none; }
+
+/* ---------- long conversations: a question far off screen is skipped when the page is drawn ---------- */
+/* It keeps the height it had when it was last drawn (contain-intrinsic-size: auto); app.js turns skipping on once
+   every question has been laid out once, and keeps what the reader sees still if a skipped question comes back at
+   another height above it. A question on screen still clips at its edge (paint containment): the clip margin lets
+   the question bar's overhang and focus rings show, and while a menu is open in a question it is drawn whole. */
+.thread > .turn { contain-intrinsic-size: auto 900px; }
+.thread.cv > .turn { content-visibility: auto; overflow-clip-margin: 16px; }
+.thread.cv > .turn.menu-open { content-visibility: visible; }
+
+/* ---------- Library: the tab panel, and the list under the search that is filtered in place ---------- */
+.lib-panel { display: flex; flex-direction: column; min-width: 0; }
+.lib-results { display: contents; }

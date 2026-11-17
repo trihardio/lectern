@@ -230,7 +230,7 @@ function parseReview(raw, ids) {
   const problems = { invalidSpans: 0, outOfBatch: 0, tooWide: 0, conflicts: 0 };
   const json = extractJson(raw);
   if (!json || typeof json !== 'object' || !Array.isArray(json.spans)) {
-    return { status: 'failed', ratings: new Map(), missing: ids.slice(), problems, issues: [], summary: '', error: 'The model’s reply was not the expected JSON, so nothing in this part was reviewed.' };
+    return { status: 'failed', ratings: new Map(), missing: ids.slice(), problems, issues: [], summary: '', error: 'The model’s reply could not be read, so nothing in this part was reviewed. Run the check again.' };
   }
   const ratings = new Map();
   const conflicted = new Set();
@@ -342,7 +342,7 @@ async function runAiCheck({ text: input, config, signal, emit = () => {}, engine
           if (r.summary) summaries[k] = r.summary;
         } catch (e) {
           if (signal && signal.aborted) throw e;
-          entry.error = e.message || 'The request failed.';
+          entry.error = e.message || 'The model did not answer for this part. Run the check again.';
           for (const n of ids) unreviewedWhy.set(n - 1, `This part could not be read: ${entry.error}`);
           if (e.code === 'MODEL_REJECTED') stopReason = entry.error; // the same rejection would repeat: stop, do not switch
         }
