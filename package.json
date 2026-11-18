@@ -1,7 +1,7 @@
 {
   "name": "lectern",
   "productName": "Lectern",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Ask a research question and get an answer grounded in real, linkable papers.",
   "main": "electron/main.js",
   "private": true,

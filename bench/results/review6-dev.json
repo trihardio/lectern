@@ -1,0 +1,419 @@
+{
+ "styleVersion": 4,
+ "n": {
+  "review": 40,
+  "devAll": 105
+ },
+ "systems": {
+  "S1": {
+   "line": 50,
+   "lowestLineUnderRule": 50,
+   "allDev": {
+    "line": 50,
+    "ai": {
+     "k": 21,
+     "n": 56,
+     "pct": 37.5,
+     "lo": 26,
+     "hi": 50.6
+    },
+    "human": {
+     "k": 0,
+     "n": 49,
+     "pct": 0,
+     "lo": 0,
+     "hi": 7.3
+    },
+    "nonNative": {
+     "k": 0,
+     "n": 14,
+     "pct": 0,
+     "lo": 0,
+     "hi": 21.5
+    },
+    "auroc": 0.897,
+    "noScore": 0
+   },
+   "reviewSet": {
+    "line": 50,
+    "ai": {
+     "k": 7,
+     "n": 18,
+     "pct": 38.9,
+     "lo": 20.3,
+     "hi": 61.4
+    },
+    "human": {
+     "k": 0,
+     "n": 22,
+     "pct": 0,
+     "lo": 0,
+     "hi": 14.9
+    },
+    "nonNative": {
+     "k": 0,
+     "n": 8,
+     "pct": 0,
+     "lo": 0,
+     "hi": 32.4
+    },
+    "auroc": 0.949,
+    "noScore": 0
+   }
+  },
+  "S2": {
+   "line": 52.1,
+   "reviewSet": {
+    "line": 52.1,
+    "ai": {
+     "k": 7,
+     "n": 18,
+     "pct": 38.9,
+     "lo": 20.3,
+     "hi": 61.4
+    },
+    "human": {
+     "k": 1,
+     "n": 22,
+     "pct": 4.5,
+     "lo": 0.8,
+     "hi": 21.8
+    },
+    "nonNative": {
+     "k": 0,
+     "n": 8,
+     "pct": 0,
+     "lo": 0,
+     "hi": 32.4
+    },
+    "auroc": 0.838,
+    "noScore": 0
+   },
+   "at538": {
+    "line": 53.8,
+    "ai": {
+     "k": 6,
+     "n": 18,
+     "pct": 33.3,
+     "lo": 16.3,
+     "hi": 56.3
+    },
+    "human": {
+     "k": 1,
+     "n": 22,
+     "pct": 4.5,
+     "lo": 0.8,
+     "hi": 21.8
+    },
+    "nonNative": {
+     "k": 0,
+     "n": 8,
+     "pct": 0,
+     "lo": 0,
+     "hi": 32.4
+    },
+    "auroc": 0.838,
+    "noScore": 0
+   }
+  },
+  "S3weighted": {
+   "best": {
+    "w": 0.3,
+    "line": 41.1,
+    "ai": {
+     "k": 16,
+     "n": 18,
+     "pct": 88.9,
+     "lo": 67.2,
+     "hi": 96.9
+    },
+    "human": {
+     "k": 1,
+     "n": 22,
+     "pct": 4.5,
+     "lo": 0.8,
+     "hi": 21.8
+    },
+    "nonNative": {
+     "k": 0,
+     "n": 8,
+     "pct": 0,
+     "lo": 0,
+     "hi": 32.4
+    },
+    "auroc": 0.987,
+    "noScore": 0
+   },
+   "all": [
+    {
+     "w": 0.3,
+     "line": 41.1,
+     "ai": 16,
+     "human": 1,
+     "nn": 0,
+     "auroc": 0.987
+    },
+    {
+     "w": 0.2,
+     "line": 41.4,
+     "ai": 16,
+     "human": 1,
+     "nn": 0,
+     "auroc": 0.985
+    },
+    {
+     "w": 0.4,
+     "line": 42.6,
+     "ai": 15,
+     "human": 1,
+     "nn": 0,
+     "auroc": 0.985
+    },
+    {
+     "w": 0.1,
+     "line": 45.7,
+     "ai": 13,
+     "human": 0,
+     "nn": 0,
+     "auroc": 0.972
+    },
+    {
+     "w": 0.5,
+     "line": 44.1,
+     "ai": 13,
+     "human": 1,
+     "nn": 0,
+     "auroc": 0.97
+    },
+    {
+     "w": 0.6,
+     "line": 44.6,
+     "ai": 11,
+     "human": 1,
+     "nn": 0,
+     "auroc": 0.942
+    },
+    {
+     "w": 0.7,
+     "line": 47.3,
+     "ai": 10,
+     "human": 1,
+     "nn": 0,
+     "auroc": 0.932
+    },
+    {
+     "w": 0.8,
+     "line": 48.9,
+     "ai": 8,
+     "human": 1,
+     "nn": 0,
+     "auroc": 0.902
+    },
+    {
+     "w": 0.9,
+     "line": 50.5,
+     "ai": 8,
+     "human": 1,
+     "nn": 0,
+     "auroc": 0.876
+    },
+    {
+     "w": 0,
+     "line": 50,
+     "ai": 7,
+     "human": 0,
+     "nn": 0,
+     "auroc": 0.949
+    },
+    {
+     "w": 1,
+     "line": 52.1,
+     "ai": 7,
+     "human": 1,
+     "nn": 0,
+     "auroc": 0.838
+    }
+   ]
+  },
+  "S3logistic": {
+   "formula": {
+    "version": "S3-1",
+    "inputs": [
+     "meanRating/10",
+     "logit(styleProbability)"
+    ],
+    "intercept": -2.228929,
+    "weights": [
+     1.037408,
+     4.930301
+    ],
+    "l2": 0.1,
+    "n": 40
+   },
+   "line": 59.8,
+   "ai": {
+    "k": 16,
+    "n": 18,
+    "pct": 88.9,
+    "lo": 67.2,
+    "hi": 96.9
+   },
+   "human": {
+    "k": 1,
+    "n": 22,
+    "pct": 4.5,
+    "lo": 0.8,
+    "hi": 21.8
+   },
+   "nonNative": {
+    "k": 0,
+    "n": 8,
+    "pct": 0,
+    "lo": 0,
+    "hi": 32.4
+   },
+   "auroc": 0.987,
+   "noScore": 0
+  },
+  "S0": {
+   "v5TextsInDev": 61,
+   "at538": {
+    "line": 53.8,
+    "ai": {
+     "k": 1,
+     "n": 39,
+     "pct": 2.6,
+     "lo": 0.5,
+     "hi": 13.2
+    },
+    "human": {
+     "k": 0,
+     "n": 22,
+     "pct": 0,
+     "lo": 0,
+     "hi": 14.9
+    },
+    "nonNative": {
+     "k": 0,
+     "n": 4,
+     "pct": 0,
+     "lo": 0,
+     "hi": 49
+    },
+    "auroc": 0.611,
+    "noScore": 0
+   },
+   "inReviewSet": {
+    "line": 53.8,
+    "ai": {
+     "k": 1,
+     "n": 12,
+     "pct": 8.3,
+     "lo": 1.5,
+     "hi": 35.4
+    },
+    "human": {
+     "k": 0,
+     "n": 11,
+     "pct": 0,
+     "lo": 0,
+     "hi": 25.9
+    },
+    "nonNative": {
+     "k": 0,
+     "n": 2,
+     "pct": 0,
+     "lo": 0,
+     "hi": 65.8
+    },
+    "auroc": 0.902,
+    "noScore": 0
+   }
+  }
+ },
+ "sets": {
+  "review": 40,
+  "repeat": 15,
+  "opus": 9
+ },
+ "gates": {
+  "S2": {
+   "stability": {
+    "n": 15,
+    "medianAbsChange": 2.3999999999999986,
+    "maxAbsChange": 14.8,
+    "flips": 0,
+    "limitFlips": 1,
+    "pass": true
+   },
+   "opus": {
+    "n": 9,
+    "withScore": 9,
+    "humanFlagged": 0,
+    "aiFlagged": 2,
+    "pass": true
+   }
+  },
+  "S3weighted": {
+   "stability": {
+    "n": 15,
+    "medianAbsChange": 0.7199999999999989,
+    "maxAbsChange": 4.439999999999998,
+    "flips": 1,
+    "limitFlips": 1,
+    "pass": true
+   },
+   "opus": {
+    "n": 9,
+    "withScore": 9,
+    "humanFlagged": 0,
+    "aiFlagged": 4,
+    "pass": true
+   }
+  },
+  "S3logistic": {
+   "stability": {
+    "n": 15,
+    "medianAbsChange": 1.4000000000000057,
+    "maxAbsChange": 36.00000000000001,
+    "flips": 2,
+    "limitFlips": 1,
+    "pass": false
+   },
+   "opus": {
+    "n": 9,
+    "withScore": 9,
+    "humanFlagged": 0,
+    "aiFlagged": 4,
+    "pass": true
+   }
+  }
+ },
+ "candidates": [
+  {
+   "name": "S1",
+   "ai": 7,
+   "pass": true,
+   "line": 50
+  },
+  {
+   "name": "S2",
+   "ai": 7,
+   "pass": true,
+   "line": 52.1
+  },
+  {
+   "name": "S3weighted",
+   "ai": 16,
+   "pass": true,
+   "line": 41.1
+  },
+  {
+   "name": "S3logistic",
+   "ai": 16,
+   "pass": false,
+   "line": 59.8
+  }
+ ],
+ "choice": "S3weighted"
+}

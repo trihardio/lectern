@@ -23,7 +23,7 @@ const LEVELS = [
   },
   {
     id: 'masters', label: 'Master\'s',
-    write: 'The reader is a master\'s student. Assume they know the discipline\'s core concepts and do not define standard terms. Give more room to methods, how the key constructs were measured, and limitations. Point out gaps in the literature that could frame a dissertation.',
+    write: 'The reader is a master\'s student. Assume they know the discipline\'s core concepts and do not define standard terms. Give more room to methods, how the key constructs were measured, and limitations. Point out gaps in the papers found that could frame a dissertation, without claiming they are gaps in the whole literature.',
   },
   {
     id: 'phd', label: 'PhD or doctorate',

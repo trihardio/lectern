@@ -44,6 +44,26 @@ function bucket(u) {
   return new Response('<Error><Code>NoSuchKey</Code></Error>', { status: 404, headers: { 'content-type': 'application/xml' } });
 }
 
+/**
+ * The Gemini API: the key check (GET /v1beta/models) and the Interactions API, chosen by the key in the header.
+ * Keys: 'bad-gemini-key' is refused, 'quota-gemini-key' has no quota left, 'free-gemini-key' has no web search,
+ * 'cut-gemini-key' times out half way; any other key works. A model not named gemini-… is unknown.
+ */
+function gemini(u, init, body) {
+  const key = (init.headers || {})['x-goog-api-key'];
+  const err = (status, message, extra = {}) => jsonResponse({ error: { code: status, message, ...extra } }, status);
+  if (!key || key === 'bad-gemini-key') return err(400, 'API key not valid. Please pass a valid API key.', { status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] });
+  if (key === 'quota-gemini-key') return err(429, 'You exceeded your current quota, please check your plan and billing details.', { status: 'RESOURCE_EXHAUSTED' });
+  if (u.pathname === '/v1beta/models') return jsonResponse({ models: [{ name: 'models/gemini-4-hydrogen' }] });
+  if (u.pathname !== '/v1beta/interactions') return err(404, 'Not found.', { status: 'NOT_FOUND' });
+  if (!/^gemini-/.test(body.model || '')) return err(404, `models/${body.model} is not found for API version v1beta.`, { status: 'NOT_FOUND' });
+  if (key === 'free-gemini-key' && body.tools) return err(400, 'Grounding with Google Search is not available on the free tier.', { status: 'INVALID_ARGUMENT' });
+  const web = !!body.tools;
+  let text = fx.modelReply(`${body.system_instruction || ''}\n\n${body.input || ''}`);
+  if (web && text === fx.ANSWER_TEXT) text = fx.withWebLinks(text);
+  return new Response(fx.geminiStream({ text, model: body.model, web, cut: key === 'cut-gemini-key' }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+}
+
 async function mockFetch(input, init = {}) {
   const url = typeof input === 'string' ? input : input.url;
   if (/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(url)) return realFetch(input, init);
@@ -66,6 +86,7 @@ async function mockFetch(input, init = {}) {
       if (/DOI:"/.test(u.searchParams.get('query') || '')) return jsonResponse(fx.europepmcLite(u.searchParams.get('query')));
       return jsonResponse(fx.europepmc());
     case 'pmc-oa-opendata.s3.amazonaws.com': return bucket(u);
+    case 'generativelanguage.googleapis.com': return gemini(u, init, body || {});
     case 'example.edu': {
       const r = fx.checkPage(u.pathname);
       return new Response(r.body || '', { status: r.status, headers: { 'content-type': r.type || 'text/plain', ...(r.location ? { location: r.location } : {}) } });
@@ -76,4 +97,7 @@ async function mockFetch(input, init = {}) {
 }
 
 globalThis.fetch = mockFetch;
-module.exports = { calls, state, realFetch, reset() { calls.length = 0; state.fail = {}; } };
+// Offline there is no database to protect, so the request limiter (server/sources/index.js) does not wait between
+// requests. Only the waiting is removed: the one-at-a-time rules still apply, so the order of requests stays realistic.
+require('../server/sources').limiter.setPacing(false);
+module.exports ={ calls, state, realFetch, reset() { calls.length = 0; state.fail = {}; } };

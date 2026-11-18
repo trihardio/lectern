@@ -1,0 +1,905 @@
+{
+ "fetched": "2026-11-17T16:54:19.088Z",
+ "sources": {
+  "synergy": {
+   "name": "SYNERGY (De Bruin et al.)",
+   "url": "https://github.com/asreview/synergy-dataset",
+   "commit": "7efde4a37bed9e8d71f19421b90eae3485184c4d",
+   "licence": "CC0-1.0 (repository licence)",
+   "reviews": 119
+  },
+  "clef": {
+   "name": "CLEF eHealth TAR 2017-2019 (Kanoulas et al.)",
+   "url": "https://github.com/CLEF-TAR/tar",
+   "commit": "dbc13d02bb3e2f8ebc90e62ff47f5eb591e5ca20",
+   "licence": "MIT (repository licence)",
+   "topics": {
+    "2017": 30,
+    "2018": 30,
+    "2019i": 20
+   }
+  },
+  "litsearch": {
+   "name": "LitSearch (Ajith et al. 2024)",
+   "url": "https://huggingface.co/datasets/princeton-nlp/LitSearch",
+   "revision": "9573fb284a1026c998df47024b888a163f0f0e25",
+   "licence": "none stated on the dataset card; the code repository (github.com/princeton-nlp/LitSearch) is MIT",
+   "queries": 597
+  }
+ },
+ "files": {
+  "synergy/datasets.toml": {
+   "sha256": "b1965402d8cda79418b72da0ed0256a335fb33a5e0b2555f5939995d4b991f01",
+   "bytes": 143104
+  },
+  "synergy/Abgaz_2023_ids.csv": {
+   "sha256": "cbc6704c32f1ccd9c1f2c2ebb3f40944bfb13d0ab79d1586ea74c54daa02f5f1",
+   "bytes": 17639
+  },
+  "synergy/Adamo_2021_ids.csv": {
+   "sha256": "57eca519303460301cee1f2846a899744ac4db3a38332624d9d5ba13a5cf5505",
+   "bytes": 179131
+  },
+  "synergy/Ali_2024_ids.csv": {
+   "sha256": "8cde6f42b134a98f40110e3d1808978c03859223927590a560b2a14d50939ad2",
+   "bytes": 101139
+  },
+  "synergy/Alunno_2020_ids.csv": {
+   "sha256": "3d99a6feaeeddbef8e3e32f8a36627450c3ca4baf6f0db43afba7028320af5cd",
+   "bytes": 190235
+  },
+  "synergy/Anmarkrud_2021_ids.csv": {
+   "sha256": "a0ba1ebc67928e5167bc0c4a71ccdb80e7c4508e27537051894588f5f1927157",
+   "bytes": 41114
+  },
+  "synergy/Aouad_2024_ids.csv": {
+   "sha256": "5f8e612a9614ec76edcaae5e49d2901cf4fae61393f599bb33fa0d274c299835",
+   "bytes": 88625
+  },
+  "synergy/Appenzeller-Herzog_2019_ids.csv": {
+   "sha256": "9d19a60a05e4e5e69869aff29471caf5fc1dbd99a61799cc39506ed573125af3",
+   "bytes": 188379
+  },
+  "synergy/Attai_2022_ids.csv": {
+   "sha256": "f1b647a73cc22cb6cf4bd8d63f68e50ca478f67da007e7731ffc36cc53dc9165",
+   "bytes": 40492
+  },
+  "synergy/Bakker-Jacobs_2022_ids.csv": {
+   "sha256": "ea799799efc6d867492490605f528190e07dfa82f4312e3c66eb2500fe6ff430",
+   "bytes": 26572
+  },
+  "synergy/Bech_2019_ids.csv": {
+   "sha256": "57cbe22e49e4ed745c29dce18dc99a7e33409cfb0ba84a31861352a02c860bf8",
+   "bytes": 64748
+  },
+  "synergy/Bindoli_2024a_ids.csv": {
+   "sha256": "a131666e22e55717048e5a32604d0b0ea6ee2be6854c917ecf830f7c8118a1e9",
+   "bytes": 164399
+  },
+  "synergy/Bindoli_2024b_ids.csv": {
+   "sha256": "7727c1f3e902d71648aa98d5f3dafe38fcece2798e9665b8f4a788fc0539a566",
+   "bytes": 34039
+  },
+  "synergy/Boersma-van_Dam_2024_ids.csv": {
+   "sha256": "c81567b6fbce0f33be668b77b714ea69798690852a82ef966f88d0d3097cdce9",
+   "bytes": 131941
+  },
+  "synergy/Bos_2018_ids.csv": {
+   "sha256": "f8f6af6696d1c079fc1dbc623d84a2d018e9038ff79f1e5bfabd1f36167f6bb9",
+   "bytes": 263617
+  },
+  "synergy/Bosch_2021_ids.csv": {
+   "sha256": "5568365c72f41363f19982ed43636d28f5a9abf46b9a27bd37560de2175d72d4",
+   "bytes": 203295
+  },
+  "synergy/Bosch_2023_ids.csv": {
+   "sha256": "9405cd2d55006c786c90507e2ed18058b177af8132f92b99ef2ae37aefc42dc3",
+   "bytes": 206241
+  },
+  "synergy/Brons_2024_ids.csv": {
+   "sha256": "fe399e9e38cd72ececf4958eb3f575dc47e8acc680a4c197e131c6857463accf",
+   "bytes": 3964
+  },
+  "synergy/Brouwer_2019_ids.csv": {
+   "sha256": "01d00a9234265e56a3e9274d51b46b734bb510ff881c68c00014271efdb81225",
+   "bytes": 1570118
+  },
+  "synergy/Burska_2023_ids.csv": {
+   "sha256": "f9241dbda5d3c6d0e28e76e9aed94fe178f90d358bd28e408b99e6e54f96dccd",
+   "bytes": 402154
+  },
+  "synergy/Butink_2023_ids.csv": {
+   "sha256": "b48220536960f89503815ded7213517ed177ee519d41557706603ea67fc5e6cb",
+   "bytes": 326556
+  },
+  "synergy/Chakraborty_2023_ids.csv": {
+   "sha256": "733cf71c0d6312557441ae558c8671c8b04894d93364c57ec9d32347ced409e8",
+   "bytes": 94443
+  },
+  "synergy/Chou_2003_ids.csv": {
+   "sha256": "2fcdeacb7703b9a0cb40ace86c5d85fef3ea490c7e9bea973014ef465838f87f",
+   "bytes": 91051
+  },
+  "synergy/Chueca_2023_ids.csv": {
+   "sha256": "38ac866c89ae7775b6ef031203c5dffca60e35b9d0e2817aec6f3c58ce568eb3",
+   "bytes": 99903
+  },
+  "synergy/Cinquin_2018_ids.csv": {
+   "sha256": "617b7dcc212136e016022985e23e782fcb87ac880e00c27aff20f4170e8518a8",
+   "bytes": 8699
+  },
+  "synergy/Clarinval_2021_ids.csv": {
+   "sha256": "d9f040b5e7f376b8557d6a2f03bf78207dde88e179b2cb2f56d0e18149712a23",
+   "bytes": 16202
+  },
+  "synergy/Clark_2021_ids.csv": {
+   "sha256": "7268ad17eb90d8651adca37aaea4484d28205434628e091939bba24155667c51",
+   "bytes": 7525
+  },
+  "synergy/Cozim-Melges_2024_ids.csv": {
+   "sha256": "c46899902b21f38f4c9fcaa000df514e3e60cba35194a4c35a451db9708a4d1a",
+   "bytes": 81052
+  },
+  "synergy/Deckers_2022_ids.csv": {
+   "sha256": "b5f42f0628568565119e2123a8263f957caeed62d4be38ca8e99fb975cb188fe",
+   "bytes": 4899
+  },
+  "synergy/de_Matteis_2024a_ids.csv": {
+   "sha256": "86d51c89243ecc4be45f5641fb633bb56b310fb828e336bd6c6cc44496ed84d2",
+   "bytes": 14229
+  },
+  "synergy/de_Matteis_2024b_ids.csv": {
+   "sha256": "7944e1bb9e391a0cb61827a62c2de61902b0d9f6e804af80360a50c3329a6ff2",
+   "bytes": 43229
+  },
+  "synergy/Demirkaya_2015_ids.csv": {
+   "sha256": "2a08b18aee12c7b3368e30fa767bd545cc7aef2120f781538801b4d2002e473a",
+   "bytes": 36938
+  },
+  "synergy/Dolinska_2022_ids.csv": {
+   "sha256": "9a1fc428cf2cd41ed19ce7f67d7cf4b7d3d1d4cd4b0d5399ca3fba80a032dce8",
+   "bytes": 315755
+  },
+  "synergy/Donners_2021_ids.csv": {
+   "sha256": "ed1f7e30d70ff03e198c985e987db4a7045d8c9d10127fa9485cd2247ef091e7",
+   "bytes": 15671
+  },
+  "synergy/Dornauer_2023_ids.csv": {
+   "sha256": "8b56a17f4909fb58042113e8e406f03786e8a56b37a4fba76a2e15281376dcc0",
+   "bytes": 41358
+  },
+  "synergy/Eggmann_2023_ids.csv": {
+   "sha256": "f74112ef9b3e9c08057016a247ff4df8b98622471a5ce519bc069afaf0d4754e",
+   "bytes": 41891
+  },
+  "synergy/Endedijk_2021_ids.csv": {
+   "sha256": "dd7467928880f3bbbed137e5067e3c648ea8030f03fb61460498dc00d87e76b0",
+   "bytes": 150945
+  },
+  "synergy/Erer_2015_ids.csv": {
+   "sha256": "d0c4bda8d05c11cc6cce34d160a41051363aab4fb70d49b2b4f89fc88004127b",
+   "bytes": 30707
+  },
+  "synergy/Farisogullari_2023_ids.csv": {
+   "sha256": "d7ba4ec504e2b7644f894dbbbbeb567f70a3b5e2236c5511f0632cd52edd92fa",
+   "bytes": 251020
+  },
+  "synergy/Fejza_2023_ids.csv": {
+   "sha256": "adb2a44aa3cf840bc66ecdf71763453db0d90dde516ce6d6417b62fd21459456",
+   "bytes": 256777
+  },
+  "synergy/Ferreira_2022_ids.csv": {
+   "sha256": "9e7367fe52cf58b0228034e51a9399430d6edb9b992c738a0703ca537fba9cfb",
+   "bytes": 39345
+  },
+  "synergy/Fong_2021_ids.csv": {
+   "sha256": "b448287676d26b251bcd0c350714177776d2a1a734fe358c3a861d1c9a84401e",
+   "bytes": 37442
+  },
+  "synergy/Filges_2018_ids.csv": {
+   "sha256": "47ed1d226a1e11191aefc04c470dab85f2252f961476483877701f6d3247d5a8",
+   "bytes": 115003
+  },
+  "synergy/Filges_2022_ids.csv": {
+   "sha256": "a0299a5f033f5ec48411e00e5a2745c03bb2e812431e04624200c54ea495c0fd",
+   "bytes": 105866
+  },
+  "synergy/Giesen_2021_ids.csv": {
+   "sha256": "bb5818a15fc262d7657f07cb5aeb34a1e8408cdd600d9c38124ee5f03d2aef4c",
+   "bytes": 230842
+  },
+  "synergy/Greca_2023_ids.csv": {
+   "sha256": "519b61acbf6c879a6cf5f6b9b1e5c6cdece31648cd524980cb63d3b1497a7e29",
+   "bytes": 12839
+  },
+  "synergy/Hall_2011_ids.csv": {
+   "sha256": "0e043278fd7f802c7ee145f2a1f67c8b50fe273349abd4073043e4376b83951e",
+   "bytes": 62444
+  },
+  "synergy/Hamaker_2022_ids.csv": {
+   "sha256": "576d30c3ea2cc221d80ff0e893be1ed014b9181ee815da805f55c99336ee0f97",
+   "bytes": 219436
+  },
+  "synergy/Hanlon_2022_ids.csv": {
+   "sha256": "4b37e29927f82c81f350c846ae6ef498c5a072c26c778d41416a09f2639c559b",
+   "bytes": 2771
+  },
+  "synergy/Harms_2024_ids.csv": {
+   "sha256": "86eabcbad9074bd28e6997908196501543505e28c9be3a80d76617f9a792244e",
+   "bytes": 75768
+  },
+  "synergy/Hilfiker_2017_ids.csv": {
+   "sha256": "8b3d717abc112860c84ad41b383dce7b11553b541ba585df1ff9472c410e0eb9",
+   "bytes": 802043
+  },
+  "synergy/Kapuka_2021_ids.csv": {
+   "sha256": "3c1d28da7e81419769c18c34457cd219f7409adb6dbbda6ce6289d31e54bfe63",
+   "bytes": 22387
+  },
+  "synergy/Kerschbaumer_2022_ids.csv": {
+   "sha256": "3e7ef565ec2cc7a8b78e66579178cde545e790ee67c29931874c0e20a7cea380",
+   "bytes": 35501
+  },
+  "synergy/Kerschbaumer_2024a_ids.csv": {
+   "sha256": "17bf6756f44b5344e3e42be1abb5e469d76da847c98b0da08585ac5699f6b124",
+   "bytes": 179059
+  },
+  "synergy/Kerschbaumer_2024b_ids.csv": {
+   "sha256": "e0674d63260076f592095d9ce86996682cd1c78828242342961d45612cac9b01",
+   "bytes": 96706
+  },
+  "synergy/Lauper_2021_ids.csv": {
+   "sha256": "afe6fbbcca33e4837d8911731a23ab94d54b07e7a2c2298de2c3ac354d2ae7da",
+   "bytes": 69745
+  },
+  "synergy/Leenaars_2019_ids.csv": {
+   "sha256": "51248aac205504c6144a1966f57677c42e86efe3fbcba32b18b9cba3b3c64833",
+   "bytes": 509959
+  },
+  "synergy/Leenaars_2020_ids.csv": {
+   "sha256": "e6881aadc136d06067bc6d754d195a51430d661e7f28f9cd3102b05f3b40291c",
+   "bytes": 469618
+  },
+  "synergy/Lewowski_2021_ids.csv": {
+   "sha256": "18107b7ed58e59b68969685e264cb57d426b7da014ee9b74a7cc8911697e8646",
+   "bytes": 75424
+  },
+  "synergy/Low_2023_ids.csv": {
+   "sha256": "b49c1bf3090f9a64f6498423bdc8c561ac99ed3218d5b2bb5fe8a0bfe66aa358",
+   "bytes": 58210
+  },
+  "synergy/Maciel_2024_ids.csv": {
+   "sha256": "70ec8d9b9dec9fe6b85907e29deba9c08d432a5f661c61fe735c32a25b2f61df",
+   "bytes": 39781
+  },
+  "synergy/Marques_2021_ids.csv": {
+   "sha256": "fa6b3a7fef52edc07b0f34752ad6de0757f347f752050a7945e1148837f78bf6",
+   "bytes": 103981
+  },
+  "synergy/Meijboom_2021_ids.csv": {
+   "sha256": "537d8c39769d634595b382e9bda1fef9f9b5c7696e6e7422153d7844505191a4",
+   "bytes": 51610
+  },
+  "synergy/Mejean_2024_ids.csv": {
+   "sha256": "d04c42737e74bdefe56bcfaf14eb6c193f8e07b1cecd2fe6bb7ce112fa933de8",
+   "bytes": 51022
+  },
+  "synergy/Menon_2022_ids.csv": {
+   "sha256": "e236266664474f69065a451a43f0ccea939c5f72be38f22d61d2e96cbd13c50e",
+   "bytes": 48931
+  },
+  "synergy/Mohamed_2023_ids.csv": {
+   "sha256": "e562fb6e427a536b9f804bdf628c07936cc1f1523048388f49636be723d9f651",
+   "bytes": 72138
+  },
+  "synergy/Monschau_2025_ids.csv": {
+   "sha256": "21b64f395c2e9fd3dfb06ec0d16c42ce4f19664aa8e134eb575fcd0eed60e74f",
+   "bytes": 671221
+  },
+  "synergy/Moran_2020_ids.csv": {
+   "sha256": "85cf3e9a9e1b9bcb4ac8cd5e83bc0dccc16d952d07afcbf741018a1212c24255",
+   "bytes": 247067
+  },
+  "synergy/Moseng_2024_ids.csv": {
+   "sha256": "281e28e3057cce3760dcf4e6294eed11a7e8e1f08a48d0580e93b97bb14a93bb",
+   "bytes": 306518
+  },
+  "synergy/Muthu_2020_ids.csv": {
+   "sha256": "4d9c7daaddcf9950a8827861ebb0e1e14621779cb1a612afa0ba7ade6936623f",
+   "bytes": 132879
+  },
+  "synergy/Nobrega-Dos_Santos_2023_ids.csv": {
+   "sha256": "83a93bd66a075dced66cd06fb2fff3e0d59a5a65124be04a81319440cf09c57b",
+   "bytes": 43376
+  },
+  "synergy/Noetel_2021_ids.csv": {
+   "sha256": "8139536edc3a76fc4002e425b038acea9ba793e8004829db5f6b30bb4d8538d9",
+   "bytes": 10773
+  },
+  "synergy/Oliveira_2021_ids.csv": {
+   "sha256": "4d54bae32ae4b6a7214a0f471285881b0e364e3fd17ac6fffad4b3cea8b69562",
+   "bytes": 7387
+  },
+  "synergy/Oud_2018_ids.csv": {
+   "sha256": "00bb79d710f8eb3f2e4db674246731cde2ea6d508301b5cef7f2ed7f39146275",
+   "bytes": 44273
+  },
+  "synergy/Parodis_2023a_ids.csv": {
+   "sha256": "0d8d672ede85b2286d7726f04140eb6f4dbf1f21dbb9471dde45b024f03e3418",
+   "bytes": 105750
+  },
+  "synergy/Parodis_2023b_ids.csv": {
+   "sha256": "62873fcf0494a506b581fbeb201e4c4a58539a4bee6186ec4391314290f2a6b4",
+   "bytes": 49904
+  },
+  "synergy/Pijls_2017_ids.csv": {
+   "sha256": "255736a11cc2197464e8d20bfe68cf414516c0b8b33e0eae2964e85f613efe91",
+   "bytes": 9408
+  },
+  "synergy/Pijls_2018_ids.csv": {
+   "sha256": "0d8b961a09d57cb7e446cba1bd67e1cd799e146dff3648feb7f558e10f0364ed",
+   "bytes": 67741
+  },
+  "synergy/Pinos-Cisneros_2023_ids.csv": {
+   "sha256": "e89c6e5e29b9aace0956f63e50612d471a38e5e2e2e67a380f649a86ff28a8fe",
+   "bytes": 10727
+  },
+  "synergy/Quevedo_2023_ids.csv": {
+   "sha256": "3b281c74b34dadf99bf93520f988bea62bdefc5907f76927603c2d9a8b3a78aa",
+   "bytes": 10405
+  },
+  "synergy/Radjenovic_2013_ids.csv": {
+   "sha256": "0ca4ddff4826d2ff10484f034615a35d69e2f656df332dc3d57f31a33a6e3a01",
+   "bytes": 42067
+  },
+  "synergy/Ramiro_2015_ids.csv": {
+   "sha256": "150360c8fd4db7fda512a9058f509cde10eb0ccd683147629296aa61b8ec36a5",
+   "bytes": 11778
+  },
+  "synergy/Rinne_2021_ids.csv": {
+   "sha256": "63071a5cdf90c6263520f6748812bb4f94bb466a99e7271e71cf284224bf40b3",
+   "bytes": 13843
+  },
+  "synergy/Roberts_2021_ids.csv": {
+   "sha256": "a482fb2edc546a8afa58248614bc9eef480a0f0b7bf4062edc3867ed101e6091",
+   "bytes": 208607
+  },
+  "synergy/Ruggeri_2019_ids.csv": {
+   "sha256": "473ec46623f4e2d033db2918072fa1b0203106f53f7599162fe662a780413c62",
+   "bytes": 53929
+  },
+  "synergy/Sanchez-Acedo_2023_ids.csv": {
+   "sha256": "4fc5894bdd41548923a3007b6da2ba5b4a18edcce35e522a725bcfbdb61e0b93",
+   "bytes": 27770
+  },
+  "synergy/Sanchez-Alvarez_2023_ids.csv": {
+   "sha256": "6e2166be00dbe1fa34cb2d1acfd670f97b900d27cb5ee4016692f685e82dc994",
+   "bytes": 279566
+  },
+  "synergy/Sanchez-Gomez_2024_ids.csv": {
+   "sha256": "750f93740fae53b31027ad4ab77ba0ab41eb927e68a755e9b80d182e10918955",
+   "bytes": 53275
+  },
+  "synergy/Santos_2018_ids.csv": {
+   "sha256": "7bbb8e846d8bb51900880049cb5fa8302f35fc6d65f02ea8f6f698d7b7f38ded",
+   "bytes": 129902
+  },
+  "synergy/Seghers_2022_ids.csv": {
+   "sha256": "08b08668f309c43cd48696f08667add95459c78fc6dae98e1bee78d6ea3a4fef",
+   "bytes": 306814
+  },
+  "synergy/Sep_2021_ids.csv": {
+   "sha256": "bc3cc0f99f8663461966a55a09ae4d45cb7e7b8c357b53bba8c9717bb4014de4",
+   "bytes": 12892
+  },
+  "synergy/Sepriano_2020_ids.csv": {
+   "sha256": "c9a8a8d25a185074e38fc7c4206d7dea3852c7f023d44f261862664047e8535a",
+   "bytes": 171034
+  },
+  "synergy/Sepriano_2022_ids.csv": {
+   "sha256": "265b9e63584298a139b74e255dd989c50c6a85009a769a826757e2b3d8bbdb9c",
+   "bytes": 130389
+  },
+  "synergy/Smid_2019_ids.csv": {
+   "sha256": "591f73e082c8afc053a5452efc6f5cf7160567c54ab274bf0fd571ba50fd706e",
+   "bytes": 102703
+  },
+  "synergy/Taschner_2024_ids.csv": {
+   "sha256": "63d60aad49cf7ff183621caa85a6d0c6c0d5bd12e4a2fcfef6639b0e8974063a",
+   "bytes": 97710
+  },
+  "synergy/Tektonidou_2019_ids.csv": {
+   "sha256": "e230714e35432f2660561734147a8312e71f35eac86f4a97508f54f030d49689",
+   "bytes": 208379
+  },
+  "synergy/Theobald_2021_ids.csv": {
+   "sha256": "332ab0b5d4ef53b4c2d5ce2b79b149b70ff3271d487cd9189e3489659c55576d",
+   "bytes": 13917
+  },
+  "synergy/Toffalini_2021_ids.csv": {
+   "sha256": "70d79a5b3421904ab58459d55384a04cbe1cac0437e1c12961d53d1aadb30643",
+   "bytes": 10145
+  },
+  "synergy/Tumkaya_2018_ids.csv": {
+   "sha256": "be2fe3463042e490cef41d4aac8a5f6d9741d82cde5c0f10ba55e482a260b777",
+   "bytes": 32268
+  },
+  "synergy/van_Ballegooijen_2024_ids.csv": {
+   "sha256": "13b588369f0859c6bbab30aeca61a904b9d4cf16852182141aec4f80a6ee67d5",
+   "bytes": 617095
+  },
+  "synergy/van_de_Schoot_2025_ids.csv": {
+   "sha256": "eb1a2b737b7287db90a84fc0d692eb7a2e7b59d3bbd4763d839622bb349831fe",
+   "bytes": 1166269
+  },
+  "synergy/van_der_Valk_2021_ids.csv": {
+   "sha256": "42aba3cc60b0743ced7b7976b18d4072318a658735bcf1dc17ab1bc66de31d11",
+   "bytes": 22836
+  },
+  "synergy/van_der_Waal_2022_ids.csv": {
+   "sha256": "ed12506d8fc812091007c661dff26942c1776831030bbed1c7b000671c739f10",
+   "bytes": 28948
+  },
+  "synergy/van_Dis_2019_ids.csv": {
+   "sha256": "c917cba5e96531a302bee7ddfd79b4268992469893879b2131466d5420f504ca",
+   "bytes": 567157
+  },
+  "synergy/van_Heugten_Breurkes_2022_ids.csv": {
+   "sha256": "d7985b04585c1aebfd760b94f30c8443f72993fea1aaca5ea099e0f80ead36c6",
+   "bytes": 67789
+  },
+  "synergy/van_Hoorn_2020_ids.csv": {
+   "sha256": "e53312b880e1fb73998d380e973b6159423fb61392b6977717e40d275a1f50ab",
+   "bytes": 32027
+  },
+  "synergy/Verdugo-Castro_2022_ids.csv": {
+   "sha256": "363a39b4471ccb3baae95a1196a2deef1daea587bd4c901782a574e5d72267d8",
+   "bytes": 167550
+  },
+  "synergy/Viguie_2020_ids.csv": {
+   "sha256": "9e2b2e4ef877b78ea00c5f1be19412f6a8ea95159909c322504d4d377c73af92",
+   "bytes": 273244
+  },
+  "synergy/Walker_2018_ids.csv": {
+   "sha256": "a13842b7694f92700eac5b9e697ee9539c075df9f0d08e92dae46bd31efd5b97",
+   "bytes": 2323841
+  },
+  "synergy/Ward_2020_ids.csv": {
+   "sha256": "e25329af3c4d49b048ffe9c28d8ba45b19ecfe982ec73fd8f7348def20c71854",
+   "bytes": 15862
+  },
+  "synergy/Wassenaar_2017_ids.csv": {
+   "sha256": "89ebfae89af4b60299aba7b0587ee799fb56ae5f6e0ade4fb44d1599e5d07762",
+   "bytes": 362174
+  },
+  "synergy/Webers_2022_ids.csv": {
+   "sha256": "ac4fa65d3910d2a91f69031ea0084bb053f506001b7eab56ac6ace23b2a52f25",
+   "bytes": 763286
+  },
+  "synergy/Wijnen_2024_ids.csv": {
+   "sha256": "60780da2baffaaead17c1766ca6d6e5855a35e46d55fb443971647dd4693b85c",
+   "bytes": 38059
+  },
+  "synergy/Williamson_2023_ids.csv": {
+   "sha256": "df5c772786fb23d2b9eb0fc164b349ff94eea8461d2a5c661296d1b0f21a4c9c",
+   "bytes": 23734
+  },
+  "synergy/Wolters_2018_ids.csv": {
+   "sha256": "84fc7557af594d5004272e95f25a4f1c3c6454004454e062aeb6026e55c0c2b1",
+   "bytes": 230742
+  },
+  "synergy/Xu_2022_ids.csv": {
+   "sha256": "26fd6aa9996cac7f4bf5508eb14ae03a707865e1c2da6a798ea9a4f4aee947fc",
+   "bytes": 130873
+  },
+  "synergy/Zakeri-Nasrabadi_2023a_ids.csv": {
+   "sha256": "e74a2e754f3ac9d25c4cf2196a6a0e8c612329f390ccb1c14c51b63f099a9e31",
+   "bytes": 24923
+  },
+  "synergy/Zakeri-Nasrabadi_2023b_ids.csv": {
+   "sha256": "21f96d21259daf8fc8f82c4c1381f0976e6e75902bcc0f5fe8d1cbb6478f6b08",
+   "bytes": 82451
+  },
+  "synergy/Zanframundo_2022_ids.csv": {
+   "sha256": "9ad2c779133b53cac061f38c23b4122d881956258c26ee064fab48ab55b4cb12",
+   "bytes": 254847
+  },
+  "synergy/Zinsser_2022_ids.csv": {
+   "sha256": "6aaab3ce43caf4ef17a88af04b051eff1eecc5bfe8bbf8c1b8cbb23efafec7ce",
+   "bytes": 23041
+  },
+  "clef/2017.content.qrels": {
+   "sha256": "cfe6a968968e3199a43b7974a29ad887a891c00113146414bdfb572fb5ba59f9",
+   "bytes": 3879546
+  },
+  "clef/2018.content.qrels": {
+   "sha256": "62bd82244d368673dfb150408639393f28ffbc378ada1be7811b7c3b386fe1e6",
+   "bytes": 4741923
+  },
+  "clef/2019i.content.qrels": {
+   "sha256": "c38bfe760c25196f48b34fd23819e78263fd9cabd559ee0f706ce06de134ee81",
+   "bytes": 1427864
+  },
+  "clef/topics/2017/10": {
+   "sha256": "2b7ac30cc9fce851bdf56a2b13baca403d182d83c2ed2034c2b8072fc8bd6fdc",
+   "bytes": 31966
+  },
+  "clef/topics/2017/12": {
+   "sha256": "23c0057133174de71ed09f5c64b088cb7d1801651f5c2b354eac639ed9c51911",
+   "bytes": 73604
+  },
+  "clef/topics/2017/15": {
+   "sha256": "984bbe72417183d88c83844c02e988d6b279f128b7ad38cac7d71349b53b7d29",
+   "bytes": 145558
+  },
+  "clef/topics/2017/16": {
+   "sha256": "01827a6c248485ebc59e81cde12e877be010e419673e285d6423bb531de4490b",
+   "bytes": 40560
+  },
+  "clef/topics/2017/17": {
+   "sha256": "52d3b0c1bb43b625b07b781e0bb239911c4ed279ee5e40fc2d4852d99e463d27",
+   "bytes": 11527
+  },
+  "clef/topics/2017/18": {
+   "sha256": "3d852231c0ebfa07ac51a6e12c26a8b9bf80949a2317293489239a4500c76eac",
+   "bytes": 1946
+  },
+  "clef/topics/2017/2": {
+   "sha256": "1e10121679835a2504db1505d7c29f813f98cc7f07152b7f19d2ac0be438d96a",
+   "bytes": 3493
+  },
+  "clef/topics/2017/21": {
+   "sha256": "bb9d812937b8fce41450dc326d25e67029dc0118f8bb179d2e2fadcf4acfb92e",
+   "bytes": 83494
+  },
+  "clef/topics/2017/22": {
+   "sha256": "3ce02171315a1d0d3a9ca54e50690cc2c1785deff7b9f3f446477a5850a4ffaa",
+   "bytes": 32482
+  },
+  "clef/topics/2017/25": {
+   "sha256": "b3e4819041fb1619c1a178ef0622a30046cdf5ac236a5d845f5396628ed6986b",
+   "bytes": 77659
+  },
+  "clef/topics/2017/26": {
+   "sha256": "2fb879c65eba898ff779429352ade05ce2f04e47080e3e9ba21b787a745f591a",
+   "bytes": 27020
+  },
+  "clef/topics/2017/27": {
+   "sha256": "10d53a7498d903d9d0e985a5923785229ee6449cfcee003833defe165f96a5b7",
+   "bytes": 144542
+  },
+  "clef/topics/2017/29": {
+   "sha256": "85aea1d8281d4637179983f55d9dfe1c870f25d4f0b40d2fc04832ee5c2b447c",
+   "bytes": 14083
+  },
+  "clef/topics/2017/31": {
+   "sha256": "d8177357c48eb933836954c2e1b280c22e4e0828d9afbaf062c08cc19d79c364",
+   "bytes": 22416
+  },
+  "clef/topics/2017/32": {
+   "sha256": "04dd35681cf402a896ee8bf73a77f7107054577dedafc4c11471b7036bd1c47d",
+   "bytes": 172683
+  },
+  "clef/topics/2017/34": {
+   "sha256": "3ccb60be15224ca08525288480e21b8c5d963dedd691bcaf541d9945e10a708d",
+   "bytes": 109955
+  },
+  "clef/topics/2017/36": {
+   "sha256": "a933e6cf123296f4eb06e38964930373e28b03c990279f2d785121ae98c607cc",
+   "bytes": 5865
+  },
+  "clef/topics/2017/39": {
+   "sha256": "be1c29fb726a6dbca64e1f4685b1dd62064a10ad6cdf54e9206cecfdac635c39",
+   "bytes": 3492
+  },
+  "clef/topics/2017/40": {
+   "sha256": "09a4ffac14738228eb41a4389b562f590346836ea58fb02e4d9cd51474d389b4",
+   "bytes": 14451
+  },
+  "clef/topics/2017/41": {
+   "sha256": "93067665deed68859dfe9e804c85cf72b3b3aab218f80e23ed8b29fbb6cf70a2",
+   "bytes": 4756
+  },
+  "clef/topics/2017/42": {
+   "sha256": "e7c2d6808c10e7ca305f8cb90166d427787ce9b3cc11ae000a56ece9dc8d9566",
+   "bytes": 150714
+  },
+  "clef/topics/2017/47": {
+   "sha256": "8cc6a19251d9ef401b5102cb14186886269d09267841b5ba8ec42cae4334c771",
+   "bytes": 1977
+  },
+  "clef/topics/2017/48": {
+   "sha256": "53fbd354a4357691f7ed6b0f6dda5261cc60228d2c1ad6fd9eb65bfc2bf5efd2",
+   "bytes": 22353
+  },
+  "clef/topics/2017/49": {
+   "sha256": "9e5e2f5a52732d782adbc3b03c2b6af529fe9bda1825a3f8b532ee32c0c6b02f",
+   "bytes": 77670
+  },
+  "clef/topics/2017/5": {
+   "sha256": "93e66e8656212a78f06ab3ae26d83294f80d9e890c2ae310ce0cacb6e5362d98",
+   "bytes": 28663
+  },
+  "clef/topics/2017/51": {
+   "sha256": "be48c4cd05d1b3618f4e6e531c8febedb108a6c26084fe492084b1257a6023e1",
+   "bytes": 9893
+  },
+  "clef/topics/2017/56": {
+   "sha256": "be94172de8413e88ecf12f2df72791845f88e38ddd89b6b72150d010a372e147",
+   "bytes": 151162
+  },
+  "clef/topics/2017/57": {
+   "sha256": "eb89165eb480b395d1de0f2082ca71bb490d1c44107562772599beebd281c560",
+   "bytes": 1562
+  },
+  "clef/topics/2017/7": {
+   "sha256": "5a8ea4a5d8019d2cf276955355ed4450abb73ca6a0debe5187fe08135f9bf84d",
+   "bytes": 87204
+  },
+  "clef/topics/2017/8": {
+   "sha256": "52abe7d9e58a69477e6a1ccf6c261d2f0bf7257c8d9c534ea5e7f274f3e4de3e",
+   "bytes": 89395
+  },
+  "clef/topics/2018/CD008122": {
+   "sha256": "01cb1f16a711ea57bcc7bb922204075de30521edf81261e5ed866fb6603c88d7",
+   "bytes": 26876
+  },
+  "clef/topics/2018/CD008587": {
+   "sha256": "cff9017932c6d780b484dac8baedd10869491728b3b336a96771e13920e800ff",
+   "bytes": 128541
+  },
+  "clef/topics/2018/CD008759": {
+   "sha256": "10dbf904760f9a9e7ee061d0738e2461500e99d103bb268894e69c75167616db",
+   "bytes": 13294
+  },
+  "clef/topics/2018/CD008892": {
+   "sha256": "87dd2619135cf19b870674df13889080b4617602855e9579b32534e8cac0cff2",
+   "bytes": 21859
+  },
+  "clef/topics/2018/CD009175": {
+   "sha256": "48a437420dbb1becc435b74f5e09243a8f71cadfb94c4404f8a2f069bb1cd271",
+   "bytes": 77599
+  },
+  "clef/topics/2018/CD009263": {
+   "sha256": "6e538dfa4df4c1308a22c57278001bc1d24315d5f7d7a047096c46c5b0cf00b8",
+   "bytes": 1100351
+  },
+  "clef/topics/2018/CD009694": {
+   "sha256": "9b5444aad3acb750f9df0af2b5d1ba1f403847dfcade3503feba12c54326c73e",
+   "bytes": 2633
+  },
+  "clef/topics/2018/CD010213": {
+   "sha256": "74c4e0fbdf6171a23b18a756667d4fa8f0d230cd3ad6587345d9f0749960d1d2",
+   "bytes": 209603
+  },
+  "clef/topics/2018/CD010296": {
+   "sha256": "f548e909b66ac9ed91e3995fa4a561c060bd118bd335fcdaff558b220466a072",
+   "bytes": 64476
+  },
+  "clef/topics/2018/CD010502": {
+   "sha256": "496c64323199ab3863c3fdd397a31d3b0fe5cd454059fa983232e7f822abec64",
+   "bytes": 41753
+  },
+  "clef/topics/2018/CD010657": {
+   "sha256": "58d3da169facaa72389ae728adb8f81a1a8fc64c7233f1e36532f5193d6f9814",
+   "bytes": 26626
+  },
+  "clef/topics/2018/CD010680": {
+   "sha256": "56df6bd687f5055e74b94503c71b6555313f814cb1d112b21519bed282288808",
+   "bytes": 116193
+  },
+  "clef/topics/2018/CD010864": {
+   "sha256": "f859da92115b67b0476edf7b32fffea9d6934aa357dee6cedd51e64c30a28cf5",
+   "bytes": 35775
+  },
+  "clef/topics/2018/CD011053": {
+   "sha256": "5a6df1b5883f1c10252d81cf8aee62a80559e2525a92da21264ab12d8fea6533",
+   "bytes": 32588
+  },
+  "clef/topics/2018/CD011126": {
+   "sha256": "14754d33b6923ddc4ca14361f57b8a2583ca6cb286499be159b399ea57ff83c5",
+   "bytes": 87171
+  },
+  "clef/topics/2018/CD011420": {
+   "sha256": "5422e797b9c37acdbfaacbe00a054506737fe78c930bfd73f6f70ef0491009b9",
+   "bytes": 3941
+  },
+  "clef/topics/2018/CD011431": {
+   "sha256": "d6f4d9793821725f39d32093023de3be4d2158fde7171362a81bcf36d0e73784",
+   "bytes": 17244
+  },
+  "clef/topics/2018/CD011515": {
+   "sha256": "a5e0da68cd7c8d1d79ec77dc61e7fd79955b968fe4fa0293e3df2df5501b3d2a",
+   "bytes": 101588
+  },
+  "clef/topics/2018/CD011602": {
+   "sha256": "38239354300dada794d6f966df63e2c83e7e8efcacabde18ad0c334dce0ee68e",
+   "bytes": 84565
+  },
+  "clef/topics/2018/CD011686": {
+   "sha256": "878c76f1b370ee34c50a043c953a6fce4060745288b6639f9d5864a8d6fd9f87",
+   "bytes": 130571
+  },
+  "clef/topics/2018/CD011912": {
+   "sha256": "c84ee90dca2d89103356aa8402cec3f092c2440daa66151ba040e59b6352191d",
+   "bytes": 19807
+  },
+  "clef/topics/2018/CD011926": {
+   "sha256": "439b09fe0fc59d534dfdb7755fe3f706ef36dd2f7f632df39c44cc9e83b0f092",
+   "bytes": 56694
+  },
+  "clef/topics/2018/CD012009": {
+   "sha256": "6e8d1fdd56d1624cbf60a33cab149fd83060519704eee8dbaef1af3a272e9abf",
+   "bytes": 8266
+  },
+  "clef/topics/2018/CD012010": {
+   "sha256": "2953e9133084f42bc7f67c3f2f7170e055dd9f031b2fa3e4b88938b453c6783e",
+   "bytes": 92812
+  },
+  "clef/topics/2018/CD012083": {
+   "sha256": "c5c75d3b7233c4b2cd56eaf6b97dcbd487172566e61b8c8463fdd6582b8caa05",
+   "bytes": 4910
+  },
+  "clef/topics/2018/CD012165": {
+   "sha256": "239b26db17971843c4ead036d5fb9a6db50a5efaff0c8b29c250050386519e06",
+   "bytes": 143235
+  },
+  "clef/topics/2018/CD012179": {
+   "sha256": "b8e9fd4b57729d4d2327b812d9ab7aa116efb68fe3e890731c10940bef63e17e",
+   "bytes": 137753
+  },
+  "clef/topics/2018/CD012216": {
+   "sha256": "bf2bdbc9f9b80c7bbfc91743bacd116ad75fb1069aaa6582dd46bf418f4b7368",
+   "bytes": 3727
+  },
+  "clef/topics/2018/CD012281": {
+   "sha256": "8b4c7fb36dac2fbd7c36ab485ea406127decb2bcccc0cd0f1dc7508f4c23568d",
+   "bytes": 138405
+  },
+  "clef/topics/2018/CD012599": {
+   "sha256": "bdbb4358861ac3b24f52e9712e398976ee4d8d155e9d4c4e7c78d3f5b4226138",
+   "bytes": 110726
+  },
+  "clef/topics/2019i/CD000996": {
+   "sha256": "4af769c2436efe8f42e483fe9a0beaeeb2eac2e22c40ebfd26d6d33e7960da77",
+   "bytes": 4473
+  },
+  "clef/topics/2019i/CD001261": {
+   "sha256": "4488a1c68d8a66dba6cdde3bb6d80495543fdcd8c70f18d7a2abd5c3966724e0",
+   "bytes": 8260
+  },
+  "clef/topics/2019i/CD004414": {
+   "sha256": "330758383bdf94c03305613740441a5f53d008b98d58a4d7b0dd5629fd834151",
+   "bytes": 5248
+  },
+  "clef/topics/2019i/CD006468": {
+   "sha256": "e894c503ef91b57a6b673ed766e6aba5d4e90aa63d1f214f4c93cbbb0c9052ec",
+   "bytes": 54319
+  },
+  "clef/topics/2019i/CD007867": {
+   "sha256": "8e6b6c0d2af7485fd4e18d87fb9ca9c2c6c0389fe49531f010d392e6ac475239",
+   "bytes": 13737
+  },
+  "clef/topics/2019i/CD009069": {
+   "sha256": "78bd0114756333bbbf700142d550351907ff6586ca36ebb994b1bbcd0bdaafaa",
+   "bytes": 25061
+  },
+  "clef/topics/2019i/CD009642": {
+   "sha256": "cdbdaca653d5066ef3e12f38bf1a4391ff7ae344ed9d627219d8a74014f96b7f",
+   "bytes": 26987
+  },
+  "clef/topics/2019i/CD010038": {
+   "sha256": "cc2a453bd56a8be9d0867678b8b6c686bfd1047dcce21a50f2c5a6b38fcee8c0",
+   "bytes": 125220
+  },
+  "clef/topics/2019i/CD010239": {
+   "sha256": "7bbb3f9ff5c77687b04fcf99c4bd7119c3a51cfef453ac5ebee8d0e3c7d5dc00",
+   "bytes": 3438
+  },
+  "clef/topics/2019i/CD010558": {
+   "sha256": "1fa94bec6606f927db11fc6b6f2f3e922e7e3479cb0d0f6405104d03a055dc52",
+   "bytes": 40470
+  },
+  "clef/topics/2019i/CD010753": {
+   "sha256": "78842cd579ca0e61ee42e8d2186083c9a59069de20a336ab35f7f85623397d38",
+   "bytes": 37624
+  },
+  "clef/topics/2019i/CD011140": {
+   "sha256": "386aba5acd45986c992e3493c8b75b2d904273a5b15bf3bbdfc2e3a18f1794f1",
+   "bytes": 5015
+  },
+  "clef/topics/2019i/CD011571": {
+   "sha256": "8472ac2b0079f95777109dced70ab6dffa19220cc9c5a32ef3e6f50bcb29c720",
+   "bytes": 2607
+  },
+  "clef/topics/2019i/CD011768": {
+   "sha256": "5917c1aa66fec3df84fd49519a4badd652611148fbdf771d58806340558f9542",
+   "bytes": 126870
+  },
+  "clef/topics/2019i/CD011977": {
+   "sha256": "5d22e0b545518da0dca36b6bf726e1c987b17bb1a9fb343960ae99168c79f146",
+   "bytes": 4002
+  },
+  "clef/topics/2019i/CD012069": {
+   "sha256": "424cb638d2f437f9e3f8799cd16eb3f325e7c81c7981ff08e46b6190b89184e6",
+   "bytes": 53268
+  },
+  "clef/topics/2019i/CD012164": {
+   "sha256": "13e2eeb6d1cf29a6f6ed99f06138918bf9a606de72f9403269222a4b489ab17c",
+   "bytes": 1817
+  },
+  "clef/topics/2019i/CD012342": {
+   "sha256": "0fb196837ff80bbdd5b4f724f2e3e2e62ea962fd5ecccf6ea38c34742b50943a",
+   "bytes": 35805
+  },
+  "clef/topics/2019i/CD012455": {
+   "sha256": "d5483dfb01bd546a88510e48dc3ab7d18d2f6a3965382335b1d8d91716458c50",
+   "bytes": 22746
+  },
+  "clef/topics/2019i/CD012551": {
+   "sha256": "c5baaee68c77888541e516e097685e47afb17ddd13e07e8b86e9a46366818978",
+   "bytes": 9145
+  },
+  "litsearch/query.0.json": {
+   "sha256": "386687f303583e77df75109251f929027cbc1b3129e0734a372d578ff1cd42bf",
+   "bytes": 31515
+  },
+  "litsearch/query.100.json": {
+   "sha256": "4fb5539a16ffa76c033d0d3df7f20156880701f11e6af92179083c4f0413b6d5",
+   "bytes": 29725
+  },
+  "litsearch/query.200.json": {
+   "sha256": "552208872d4461ed5508fcde3b50347d447f3d44cf7285baee234532e59cffd3",
+   "bytes": 29031
+  },
+  "litsearch/query.300.json": {
+   "sha256": "02c14c9ed02c55aaa3606a8f44bc2989d17eda10a67c30204b65c5ee96b45e8b",
+   "bytes": 26572
+  },
+  "litsearch/query.400.json": {
+   "sha256": "ec5ce31f416bb33b30ca1e196f3ce35894ecd6ee775fe87988fb24504afdfb0a",
+   "bytes": 25880
+  },
+  "litsearch/query.500.json": {
+   "sha256": "aad362722425b083b3863fb6ff83c32b113d9e90d14484a0c2b601bd9342a9e6",
+   "bytes": 25066
+  }
+ },
+ "questions": {
+  "built": "2026-11-17T16:57:47.152Z",
+  "total": 113,
+  "droppedForTooFewGold": [
+   "syn-Chakraborty_2023",
+   "syn-Deckers_2022",
+   "syn-Radjenovic_2013",
+   "syn-Zakeri-Nasrabadi_2023a",
+   "syn-Hanlon_2022"
+  ],
+  "goldItemsBySource": {
+   "synergy": {
+    "listed": 2012,
+    "unmapped": 356,
+    "mapped": 1656,
+    "withoutDoi": 53
+   },
+   "clef": {
+    "listed": 795,
+    "unmapped": 0,
+    "mapped": 795,
+    "withoutDoi": 63
+   },
+   "litsearch": {
+    "listed": 30,
+    "unmapped": 0,
+    "mapped": 30,
+    "withoutDoi": 0
+   }
+  },
+  "byDiscipline": {
+   "social-business-education": 22,
+   "environment-other": 6,
+   "cs": 36,
+   "health": 49
+  }
+ }
+}

@@ -38,7 +38,8 @@ process.stdin.on('end', () => {
   }
   const sys = args[args.indexOf('--system-prompt') + 1] || '';
   let text = fx.ANSWER_TEXT;
-  if (/search queries/i.test(sys)) text = fx.PLAN_JSON;
+  if (/Passage to rewrite:\n\n/i.test(input)) text = fx.modelReply(input); // the rewrite reply the fake codex gives
+  else if (/search queries/i.test(sys)) text = fx.PLAN_JSON;
   else if (/judge each/i.test(sys)) text = fx.insightsJson((input.match(/^\[\d+\] /gm) || []).length, input);
   else if (/exactly the word/i.test(sys)) text = 'ready';
   else if (/choose figures from research papers/i.test(sys)) text = process.env.FAKE_NO_FIGURES ? '{"figures": []}' : fx.figuresJson(input);

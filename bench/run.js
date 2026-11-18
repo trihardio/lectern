@@ -23,7 +23,10 @@ const arg = (name, fallback) => { const i = process.argv.indexOf(`--${name}`); r
 const PREREG = Object.freeze({
   version: 1,
   measured: { targetDevFpr: 0.05 }, // threshold = the lowest score that flags at most 5% of DEVELOPMENT human texts
-  review: { flagAtScore: 20 }, // a document is flagged when the headline share is 20% or more; no score = abstained
+  // Version 1 rule: flag when the strong-share headline is 20% or more; no score = abstained. It describes the review as shipped in 0.2.1 (SCORING.version 2).
+  // Since SCORING.version 3 the report's `score` is the mean rating and `flagged` carries the decision (bench/review/ and PREREGISTRATION.md version 4),
+  // so the --system review run below takes the decision from `flagged` and only falls back to this rule for code that has no `flagged` field.
+  review: { flagAtScore: 20 },
   claim: { maxFprUpper: 0.05, minDetectionLower: 0.8, maxAbstention: 0.1 }, // all must hold on the holdout, overall and for non-native writers
   lengthBins: [[0, 149, 'under 150 words'], [150, 299, '150-299 words'], [300, 599, '300-599 words'], [600, Infinity, '600+ words']],
 });
@@ -151,14 +154,14 @@ async function main() {
       const t0 = Date.now();
       try {
         const r = await runAiCheck({ text: it.text, config, engine, selectedModel: typeof model === 'string' ? model : undefined });
-        rows.push({ ...it, score: r.score, status: r.status, coverage: r.coverage, reported: r.provenance.reportedModels, decision: r.score == null ? null : r.score >= PREREG.review.flagAtScore, ms: Date.now() - t0 });
+        rows.push({ ...it, score: r.scoreExact != null ? r.scoreExact : r.score, status: r.status, coverage: r.coverage, reported: r.provenance.reportedModels, decision: r.flagged != null ? r.flagged : r.score == null ? null : r.score >= PREREG.review.flagAtScore, ms: Date.now() - t0 });
       } catch (e) {
         rows.push({ ...it, score: null, status: 'error', error: e.message, decision: null, ms: Date.now() - t0 });
       }
       process.stdout.write(`\r${rows.length}/${items.length}`);
     }
     process.stdout.write('\n');
-    rule = `flag when the headline share >= ${PREREG.review.flagAtScore}%; no score = abstained`;
+    rule = `flag when the report's \`flagged\` is true (mean rating at or above SCORING.flagAt); code without that field: headline share >= ${PREREG.review.flagAtScore}%; no score = abstained`;
     note = fake ? 'FAKE MODEL: checks the pipeline only; these numbers say nothing about accuracy.' : `Live model: ${engine}${model ? ` / ${model}` : ''}.`;
   }
 

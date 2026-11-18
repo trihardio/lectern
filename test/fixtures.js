@@ -316,9 +316,13 @@ function checkPage(path) {
 /** The fake model's reading of numbered sentences: stock AI words score high, everything else low. */
 function aiReviewJson(input) {
   const sents = [...input.matchAll(/^\[(\d+)\] (.*)$/gm)].map((m) => ({ n: +m[1], text: m[2] }));
+  // FAKE_REVIEW_MODE=bands (browser checks only) also rates a middle band, so all three colours can be looked at.
+  const middle = process.env.FAKE_REVIEW_MODE === 'bands' ? /navigate|seamless|landscape/i : null;
   const spans = sents.map((s) => (/delve|pivotal|tapestry|underscore|crucial role/i.test(s.text)
     ? { from: s.n, to: s.n, ai: 88, why: 'Stock vocabulary and a generic claim with no concrete detail.' }
-    : { from: s.n, to: s.n, ai: 18, why: 'Specific figures and uneven phrasing read as human.' }));
+    : middle && middle.test(s.text)
+      ? { from: s.n, to: s.n, ai: 52, why: 'Generic phrasing around a real point; some stock words, no detail.' }
+      : { from: s.n, to: s.n, ai: 18, why: 'Specific figures and uneven phrasing read as human.' }));
   const issues = [];
   for (const s of sents) {
     if (/recieve/.test(s.text)) issues.push({ s: s.n, quote: 'recieve', kind: 'spelling', note: 'Misspelt.', fix: 'receive' });
@@ -361,8 +365,136 @@ function withWebLinks(answer) {
   return at === -1 ? `${answer}\n\n${line}` : `${answer.slice(0, at)}\n\n${line}${answer.slice(at)}`;
 }
 
+// Records for the edge cases the sample set above does not cover, shaped like what the databases really sent on 2026-11-18
+// (preprints, a retracted paper, a correction notice, double-escaped markup, study designs, other ids). All made up.
+function edgeOpenalex() {
+  const loc = (extra) => ({ is_oa: false, landing_page_url: null, pdf_url: null, doi: null, version: null, source: null, ...extra });
+  return {
+    meta: { count: 4 },
+    results: [
+      { id: 'https://openalex.org/W9100001', doi: 'https://doi.org/10.5555/lectern.edge.1', display_name: 'Sample edge record: intermittent fasting and cardiometabolic risk, a systematic review and meta-analysis',
+        publication_year: 2024, publication_date: '2024-02-01', type: 'review', cited_by_count: 12, is_retracted: false, rerank_score: 0.87, relevance_score: 55.2,
+        authorships: [{ author: { display_name: 'Tess Arden' } }], biblio: { volume: '9', issue: '1', first_page: '10', last_page: '20' },
+        primary_location: { landing_page_url: 'https://example.org/edge/1', source: { id: 'https://openalex.org/S9001', display_name: 'Sample Nutrition Journal', type: 'journal' } },
+        best_oa_location: null, open_access: { is_oa: false, oa_url: null }, topics: [],
+        ids: { openalex: 'https://openalex.org/W9100001', doi: 'https://doi.org/10.5555/lectern.edge.1', pmid: 'https://pubmed.ncbi.nlm.nih.gov/39000001', pmcid: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9000001' },
+        study_designs: [{ id: 'https://openalex.org/study-designs/systematic-review' }, { id: 'https://openalex.org/study-designs/meta-analysis' }],
+        locations: [loc({ doi: 'https://doi.org/10.5555/lectern.edge.1', version: 'publishedVersion' }),
+          loc({ doi: 'https://doi.org/10.5555/lectern.edge.1pre', version: 'submittedVersion', landing_page_url: 'https://arxiv.org/abs/2401.01234v2', id: 'pmh:oai:arXiv.org:2401.01234' })],
+        abstract_inverted_index: { Sample: [0], abstract: [1], text: [2] } },
+      { id: 'https://openalex.org/W9100002', doi: 'https://doi.org/10.5555/lectern.edge.2', display_name: 'Sample edge record: a meta-analysis of sleep and memory (preprint)',
+        publication_year: 2025, publication_date: '2025-01-05', type: 'preprint', cited_by_count: 0, is_retracted: false,
+        authorships: [], biblio: {}, primary_location: { landing_page_url: 'https://example.org/edge/2', source: { display_name: 'Sample Preprint Server', type: 'repository' } },
+        open_access: { is_oa: true, oa_url: 'https://example.org/edge/2' }, topics: [], ids: { openalex: 'https://openalex.org/W9100002' }, study_designs: [], locations: [],
+        abstract_inverted_index: null },
+      { id: 'https://openalex.org/W9100003', doi: 'https://doi.org/10.5555/lectern.edge.3', display_name: 'Sample edge record: a retracted trial of sleep and memory',
+        publication_year: 2020, type: 'article', cited_by_count: 3, is_retracted: true, authorships: [], biblio: {}, primary_location: null, open_access: {}, topics: [], ids: {}, study_designs: [], locations: [] },
+      { id: 'https://openalex.org/W9100004', doi: 'https://doi.org/10.5555/lectern.edge.4', display_name: 'Sample edge record: correction notice for a trial of sleep',
+        publication_year: 2021, type: 'erratum', cited_by_count: 0, is_retracted: false, authorships: [], biblio: {}, primary_location: null, open_access: {}, topics: [], ids: {}, study_designs: [], locations: [] },
+    ],
+  };
+}
+
+function edgeSemanticscholar() {
+  return {
+    total: 3,
+    data: [
+      { paperId: 's2-e1', title: 'Sample edge record: scaling laws for sample networks', abstract: null, tldr: null, year: 2021, publicationDate: '2021-01-05', authors: [{ name: 'Sam Okoro' }],
+        venue: 'arXiv.org', journal: null, externalIds: { ArXiv: '2101.00001', CorpusId: 1 }, citationCount: 4, isOpenAccess: true, openAccessPdf: { url: 'https://arxiv.org/pdf/2101.00001.pdf' }, publicationTypes: null, url: 'https://www.semanticscholar.org/paper/s2-e1' },
+      { paperId: 's2-e2', title: 'Sample edge record: vaccine effectiveness in older adults', abstract: 'Sample abstract about vaccines.', tldr: { text: 'Sample summary.' }, year: 2024, authors: [{ name: 'Rae Lindqvist' }],
+        venue: 'Sample Medical Journal', journal: { name: 'Sample Medical Journal', volume: '3', pages: '1-9' }, externalIds: { DOI: '10.5555/LECTERN.EDGE.S2', PubMed: '39000002', PubMedCentral: '9000002', ArXiv: '2401.99999' },
+        citationCount: 23, isOpenAccess: false, openAccessPdf: null, publicationTypes: ['JournalArticle', 'Study'], url: 'https://www.semanticscholar.org/paper/s2-e2' },
+      { paperId: 's2-e3', title: 'Sample edge record: a preprint with a bioRxiv DOI', abstract: 'Sample abstract.', year: 2025, authors: [], venue: 'bioRxiv', journal: null,
+        externalIds: { DOI: '10.1101/2025.01.02.123456' }, citationCount: 0, isOpenAccess: true, openAccessPdf: null, publicationTypes: ['JournalArticle'], url: 'https://www.semanticscholar.org/paper/s2-e3' },
+    ],
+  };
+}
+
+function edgeCrossref() {
+  const item = (o) => ({ title: ['x'], author: [], issued: { 'date-parts': [[2024]] }, type: 'journal-article', 'is-referenced-by-count': 0, ...o });
+  return {
+    status: 'ok',
+    message: {
+      'total-results': 5,
+      items: [
+        item({ DOI: '10.5555/lectern.edge.c1', title: ['Sample edge record: peer feedback and formative assessment'], type: 'posted-content',
+          abstract: '&lt;p dir="ltr"&gt;Introduction&lt;br&gt;Clinical education is a cornerstone (P &lt; 0.05).&lt;/p&gt;', relation: { 'is-preprint-of': [{ 'id-type': 'doi', id: 'https://doi.org/10.5555/LECTERN.EDGE.C1PUB', 'asserted-by': 'subject' }] } }),
+        item({ DOI: '10.5555/lectern.edge.c2', title: ['Sample edge record: formative feedback in secondary schools'],
+          abstract: '<jats:title>Abstract</jats:title><jats:sec><jats:title>Background</jats:title><jats:p>Feedback matters.</jats:p></jats:sec><jats:sec><jats:title>Methods</jats:title><jats:p>We ran H<jats:sub>2</jats:sub>O tests where x<y and a>b.</jats:p></jats:sec>',
+          relation: { 'has-preprint': [{ 'id-type': 'doi', id: 'https://doi.org/10.5555/lectern.edge.c1', 'asserted-by': 'subject' }] } }),
+        item({ DOI: '10.5555/lectern.edge.c3', title: ['Sample edge record: a withdrawn trial of feedback'], abstract: 'Sample abstract.', 'updated-by': [{ type: 'retraction', DOI: '10.5555/lectern.edge.c3r', source: 'publisher', label: 'Retraction' }] }),
+        item({ DOI: '10.5555/lectern.edge.c4', title: ['Sample edge record: notice about a trial of feedback'], 'update-to': [{ type: 'retraction', DOI: '10.5555/lectern.edge.c3' }] }),
+        item({ DOI: '10.5555/lectern.edge.c5', title: ['Correction to: Sample edge record about feedback'], abstract: 'Sample abstract.' }),
+      ],
+    },
+  };
+}
+
+function edgeEuropepmc() {
+  const base = { firstPublicationDate: '2025-03-01', pubYear: '2025', isOpenAccess: 'N', citedByCount: 1, authorList: { author: [{ lastName: 'Sample', firstName: 'Ann' }] }, journalInfo: { volume: '1', issue: '2', journal: { title: 'Sample Journal' } } };
+  return {
+    hitCount: 3,
+    resultList: {
+      result: [
+        { ...base, id: '39000003', source: 'MED', pmid: '39000003', pmcid: 'PMC9000003', doi: '10.5555/lectern.edge.e1', title: 'Sample edge record: a trial that was retracted.', abstractText: '<h4>Background</h4><p>Sample text.</p><h4>Methods</h4><p>More text.</p>', pubTypeList: { pubType: ['Journal Article', 'Retracted Publication'] } },
+        { ...base, id: 'PPR9000004', source: 'PPR', doi: '10.5555/lectern.edge.e2', title: 'Sample edge record: a preprint on sleep', abstractText: 'Sample abstract.', pubTypeList: { pubType: ['Preprint'] } },
+        { ...base, id: '39000005', source: 'MED', pmid: '39000005', doi: '10.5555/lectern.edge.e3', title: 'Sample edge record: retraction notice for a trial', abstractText: 'Sample abstract.', pubTypeList: { pubType: ['Journal Article', 'Retraction of Publication'] } },
+      ],
+    },
+  };
+}
+
+/**
+ * The canned model reply for one request, chosen the way test/fakes/codex chooses (by words in the instructions and
+ * the prompt). Used by the Gemini API mock in mock-fetch.js.
+ */
+function modelReply(input) {
+  if (/Passage to rewrite:\n\n/i.test(input)) return JSON.stringify({ text: input.split('Passage to rewrite:\n\n').pop().replace('The report states', 'According to the report,') });
+  if (/Numbered sentences \(/i.test(input)) return aiReviewJson(input);
+  if (/search queries/i.test(input)) return PLAN_JSON;
+  if (/judge each/i.test(input)) return insightsJson((input.match(/^\[\d+\] /gm) || []).length, input);
+  if (/exactly the word/i.test(input)) return 'ready';
+  if (/choose figures from research papers/i.test(input)) return figuresJson(input);
+  if (/claim-citation pairs/i.test(input)) return VERIFY_JSON;
+  return ANSWER_TEXT;
+}
+
+/**
+ * A Gemini Interactions API stream (server-sent events), shaped like the examples on ai.google.dev (checked 2026-11-19):
+ * a thought summary, an optional Google Search step and citation, the answer in two pieces, then usage.
+ * `cut` ends the stream with an error event after the first piece, as a timed-out run does.
+ */
+function geminiStream({ text, model, web = false, cut = false }) {
+  const ev = (o) => `event: ${o.event_type}\ndata: ${JSON.stringify(o)}\n\n`;
+  const half = Math.ceil(text.length / 2);
+  const out = [
+    ev({ interaction: { id: 'v1_test', status: 'in_progress', object: 'interaction', model }, event_type: 'interaction.created' }),
+    ev({ interaction_id: 'v1_test', status: 'in_progress', event_type: 'interaction.status_update' }),
+    ev({ index: 0, step: { type: 'thought' }, event_type: 'step.start' }),
+    ev({ index: 0, delta: { type: 'thought_summary', content: { type: 'text', text: 'Comparing designs.' } }, event_type: 'step.delta' }),
+    ev({ index: 0, event_type: 'step.stop' }),
+  ];
+  let i = 1;
+  if (web) {
+    out.push(ev({ index: i, step: { type: 'google_search_call' }, event_type: 'step.start' }),
+      ev({ index: i, delta: { type: 'google_search_call', arguments: { queries: ['remote work productivity'] } }, event_type: 'step.delta' }),
+      ev({ index: i, event_type: 'step.stop' }));
+    i++;
+  }
+  out.push(ev({ index: i, step: { type: 'model_output' }, event_type: 'step.start' }),
+    ev({ index: i, delta: { type: 'text', text: text.slice(0, half) }, event_type: 'step.delta' }));
+  if (cut) return out.join('') + ev({ error: { message: 'Deadline expired before operation could complete.', code: 'gateway_timeout' }, event_type: 'error' });
+  out.push(ev({ index: i, delta: { type: 'text', text: text.slice(half) }, event_type: 'step.delta' }));
+  if (web) out.push(ev({ index: i, delta: { type: 'text_annotation_delta', annotations: [{ type: 'url_citation', url: 'https://example.org/report', title: 'example.org', start_index: 0, end_index: 10 }] }, event_type: 'step.delta' }));
+  out.push(ev({ index: i, event_type: 'step.stop' }),
+    ev({ interaction: { id: 'v1_test', status: 'completed', model, usage: { total_tokens: 9350, total_input_tokens: 8800, total_output_tokens: 450, total_thought_tokens: 100, total_cached_tokens: 0 } }, event_type: 'interaction.completed' }),
+    'event: done\ndata: [DONE]\n\n');
+  return out.join('');
+}
+
 module.exports = {
-  withWebLinks,
+  edgeOpenalex, edgeSemanticscholar, edgeCrossref, edgeEuropepmc,
+  withWebLinks, modelReply, geminiStream,
   proofreadJson,
   CHECK_SOURCE_TEXT, checkPage, aiReviewJson, SOURCE_HUNT_JSON,
   FIGURE_PMC, europepmcLite, bucketList, BUCKET_FILES, FIGURE_XML, FIGURE_JSON, figuresJson,

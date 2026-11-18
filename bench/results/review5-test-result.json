@@ -1,0 +1,2111 @@
+{
+ "at": "2026-11-18T18:43:39.058Z",
+ "frozenAt": "2026-11-18T18:41:56.396Z",
+ "res": {
+  "texts": 57,
+  "unscored": 0,
+  "chosen": {
+   "score": "zmix",
+   "threshold": -0.32004626882077625,
+   "texts": 57,
+   "unscored": 0,
+   "accuracy": {
+    "k": 51,
+    "n": 57,
+    "p": 0.8947368421052632,
+    "lo": 0.7887718941661297,
+    "hi": 0.9508553414762553
+   },
+   "balancedAccuracy": 0.8932,
+   "humanFlagged": {
+    "k": 2,
+    "n": 18,
+    "p": 0.1111111111111111,
+    "lo": 0.03101952264561239,
+    "hi": 0.32799765130178804
+   },
+   "caught": {
+    "all": {
+     "k": 35,
+     "n": 39,
+     "p": 0.8974358974358975,
+     "lo": 0.7642114553714348,
+     "hi": 0.9593866865533163
+    },
+    "ai": {
+     "k": 28,
+     "n": 30,
+     "p": 0.9333333333333333,
+     "lo": 0.7867654163738308,
+     "hi": 0.9815229762087295
+    },
+    "edited": {
+     "k": 7,
+     "n": 9,
+     "p": 0.7777777777777778,
+     "lo": 0.45258896910698887,
+     "hi": 0.9367748928821533
+    }
+   },
+   "auroc": {
+    "all": 0.9501424501424501,
+    "ai": 0.9555555555555556,
+    "edited": 0.9320987654320988,
+    "allInterval": [
+     0.8825396825396825,
+     0.997229916897507
+    ]
+   },
+   "aiByWriter": {
+    "claude-haiku-5-5": {
+     "k": 15,
+     "n": 15,
+     "p": 1,
+     "lo": 0.7961166989641515,
+     "hi": 1
+    },
+    "claude-sonnet-5-5": {
+     "k": 20,
+     "n": 24,
+     "p": 0.8333333333333334,
+     "lo": 0.6414692935030095,
+     "hi": 0.9332132367136705
+    }
+   },
+   "aiByStyle": {
+    "concise": {
+     "k": 6,
+     "n": 6,
+     "p": 1,
+     "lo": 0.6096657120978346,
+     "hi": 1
+    },
+    "esl": {
+     "k": 5,
+     "n": 6,
+     "p": 0.8333333333333334,
+     "lo": 0.43649717781352987,
+     "hi": 0.9699466302516935
+    },
+    "humanlike": {
+     "k": 6,
+     "n": 6,
+     "p": 1,
+     "lo": 0.6096657120978346,
+     "hi": 1
+    },
+    "plain": {
+     "k": 6,
+     "n": 6,
+     "p": 1,
+     "lo": 0.6096657120978346,
+     "hi": 1
+    },
+    "student": {
+     "k": 5,
+     "n": 6,
+     "p": 0.8333333333333334,
+     "lo": 0.43649717781352987,
+     "hi": 0.9699466302516935
+    }
+   },
+   "aiByGenre": {
+    "abstract": {
+     "k": 5,
+     "n": 7,
+     "p": 0.7142857142857143,
+     "lo": 0.35893445183261935,
+     "hi": 0.9177810759959433
+    },
+    "blog": {
+     "k": 6,
+     "n": 7,
+     "p": 0.8571428571428571,
+     "lo": 0.4868721707256811,
+     "hi": 0.9743203756552565
+    },
+    "essay": {
+     "k": 6,
+     "n": 6,
+     "p": 1,
+     "lo": 0.6096657120978346,
+     "hi": 1
+    },
+    "labreport": {
+     "k": 6,
+     "n": 7,
+     "p": 0.8571428571428571,
+     "lo": 0.4868721707256811,
+     "hi": 0.9743203756552565
+    },
+    "litreview": {
+     "k": 6,
+     "n": 6,
+     "p": 1,
+     "lo": 0.6096657120978346,
+     "hi": 1
+    },
+    "reflection": {
+     "k": 6,
+     "n": 6,
+     "p": 1,
+     "lo": 0.6096657120978346,
+     "hi": 1
+    }
+   },
+   "humanByDomain": {
+    "CS224N_real": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "CollegeEssay_real": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "TOEFL_real": {
+     "k": 0,
+     "n": 4,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.4898908364545973
+    },
+    "abstracts": {
+     "k": 1,
+     "n": 3,
+     "p": 0.3333333333333333,
+     "lo": 0.06149194472039621,
+     "hi": 0.7923403991979522
+    },
+    "books": {
+     "k": 0,
+     "n": 1,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.7934506856227626
+    },
+    "news": {
+     "k": 1,
+     "n": 3,
+     "p": 0.3333333333333333,
+     "lo": 0.06149194472039621,
+     "hi": 0.7923403991979522
+    },
+    "reddit_eli5": {
+     "k": 0,
+     "n": 1,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.7934506856227626
+    }
+   },
+   "errors": [
+    {
+     "id": "sn-labreport-student",
+     "label": "ai",
+     "style": "student",
+     "score": -0.3891776818913381,
+     "meanRating": 13.7,
+     "status": "complete"
+    },
+    {
+     "id": "sn-abstract-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": -0.8701597856311404,
+     "meanRating": 14.6,
+     "status": "complete"
+    },
+    {
+     "id": "ed-blog-1",
+     "label": "edited",
+     "style": "plain",
+     "score": -0.35970338879635794,
+     "meanRating": 28,
+     "status": "complete"
+    },
+    {
+     "id": "ed-abstract-1",
+     "label": "edited",
+     "style": "plain",
+     "score": -0.49432298406916064,
+     "meanRating": 16.5,
+     "status": "complete"
+    },
+    {
+     "id": "hu-news-2",
+     "label": "human",
+     "style": "human",
+     "score": 0.22637032301327675,
+     "meanRating": 8.9,
+     "status": "complete"
+    },
+    {
+     "id": "hu-abstracts-2",
+     "label": "human",
+     "style": "human",
+     "score": 0.1063107176154251,
+     "meanRating": 28.7,
+     "status": "complete"
+    }
+   ]
+  },
+  "shipped": {
+   "score": "meanRating",
+   "threshold": 53.8,
+   "texts": 57,
+   "unscored": 0,
+   "accuracy": {
+    "k": 18,
+    "n": 57,
+    "p": 0.3157894736842105,
+    "lo": 0.21004287638825245,
+    "hi": 0.4447977469786344
+   },
+   "balancedAccuracy": 0.5,
+   "humanFlagged": {
+    "k": 0,
+    "n": 18,
+    "p": 0,
+    "lo": 0,
+    "hi": 0.17587922364665765
+   },
+   "caught": {
+    "all": {
+     "k": 0,
+     "n": 39,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.08966685370757144
+    },
+    "ai": {
+     "k": 0,
+     "n": 30,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.11351339317396876
+    },
+    "edited": {
+     "k": 0,
+     "n": 9,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.2991450484195441
+    }
+   },
+   "auroc": {
+    "all": 0.4672364672364672,
+    "ai": 0.49444444444444446,
+    "edited": 0.3765432098765432,
+    "allInterval": [
+     0.2896825396825397,
+     0.638095238095238
+    ]
+   },
+   "aiByWriter": {
+    "claude-haiku-5-5": {
+     "k": 0,
+     "n": 15,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.20388330103584862
+    },
+    "claude-sonnet-5-5": {
+     "k": 0,
+     "n": 24,
+     "p": 0,
+     "lo": 1.3877787807814457e-17,
+     "hi": 0.13797620467498017
+    }
+   },
+   "aiByStyle": {
+    "concise": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "esl": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "humanlike": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "plain": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "student": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    }
+   },
+   "aiByGenre": {
+    "abstract": {
+     "k": 0,
+     "n": 7,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.35433043506668743
+    },
+    "blog": {
+     "k": 0,
+     "n": 7,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.35433043506668743
+    },
+    "essay": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "labreport": {
+     "k": 0,
+     "n": 7,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.35433043506668743
+    },
+    "litreview": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "reflection": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    }
+   },
+   "humanByDomain": {
+    "CS224N_real": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "CollegeEssay_real": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "TOEFL_real": {
+     "k": 0,
+     "n": 4,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.4898908364545973
+    },
+    "abstracts": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "books": {
+     "k": 0,
+     "n": 1,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.7934506856227626
+    },
+    "news": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "reddit_eli5": {
+     "k": 0,
+     "n": 1,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.7934506856227626
+    }
+   },
+   "errors": [
+    {
+     "id": "sn-essay-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 47.1,
+     "meanRating": 47.1,
+     "status": "complete"
+    },
+    {
+     "id": "hk-essay-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 43.5,
+     "meanRating": 43.5,
+     "status": "complete"
+    },
+    {
+     "id": "hk-blog-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 37.2,
+     "meanRating": 37.2,
+     "status": "complete"
+    },
+    {
+     "id": "hk-litreview-student",
+     "label": "ai",
+     "style": "student",
+     "score": 36.2,
+     "meanRating": 36.2,
+     "status": "complete"
+    },
+    {
+     "id": "sn-litreview-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 33.3,
+     "meanRating": 33.3,
+     "status": "complete"
+    },
+    {
+     "id": "sn-reflection-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 32.9,
+     "meanRating": 32.9,
+     "status": "complete"
+    },
+    {
+     "id": "sn-essay-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 32.5,
+     "meanRating": 32.5,
+     "status": "complete"
+    },
+    {
+     "id": "hk-litreview-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 31.9,
+     "meanRating": 31.9,
+     "status": "complete"
+    },
+    {
+     "id": "sn-essay-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 31.1,
+     "meanRating": 31.1,
+     "status": "complete"
+    },
+    {
+     "id": "sn-litreview-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 27.2,
+     "meanRating": 27.2,
+     "status": "complete"
+    },
+    {
+     "id": "sn-blog-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 25.5,
+     "meanRating": 25.5,
+     "status": "complete"
+    },
+    {
+     "id": "sn-litreview-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 23.9,
+     "meanRating": 23.9,
+     "status": "complete"
+    },
+    {
+     "id": "hk-blog-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 23.5,
+     "meanRating": 23.5,
+     "status": "complete"
+    },
+    {
+     "id": "hk-blog-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 20.4,
+     "meanRating": 20.4,
+     "status": "complete"
+    },
+    {
+     "id": "sn-blog-student",
+     "label": "ai",
+     "style": "student",
+     "score": 20.3,
+     "meanRating": 20.3,
+     "status": "complete"
+    },
+    {
+     "id": "hk-labreport-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 18.7,
+     "meanRating": 18.7,
+     "status": "complete"
+    },
+    {
+     "id": "hk-essay-student",
+     "label": "ai",
+     "style": "student",
+     "score": 18.6,
+     "meanRating": 18.6,
+     "status": "complete"
+    },
+    {
+     "id": "sn-labreport-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 18.5,
+     "meanRating": 18.5,
+     "status": "complete"
+    },
+    {
+     "id": "hk-reflection-student",
+     "label": "ai",
+     "style": "student",
+     "score": 18,
+     "meanRating": 18,
+     "status": "complete"
+    },
+    {
+     "id": "sn-reflection-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 14.8,
+     "meanRating": 14.8,
+     "status": "complete"
+    },
+    {
+     "id": "sn-abstract-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 14.6,
+     "meanRating": 14.6,
+     "status": "complete"
+    },
+    {
+     "id": "hk-abstract-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 14.4,
+     "meanRating": 14.4,
+     "status": "complete"
+    },
+    {
+     "id": "hk-abstract-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 14.4,
+     "meanRating": 14.4,
+     "status": "complete"
+    },
+    {
+     "id": "sn-reflection-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 13.8,
+     "meanRating": 13.8,
+     "status": "complete"
+    },
+    {
+     "id": "sn-labreport-student",
+     "label": "ai",
+     "style": "student",
+     "score": 13.7,
+     "meanRating": 13.7,
+     "status": "complete"
+    },
+    {
+     "id": "hk-labreport-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 13.1,
+     "meanRating": 13.1,
+     "status": "complete"
+    },
+    {
+     "id": "hk-reflection-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 12.5,
+     "meanRating": 12.5,
+     "status": "complete"
+    },
+    {
+     "id": "hk-abstract-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 12.1,
+     "meanRating": 12.1,
+     "status": "complete"
+    },
+    {
+     "id": "hk-labreport-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 9.2,
+     "meanRating": 9.2,
+     "status": "complete"
+    },
+    {
+     "id": "sn-abstract-student",
+     "label": "ai",
+     "style": "student",
+     "score": 9,
+     "meanRating": 9,
+     "status": "complete"
+    },
+    {
+     "id": "ed-blog-1",
+     "label": "edited",
+     "style": "plain",
+     "score": 28,
+     "meanRating": 28,
+     "status": "complete"
+    },
+    {
+     "id": "ed-litreview-2",
+     "label": "edited",
+     "style": "student",
+     "score": 22.3,
+     "meanRating": 22.3,
+     "status": "partial"
+    },
+    {
+     "id": "ed-essay-2",
+     "label": "edited",
+     "style": "student",
+     "score": 21.7,
+     "meanRating": 21.7,
+     "status": "complete"
+    },
+    {
+     "id": "ed-reflection-2",
+     "label": "edited",
+     "style": "student",
+     "score": 17.3,
+     "meanRating": 17.3,
+     "status": "complete"
+    },
+    {
+     "id": "ed-abstract-3",
+     "label": "edited",
+     "style": "humanlike",
+     "score": 16.7,
+     "meanRating": 16.7,
+     "status": "complete"
+    },
+    {
+     "id": "ed-abstract-1",
+     "label": "edited",
+     "style": "plain",
+     "score": 16.5,
+     "meanRating": 16.5,
+     "status": "complete"
+    },
+    {
+     "id": "ed-labreport-3",
+     "label": "edited",
+     "style": "humanlike",
+     "score": 16,
+     "meanRating": 16,
+     "status": "complete"
+    },
+    {
+     "id": "ed-labreport-1",
+     "label": "edited",
+     "style": "plain",
+     "score": 15,
+     "meanRating": 15,
+     "status": "complete"
+    },
+    {
+     "id": "ed-blog-3",
+     "label": "edited",
+     "style": "humanlike",
+     "score": 13.2,
+     "meanRating": 13.2,
+     "status": "complete"
+    }
+   ]
+  },
+  "styleAlone": {
+   "score": "styleProb",
+   "threshold": 0.772211,
+   "texts": 57,
+   "unscored": 0,
+   "accuracy": {
+    "k": 45,
+    "n": 57,
+    "p": 0.7894736842105263,
+    "lo": 0.6671387891680949,
+    "hi": 0.8752545169696542
+   },
+   "balancedAccuracy": 0.8162,
+   "humanFlagged": {
+    "k": 2,
+    "n": 18,
+    "p": 0.1111111111111111,
+    "lo": 0.03101952264561239,
+    "hi": 0.32799765130178804
+   },
+   "caught": {
+    "all": {
+     "k": 29,
+     "n": 39,
+     "p": 0.7435897435897436,
+     "lo": 0.5891834407831603,
+     "hi": 0.8543121945900741
+    },
+    "ai": {
+     "k": 24,
+     "n": 30,
+     "p": 0.8,
+     "lo": 0.6269430358685175,
+     "hi": 0.9049489282271013
+    },
+    "edited": {
+     "k": 5,
+     "n": 9,
+     "p": 0.5555555555555556,
+     "lo": 0.26665129349549305,
+     "hi": 0.8112214789023355
+    }
+   },
+   "auroc": {
+    "all": 0.8582621082621082,
+    "ai": 0.9027777777777778,
+    "edited": 0.7098765432098766,
+    "allInterval": [
+     0.7554054054054054,
+     0.948849104859335
+    ]
+   },
+   "aiByWriter": {
+    "claude-haiku-5-5": {
+     "k": 15,
+     "n": 15,
+     "p": 1,
+     "lo": 0.7961166989641515,
+     "hi": 1
+    },
+    "claude-sonnet-5-5": {
+     "k": 14,
+     "n": 24,
+     "p": 0.5833333333333334,
+     "lo": 0.3883466586522876,
+     "hi": 0.7553239739018824
+    }
+   },
+   "aiByStyle": {
+    "concise": {
+     "k": 5,
+     "n": 6,
+     "p": 0.8333333333333334,
+     "lo": 0.43649717781352987,
+     "hi": 0.9699466302516935
+    },
+    "esl": {
+     "k": 5,
+     "n": 6,
+     "p": 0.8333333333333334,
+     "lo": 0.43649717781352987,
+     "hi": 0.9699466302516935
+    },
+    "humanlike": {
+     "k": 5,
+     "n": 6,
+     "p": 0.8333333333333334,
+     "lo": 0.43649717781352987,
+     "hi": 0.9699466302516935
+    },
+    "plain": {
+     "k": 5,
+     "n": 6,
+     "p": 0.8333333333333334,
+     "lo": 0.43649717781352987,
+     "hi": 0.9699466302516935
+    },
+    "student": {
+     "k": 4,
+     "n": 6,
+     "p": 0.6666666666666666,
+     "lo": 0.299993315138392,
+     "hi": 0.9032285888942195
+    }
+   },
+   "aiByGenre": {
+    "abstract": {
+     "k": 3,
+     "n": 7,
+     "p": 0.42857142857142855,
+     "lo": 0.15821985525146975,
+     "hi": 0.7495416354723428
+    },
+    "blog": {
+     "k": 7,
+     "n": 7,
+     "p": 1,
+     "lo": 0.6456695649333126,
+     "hi": 1
+    },
+    "essay": {
+     "k": 6,
+     "n": 6,
+     "p": 1,
+     "lo": 0.6096657120978346,
+     "hi": 1
+    },
+    "labreport": {
+     "k": 5,
+     "n": 7,
+     "p": 0.7142857142857143,
+     "lo": 0.35893445183261935,
+     "hi": 0.9177810759959433
+    },
+    "litreview": {
+     "k": 2,
+     "n": 6,
+     "p": 0.3333333333333333,
+     "lo": 0.09677141110578041,
+     "hi": 0.700006684861608
+    },
+    "reflection": {
+     "k": 6,
+     "n": 6,
+     "p": 1,
+     "lo": 0.6096657120978346,
+     "hi": 1
+    }
+   },
+   "humanByDomain": {
+    "CS224N_real": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "CollegeEssay_real": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "TOEFL_real": {
+     "k": 1,
+     "n": 4,
+     "p": 0.25,
+     "lo": 0.04558726080970055,
+     "hi": 0.6993581574175981
+    },
+    "abstracts": {
+     "k": 1,
+     "n": 3,
+     "p": 0.3333333333333333,
+     "lo": 0.06149194472039621,
+     "hi": 0.7923403991979522
+    },
+    "books": {
+     "k": 0,
+     "n": 1,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.7934506856227626
+    },
+    "news": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "reddit_eli5": {
+     "k": 0,
+     "n": 1,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.7934506856227626
+    }
+   },
+   "errors": [
+    {
+     "id": "sn-litreview-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 0.77,
+     "meanRating": 33.3,
+     "status": "complete"
+    },
+    {
+     "id": "sn-labreport-student",
+     "label": "ai",
+     "style": "student",
+     "score": 0.745,
+     "meanRating": 13.7,
+     "status": "complete"
+    },
+    {
+     "id": "sn-litreview-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 0.447,
+     "meanRating": 23.9,
+     "status": "complete"
+    },
+    {
+     "id": "sn-abstract-student",
+     "label": "ai",
+     "style": "student",
+     "score": 0.289,
+     "meanRating": 9,
+     "status": "complete"
+    },
+    {
+     "id": "sn-litreview-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 0.265,
+     "meanRating": 27.2,
+     "status": "complete"
+    },
+    {
+     "id": "sn-abstract-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 0.263,
+     "meanRating": 14.6,
+     "status": "complete"
+    },
+    {
+     "id": "ed-labreport-1",
+     "label": "edited",
+     "style": "plain",
+     "score": 0.608,
+     "meanRating": 15,
+     "status": "complete"
+    },
+    {
+     "id": "ed-litreview-2",
+     "label": "edited",
+     "style": "student",
+     "score": 0.383,
+     "meanRating": 22.3,
+     "status": "partial"
+    },
+    {
+     "id": "ed-abstract-3",
+     "label": "edited",
+     "style": "humanlike",
+     "score": 0.183,
+     "meanRating": 16.7,
+     "status": "complete"
+    },
+    {
+     "id": "ed-abstract-1",
+     "label": "edited",
+     "style": "plain",
+     "score": 0.145,
+     "meanRating": 16.5,
+     "status": "complete"
+    },
+    {
+     "id": "hu-toefl-8",
+     "label": "human",
+     "style": "human",
+     "score": 0.814,
+     "meanRating": 39.1,
+     "status": "complete"
+    },
+    {
+     "id": "hu-abstracts-2",
+     "label": "human",
+     "style": "human",
+     "score": 0.789,
+     "meanRating": 28.7,
+     "status": "complete"
+    }
+   ]
+  },
+  "rewriteAlone": {
+   "score": "unchanged",
+   "threshold": 9999,
+   "texts": 57,
+   "unscored": 0,
+   "accuracy": {
+    "k": 18,
+    "n": 57,
+    "p": 0.3157894736842105,
+    "lo": 0.21004287638825245,
+    "hi": 0.4447977469786344
+   },
+   "balancedAccuracy": 0.5,
+   "humanFlagged": {
+    "k": 0,
+    "n": 18,
+    "p": 0,
+    "lo": 0,
+    "hi": 0.17587922364665765
+   },
+   "caught": {
+    "all": {
+     "k": 0,
+     "n": 39,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.08966685370757144
+    },
+    "ai": {
+     "k": 0,
+     "n": 30,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.11351339317396876
+    },
+    "edited": {
+     "k": 0,
+     "n": 9,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.2991450484195441
+    }
+   },
+   "auroc": {
+    "all": 0.8831908831908832,
+    "ai": 0.8777777777777778,
+    "edited": 0.9012345679012346,
+    "allInterval": [
+     0.7581081081081081,
+     0.9740740740740741
+    ]
+   },
+   "aiByWriter": {
+    "claude-haiku-5-5": {
+     "k": 0,
+     "n": 15,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.20388330103584862
+    },
+    "claude-sonnet-5-5": {
+     "k": 0,
+     "n": 24,
+     "p": 0,
+     "lo": 1.3877787807814457e-17,
+     "hi": 0.13797620467498017
+    }
+   },
+   "aiByStyle": {
+    "concise": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "esl": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "humanlike": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "plain": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "student": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    }
+   },
+   "aiByGenre": {
+    "abstract": {
+     "k": 0,
+     "n": 7,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.35433043506668743
+    },
+    "blog": {
+     "k": 0,
+     "n": 7,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.35433043506668743
+    },
+    "essay": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "labreport": {
+     "k": 0,
+     "n": 7,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.35433043506668743
+    },
+    "litreview": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "reflection": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    }
+   },
+   "humanByDomain": {
+    "CS224N_real": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "CollegeEssay_real": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "TOEFL_real": {
+     "k": 0,
+     "n": 4,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.4898908364545973
+    },
+    "abstracts": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "books": {
+     "k": 0,
+     "n": 1,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.7934506856227626
+    },
+    "news": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "reddit_eli5": {
+     "k": 0,
+     "n": 1,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.7934506856227626
+    }
+   },
+   "errors": [
+    {
+     "id": "sn-reflection-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 81.66,
+     "meanRating": 13.8,
+     "status": "complete"
+    },
+    {
+     "id": "hk-blog-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 79.87,
+     "meanRating": 20.4,
+     "status": "complete"
+    },
+    {
+     "id": "hk-blog-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 78.1,
+     "meanRating": 23.5,
+     "status": "complete"
+    },
+    {
+     "id": "sn-reflection-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 77.12,
+     "meanRating": 14.8,
+     "status": "complete"
+    },
+    {
+     "id": "sn-abstract-student",
+     "label": "ai",
+     "style": "student",
+     "score": 76.24,
+     "meanRating": 9,
+     "status": "complete"
+    },
+    {
+     "id": "sn-essay-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 73.68,
+     "meanRating": 32.5,
+     "status": "complete"
+    },
+    {
+     "id": "sn-essay-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 73.61,
+     "meanRating": 47.1,
+     "status": "complete"
+    },
+    {
+     "id": "sn-litreview-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 73.52,
+     "meanRating": 27.2,
+     "status": "complete"
+    },
+    {
+     "id": "hk-essay-student",
+     "label": "ai",
+     "style": "student",
+     "score": 73.32,
+     "meanRating": 18.6,
+     "status": "complete"
+    },
+    {
+     "id": "hk-blog-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 72.81,
+     "meanRating": 37.2,
+     "status": "complete"
+    },
+    {
+     "id": "hk-abstract-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 72.73,
+     "meanRating": 14.4,
+     "status": "complete"
+    },
+    {
+     "id": "hk-reflection-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 72.39,
+     "meanRating": 12.5,
+     "status": "complete"
+    },
+    {
+     "id": "sn-litreview-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 70.47,
+     "meanRating": 33.3,
+     "status": "complete"
+    },
+    {
+     "id": "sn-litreview-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 69.79,
+     "meanRating": 23.9,
+     "status": "complete"
+    },
+    {
+     "id": "sn-essay-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 69.71,
+     "meanRating": 31.1,
+     "status": "complete"
+    },
+    {
+     "id": "sn-blog-student",
+     "label": "ai",
+     "style": "student",
+     "score": 69.61,
+     "meanRating": 20.3,
+     "status": "complete"
+    },
+    {
+     "id": "hk-labreport-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 69.57,
+     "meanRating": 9.2,
+     "status": "complete"
+    },
+    {
+     "id": "hk-reflection-student",
+     "label": "ai",
+     "style": "student",
+     "score": 69.23,
+     "meanRating": 18,
+     "status": "complete"
+    },
+    {
+     "id": "hk-abstract-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 68.95,
+     "meanRating": 12.1,
+     "status": "complete"
+    },
+    {
+     "id": "hk-labreport-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 68.55,
+     "meanRating": 18.7,
+     "status": "complete"
+    },
+    {
+     "id": "hk-abstract-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 68.42,
+     "meanRating": 14.4,
+     "status": "complete"
+    },
+    {
+     "id": "sn-blog-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 68.42,
+     "meanRating": 25.5,
+     "status": "complete"
+    },
+    {
+     "id": "hk-litreview-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 64.75,
+     "meanRating": 31.9,
+     "status": "complete"
+    },
+    {
+     "id": "hk-labreport-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 63.6,
+     "meanRating": 13.1,
+     "status": "complete"
+    },
+    {
+     "id": "sn-reflection-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 60.89,
+     "meanRating": 32.9,
+     "status": "complete"
+    },
+    {
+     "id": "hk-litreview-student",
+     "label": "ai",
+     "style": "student",
+     "score": 56.12,
+     "meanRating": 36.2,
+     "status": "complete"
+    },
+    {
+     "id": "sn-abstract-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 54.55,
+     "meanRating": 14.6,
+     "status": "complete"
+    },
+    {
+     "id": "sn-labreport-student",
+     "label": "ai",
+     "style": "student",
+     "score": 54.29,
+     "meanRating": 13.7,
+     "status": "complete"
+    },
+    {
+     "id": "hk-essay-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 53.83,
+     "meanRating": 43.5,
+     "status": "complete"
+    },
+    {
+     "id": "sn-labreport-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 50.24,
+     "meanRating": 18.5,
+     "status": "complete"
+    },
+    {
+     "id": "ed-abstract-3",
+     "label": "edited",
+     "style": "humanlike",
+     "score": 82.59,
+     "meanRating": 16.7,
+     "status": "complete"
+    },
+    {
+     "id": "ed-reflection-2",
+     "label": "edited",
+     "style": "student",
+     "score": 77.43,
+     "meanRating": 17.3,
+     "status": "complete"
+    },
+    {
+     "id": "ed-essay-2",
+     "label": "edited",
+     "style": "student",
+     "score": 76.75,
+     "meanRating": 21.7,
+     "status": "complete"
+    },
+    {
+     "id": "ed-litreview-2",
+     "label": "edited",
+     "style": "student",
+     "score": 74.73,
+     "meanRating": 22.3,
+     "status": "partial"
+    },
+    {
+     "id": "ed-blog-3",
+     "label": "edited",
+     "style": "humanlike",
+     "score": 73.48,
+     "meanRating": 13.2,
+     "status": "complete"
+    },
+    {
+     "id": "ed-abstract-1",
+     "label": "edited",
+     "style": "plain",
+     "score": 68.46,
+     "meanRating": 16.5,
+     "status": "complete"
+    },
+    {
+     "id": "ed-labreport-1",
+     "label": "edited",
+     "style": "plain",
+     "score": 66.93,
+     "meanRating": 15,
+     "status": "complete"
+    },
+    {
+     "id": "ed-labreport-3",
+     "label": "edited",
+     "style": "humanlike",
+     "score": 65.48,
+     "meanRating": 16,
+     "status": "complete"
+    },
+    {
+     "id": "ed-blog-1",
+     "label": "edited",
+     "style": "plain",
+     "score": 54.13,
+     "meanRating": 28,
+     "status": "complete"
+    }
+   ]
+  },
+  "roberta": {
+   "score": "roberta",
+   "threshold": 0.5,
+   "texts": 57,
+   "unscored": 0,
+   "accuracy": {
+    "k": 17,
+    "n": 57,
+    "p": 0.2982456140350877,
+    "lo": 0.19532550074818086,
+    "hi": 0.42664280103459995
+   },
+   "balancedAccuracy": 0.4722,
+   "humanFlagged": {
+    "k": 1,
+    "n": 18,
+    "p": 0.05555555555555555,
+    "lo": 0.009875190978303097,
+    "hi": 0.25757300781872594
+   },
+   "caught": {
+    "all": {
+     "k": 0,
+     "n": 39,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.08966685370757144
+    },
+    "ai": {
+     "k": 0,
+     "n": 30,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.11351339317396876
+    },
+    "edited": {
+     "k": 0,
+     "n": 9,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.2991450484195441
+    }
+   },
+   "auroc": {
+    "all": 0.2207977207977208,
+    "ai": 0.24259259259259258,
+    "edited": 0.14814814814814814,
+    "allInterval": [
+     0.10256410256410256,
+     0.3561253561253561
+    ]
+   },
+   "aiByWriter": {
+    "claude-haiku-5-5": {
+     "k": 0,
+     "n": 15,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.20388330103584862
+    },
+    "claude-sonnet-5-5": {
+     "k": 0,
+     "n": 24,
+     "p": 0,
+     "lo": 1.3877787807814457e-17,
+     "hi": 0.13797620467498017
+    }
+   },
+   "aiByStyle": {
+    "concise": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "esl": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "humanlike": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "plain": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "student": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    }
+   },
+   "aiByGenre": {
+    "abstract": {
+     "k": 0,
+     "n": 7,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.35433043506668743
+    },
+    "blog": {
+     "k": 0,
+     "n": 7,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.35433043506668743
+    },
+    "essay": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "labreport": {
+     "k": 0,
+     "n": 7,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.35433043506668743
+    },
+    "litreview": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    },
+    "reflection": {
+     "k": 0,
+     "n": 6,
+     "p": 0,
+     "lo": 2.7755575615628914e-17,
+     "hi": 0.3903342879021653
+    }
+   },
+   "humanByDomain": {
+    "CS224N_real": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "CollegeEssay_real": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "TOEFL_real": {
+     "k": 1,
+     "n": 4,
+     "p": 0.25,
+     "lo": 0.04558726080970055,
+     "hi": 0.6993581574175981
+    },
+    "abstracts": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "books": {
+     "k": 0,
+     "n": 1,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.7934506856227626
+    },
+    "news": {
+     "k": 0,
+     "n": 3,
+     "p": 0,
+     "lo": 5.551115123125783e-17,
+     "hi": 0.5614970317550454
+    },
+    "reddit_eli5": {
+     "k": 0,
+     "n": 1,
+     "p": 0,
+     "lo": 0,
+     "hi": 0.7934506856227626
+    }
+   },
+   "errors": [
+    {
+     "id": "hk-reflection-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 0.027773,
+     "meanRating": 12.5,
+     "status": "complete"
+    },
+    {
+     "id": "sn-litreview-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 0.017086,
+     "meanRating": 33.3,
+     "status": "complete"
+    },
+    {
+     "id": "sn-reflection-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 0.013152,
+     "meanRating": 14.8,
+     "status": "complete"
+    },
+    {
+     "id": "sn-blog-student",
+     "label": "ai",
+     "style": "student",
+     "score": 0.008776,
+     "meanRating": 20.3,
+     "status": "complete"
+    },
+    {
+     "id": "sn-essay-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 0.007903,
+     "meanRating": 31.1,
+     "status": "complete"
+    },
+    {
+     "id": "hk-essay-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 0.003262,
+     "meanRating": 43.5,
+     "status": "complete"
+    },
+    {
+     "id": "sn-blog-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 0.002649,
+     "meanRating": 25.5,
+     "status": "complete"
+    },
+    {
+     "id": "sn-labreport-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 0.002282,
+     "meanRating": 18.5,
+     "status": "complete"
+    },
+    {
+     "id": "sn-labreport-student",
+     "label": "ai",
+     "style": "student",
+     "score": 0.001604,
+     "meanRating": 13.7,
+     "status": "complete"
+    },
+    {
+     "id": "hk-blog-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 0.001265,
+     "meanRating": 37.2,
+     "status": "complete"
+    },
+    {
+     "id": "hk-essay-student",
+     "label": "ai",
+     "style": "student",
+     "score": 0.001038,
+     "meanRating": 18.6,
+     "status": "complete"
+    },
+    {
+     "id": "sn-abstract-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 0.000988,
+     "meanRating": 14.6,
+     "status": "complete"
+    },
+    {
+     "id": "sn-reflection-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 0.000816,
+     "meanRating": 13.8,
+     "status": "complete"
+    },
+    {
+     "id": "hk-labreport-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 0.000773,
+     "meanRating": 13.1,
+     "status": "complete"
+    },
+    {
+     "id": "hk-blog-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 0.000751,
+     "meanRating": 23.5,
+     "status": "complete"
+    },
+    {
+     "id": "hk-abstract-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 0.000705,
+     "meanRating": 12.1,
+     "status": "complete"
+    },
+    {
+     "id": "sn-litreview-concise",
+     "label": "ai",
+     "style": "concise",
+     "score": 0.000566,
+     "meanRating": 27.2,
+     "status": "complete"
+    },
+    {
+     "id": "hk-abstract-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 0.000531,
+     "meanRating": 14.4,
+     "status": "complete"
+    },
+    {
+     "id": "hk-litreview-esl",
+     "label": "ai",
+     "style": "esl",
+     "score": 0.000518,
+     "meanRating": 31.9,
+     "status": "complete"
+    },
+    {
+     "id": "sn-essay-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 0.00049,
+     "meanRating": 32.5,
+     "status": "complete"
+    },
+    {
+     "id": "hk-labreport-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 0.000478,
+     "meanRating": 9.2,
+     "status": "complete"
+    },
+    {
+     "id": "hk-reflection-student",
+     "label": "ai",
+     "style": "student",
+     "score": 0.000469,
+     "meanRating": 18,
+     "status": "complete"
+    },
+    {
+     "id": "sn-abstract-student",
+     "label": "ai",
+     "style": "student",
+     "score": 0.000468,
+     "meanRating": 9,
+     "status": "complete"
+    },
+    {
+     "id": "sn-essay-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 0.000467,
+     "meanRating": 47.1,
+     "status": "complete"
+    },
+    {
+     "id": "hk-labreport-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 0.000466,
+     "meanRating": 18.7,
+     "status": "complete"
+    },
+    {
+     "id": "hk-blog-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 0.000465,
+     "meanRating": 20.4,
+     "status": "complete"
+    },
+    {
+     "id": "sn-reflection-plain",
+     "label": "ai",
+     "style": "plain",
+     "score": 0.000464,
+     "meanRating": 32.9,
+     "status": "complete"
+    },
+    {
+     "id": "hk-abstract-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 0.000463,
+     "meanRating": 14.4,
+     "status": "complete"
+    },
+    {
+     "id": "sn-litreview-humanlike",
+     "label": "ai",
+     "style": "humanlike",
+     "score": 0.000455,
+     "meanRating": 23.9,
+     "status": "complete"
+    },
+    {
+     "id": "hk-litreview-student",
+     "label": "ai",
+     "style": "student",
+     "score": 0.000452,
+     "meanRating": 36.2,
+     "status": "complete"
+    },
+    {
+     "id": "ed-labreport-3",
+     "label": "edited",
+     "style": "humanlike",
+     "score": 0.010248,
+     "meanRating": 16,
+     "status": "complete"
+    },
+    {
+     "id": "ed-labreport-1",
+     "label": "edited",
+     "style": "plain",
+     "score": 0.000749,
+     "meanRating": 15,
+     "status": "complete"
+    },
+    {
+     "id": "ed-reflection-2",
+     "label": "edited",
+     "style": "student",
+     "score": 0.000604,
+     "meanRating": 17.3,
+     "status": "complete"
+    },
+    {
+     "id": "ed-blog-3",
+     "label": "edited",
+     "style": "humanlike",
+     "score": 0.000533,
+     "meanRating": 13.2,
+     "status": "complete"
+    },
+    {
+     "id": "ed-abstract-3",
+     "label": "edited",
+     "style": "humanlike",
+     "score": 0.000496,
+     "meanRating": 16.7,
+     "status": "complete"
+    },
+    {
+     "id": "ed-abstract-1",
+     "label": "edited",
+     "style": "plain",
+     "score": 0.000493,
+     "meanRating": 16.5,
+     "status": "complete"
+    },
+    {
+     "id": "ed-essay-2",
+     "label": "edited",
+     "style": "student",
+     "score": 0.00049,
+     "meanRating": 21.7,
+     "status": "complete"
+    },
+    {
+     "id": "ed-litreview-2",
+     "label": "edited",
+     "style": "student",
+     "score": 0.000486,
+     "meanRating": 22.3,
+     "status": "partial"
+    },
+    {
+     "id": "ed-blog-1",
+     "label": "edited",
+     "style": "plain",
+     "score": 0.00047,
+     "meanRating": 28,
+     "status": "complete"
+    },
+    {
+     "id": "hu-toefl-2",
+     "label": "human",
+     "style": "human",
+     "score": 0.774807,
+     "meanRating": 24.8,
+     "status": "complete"
+    }
+   ]
+  }
+ }
+}

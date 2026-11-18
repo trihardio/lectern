@@ -3,20 +3,26 @@
    text being read, Atkinson for controls, mono only for numbers and tiny labels. Violet stays
    reserved for citations, so the source colours below avoid it. */
 
+/* Writing-pattern bands, from the base palette (ui/styles.css): green = few, yellow = some, red = strong.
+   Each band is drawn as a hatched box, after the owner's sketch of a ruled rectangle filled with diagonal
+   strokes: a pale fill, strokes and a thin outline in the band's ink. Stronger bands have closer strokes, so
+   the three differ without colour too (colour-blind reading, print). Declared on .chk-print as well, so the
+   printed copy recomputes them from its own light values. */
+:root, .chk-print {
+  --ai-strong: var(--red-ink);
+  --ai-strong-fill: var(--red-soft);
+  --ai-some: var(--yellow-ink);
+  --ai-some-fill: var(--yellow-soft);
+  --ai-few: var(--green-ink);
+  --ai-few-fill: var(--green-soft);
+  --ai-word: var(--yellow-ink);
+}
 :root {
-  --ai-likely: rgba(236, 128, 92, .36);
-  --ai-likely-solid: #C9562F;
-  --ai-possible: rgba(240, 205, 70, .42);
-  --ai-possible-solid: #B98A10;
   --t1: #2B62A0; --t2: #8A6100; --t3: #3F7432; --t4: #A23A22;
   --t5: #146B6B; --t6: #7D4C93; --t7: #4E5E6C; --t8: #6A6A12;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --ai-likely: rgba(240, 140, 105, .30);
-    --ai-likely-solid: #F0936F;
-    --ai-possible: rgba(240, 210, 90, .24);
-    --ai-possible-solid: #E7C25A;
     --t1: #8DB8EC; --t2: #E2BE62; --t3: #9BCF86; --t4: #F0A08A;
     --t5: #7FD0CC; --t6: #D3ACE6; --t7: #B3C1CD; --t8: #CFCF7A;
   }
@@ -157,9 +163,7 @@
 .chk-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 12px 20px; border-bottom: 1px solid var(--line-soft); font: 500 12.5px/1.3 var(--sans); color: var(--ink-2); }
 .chk-key { display: inline-flex; align-items: center; gap: 7px; }
 .chk-key::before { content: ''; width: 18px; height: 11px; border-radius: 2px; }
-.chk-key.strong::before { background: var(--ai-likely); }
-.chk-key.some::before { background: var(--ai-possible); }
-.chk-key.word::before { height: 0; border-bottom: 2px dotted var(--ai-possible-solid); }
+.chk-key.word::before { height: 0; border-bottom: 2px dotted var(--ai-word); }
 .chk-key.err::before { height: 5px; background: radial-gradient(circle at 50% 100%, transparent 2.2px, var(--brick) 2.3px 3.2px, transparent 3.3px) 0 0 / 6px 5px repeat-x; }
 .chk-key.exact::before { background: color-mix(in srgb, var(--t1) 24%, transparent); }
 .chk-key.para::before { height: 0; border-bottom: 2px dashed var(--t1); }
@@ -170,13 +174,25 @@
 .chk-ms p:last-child { margin-bottom: 0; }
 
 /* AI: sentence washes, typical words, mistakes */
-.chk-s { cursor: pointer; border-radius: 2px; padding: 2px 0; -webkit-box-decoration-break: clone; box-decoration-break: clone; transition: background-color .14s ease-out, box-shadow .14s ease-out; }
-.chk-s.strong { background: var(--ai-likely); }
-.chk-s.some { background: var(--ai-possible); }
-.chk-s:hover { box-shadow: inset 0 -2px 0 var(--rule); }
-.chk-s.picked { box-shadow: 0 0 0 1.5px var(--sel); }
+/* A sentence is a hatched box on each of its lines (box-decoration-break), slightly uneven corners like a
+   hand-ruled box. Its strokes are fainter than a swatch's, so the words over them stay easy to read. */
+.chk-s { cursor: pointer; padding: 2px 2px; border-radius: 3px 2px 4px 2px / 2px 4px 2px 3px; -webkit-box-decoration-break: clone; box-decoration-break: clone; transition: background-color .14s ease-out, box-shadow .14s ease-out; --b-a: 22%; }
+.chk-s.unreviewed:hover { box-shadow: inset 0 -2px 0 var(--rule); }
+.chk-s:is(.strong, .some, .few):hover { box-shadow: inset 0 0 0 1.25px var(--b); }
+.chk-s.picked, .chk-s.picked:hover { box-shadow: inset 0 0 0 1.25px var(--b, var(--ink-3)), 0 0 0 1.5px var(--sheet), 0 0 0 3px var(--sel); }
 .chk-s:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.chk-word { text-decoration: underline dotted 2px var(--ai-possible-solid); text-underline-offset: 4px; }
+.chk-word { text-decoration: underline dotted 2px var(--ai-word); text-underline-offset: 4px; }
+
+/* the three bands: the ink, the fill and the stroke spacing (closer for stronger patterns) */
+:is(.chk-s, .chk-key, .chk-band, .chk-band-key i, .chk-pill, .chk-dot, .chk-tip, .chk-tip-band).strong { --b: var(--ai-strong); --b-fill: var(--ai-strong-fill); --b-gap: 5px; }
+:is(.chk-s, .chk-key, .chk-band, .chk-band-key i, .chk-pill, .chk-dot, .chk-tip, .chk-tip-band).some { --b: var(--ai-some); --b-fill: var(--ai-some-fill); --b-gap: 7px; }
+:is(.chk-s, .chk-key, .chk-band, .chk-band-key i, .chk-pill, .chk-dot, .chk-tip, .chk-tip-band).few { --b: var(--ai-few); --b-fill: var(--ai-few-fill); --b-gap: 10px; }
+/* one hatched look for every place a band is shown: the text, the key, the bar, the list dots, the label */
+:is(.chk-s, .chk-band, .chk-dot, .chk-band-key i):is(.strong, .some, .few),
+:is(.chk-key, .chk-pill, .chk-tip-band):is(.strong, .some, .few)::before {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--b) var(--b-a, 42%), transparent) 0 1.25px, transparent 1.25px var(--b-gap)), var(--b-fill);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--b) 68%, transparent);
+}
 .chk-err { text-decoration: underline wavy 1.3px var(--brick); text-underline-offset: 4px; text-decoration-skip-ink: none; }
 .chk-word.chk-err { text-decoration: underline wavy 1.3px var(--brick); }
 
@@ -198,18 +214,14 @@
 .chk-score-head { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0 9px; margin-bottom: 12px; border-bottom: 1px dashed var(--rule); font: 600 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
 .chk-score-main { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 14px; }
 .chk-num { font: 500 60px/1 var(--serif); letter-spacing: -.035em; font-variant-numeric: lining-nums tabular-nums; color: var(--ink); }
+.chk-bench-src { white-space: nowrap; }
+.chk-num-of { margin-left: 3px; font: 500 14px/1 var(--mono); letter-spacing: 0; color: var(--ink-3); }
 .chk-num-say { font: 400 16px/1.4 var(--serif); color: var(--ink-2); text-wrap: pretty; }
-.chk-bands { display: flex; height: 10px; margin: 16px 0 10px; border-radius: 2px; overflow: hidden; background: var(--line-soft); gap: 2px; }
+.chk-bands { display: flex; height: 12px; margin: 16px 0 10px; border-radius: 2px; overflow: hidden; background: var(--line-soft); gap: 2px; }
 .chk-band { flex: 0 0 0; min-width: 0; }
-.chk-band.strong { background: var(--ai-likely-solid); }
-.chk-band.some { background: repeating-linear-gradient(135deg, var(--ai-possible-solid) 0 3px, color-mix(in srgb, var(--ai-possible-solid) 55%, var(--sheet)) 3px 6px); }
-.chk-band.few { background: var(--line); }
 .chk-band-key { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 5px; font: 500 13.5px/1.3 var(--sans); color: var(--ink-2); }
 .chk-band-key li { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 9px; }
 .chk-band-key i { width: 12px; height: 12px; border-radius: 2px; }
-.chk-band-key i.strong { background: var(--ai-likely-solid); }
-.chk-band-key i.some { background: var(--ai-possible-solid); }
-.chk-band-key i.few { background: var(--line); }
 .chk-band-key i.exact { background: color-mix(in srgb, var(--ink-2) 35%, transparent); }
 .chk-band-key i.para { height: 0; border-bottom: 2px dashed var(--ink-2); }
 .chk-band-key b { font: 600 13px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
@@ -226,8 +238,6 @@
 .chk-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .chk-pill { display: inline-flex; align-items: center; gap: 7px; font: 600 13px/1.2 var(--sans); color: var(--ink); }
 .chk-pill::before { content: ''; width: 10px; height: 10px; border-radius: 2px; background: var(--line); }
-.chk-pill.strong::before { background: var(--ai-likely-solid); }
-.chk-pill.some::before { background: var(--ai-possible-solid); }
 .chk-card-score { font: 600 22px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
 .chk-card-score small { font-size: 12px; color: var(--ink-3); margin-left: 2px; }
 .chk-quote { margin: 12px 0; padding: 0 0 0 12px; border-left: 1px solid var(--rule); font: 400 15px/1.55 var(--serif); color: var(--ink-2); }
@@ -250,8 +260,6 @@
 .chk-s.picked, .chk-m.lit { transition-duration: .3s; }
 .chk-item.on { border-color: var(--sel); background: var(--slate-soft); }
 .chk-dot { width: 10px; height: 10px; margin-top: 5px; border-radius: 2px; background: var(--line); }
-.chk-dot.strong { background: var(--ai-likely-solid); }
-.chk-dot.some { background: var(--ai-possible-solid); }
 .chk-item-score { font: 600 13px/1.6 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-2); }
 .chk-mistake { grid-template-columns: 1fr; gap: 4px; font-family: var(--sans); }
 .chk-kind { font: 600 10.5px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--brick); }
@@ -326,12 +334,60 @@
 .chk-model-label { font-weight: 600; color: var(--ink); }
 .chk-model-picker { min-width: 200px; }
 .chk-model-help { color: var(--ink-3); font-size: 13px; }
+/* Rewrite style, beside the Rewrite button. The picker keeps one width so the button does not move between styles. */
+.chk-rw-style { display: inline-flex; align-items: center; gap: 8px; }
+.chk-rw-style-picker .picker-btn { min-width: 9.5em; }
 
 /* ---------- AI writing review: not-reviewed text, status, provenance (audit fixes 2026-11-15) ---------- */
-.chk-s.unreviewed { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--ink-3) 18%, transparent) 0 2px, transparent 2px 6px); }
-.chk-key.unreviewed::before, .chk-band-key i.notReviewed { background: repeating-linear-gradient(135deg, var(--ink-3) 0 2px, transparent 2px 5px); border: 1px solid var(--line); }
-.chk-band.notReviewed { background: repeating-linear-gradient(135deg, var(--ink-3) 0 2px, var(--line-soft) 2px 5px); }
+/* not reviewed: grey strokes the other way, and no outline, so it never reads as one of the three bands */
+.chk-s.unreviewed { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--ink-3) 22%, transparent) 0 1.25px, transparent 1.25px 6px); }
+.chk-key.unreviewed::before, .chk-band-key i.notReviewed, .chk-tip-band.unreviewed::before { background: repeating-linear-gradient(45deg, var(--ink-3) 0 1.25px, transparent 1.25px 5px); border: 1px solid var(--line); }
+.chk-band.notReviewed { background: repeating-linear-gradient(45deg, var(--ink-3) 0 1.25px, var(--line-soft) 1.25px 5px); }
 .chk-pill.unreviewed::before, .chk-dot.unreviewed { background: transparent; border: 1.5px dashed var(--ink-3); }
+
+/* ---------- AI writing review: the number on hover, the reason on click, the key under the text (2026-11-19) ---------- */
+/* The floating label over a pointed-at sentence. It lives in <body> with position: fixed, so it never moves the text. */
+.chk-tip { position: fixed; left: 0; top: 0; z-index: 60; max-width: 264px; padding: 12px 12px 10px; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--sheet); color: var(--ink); box-shadow: 0 1px 2px rgba(22, 35, 63, .08), 0 12px 28px -14px rgba(22, 35, 63, .4); pointer-events: none; opacity: 0; visibility: hidden; }
+.chk-tip.on { opacity: 1; visibility: visible; }
+/* a 4px tab on the top edge in the sentence's band colour, like a folder tab */
+.chk-tip::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--b, var(--ink-3)); }
+@media (prefers-reduced-motion: no-preference) {
+  .chk-tip { transition: opacity .12s ease-out, visibility 0s linear .12s; }
+  .chk-tip.on { transition: opacity .12s ease-out, visibility 0s; }
+}
+.chk-tip-top { display: flex; align-items: baseline; gap: 7px; }
+.chk-tip-num { font: 600 22px/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; color: var(--ink); }
+.chk-tip-word { font: 600 14.5px/1.2 var(--sans); color: var(--ink); }
+.chk-tip-band { display: flex; align-items: center; gap: 7px; margin: 7px 0 0; font: 500 12.5px/1.35 var(--sans); color: var(--ink-2); }
+.chk-tip-band::before { content: ''; flex: none; width: 12px; height: 12px; border-radius: 2px; }
+.chk-tip-note { margin: 6px 0 0; font: 400 12px/1.4 var(--sans); color: var(--ink-3); }
+
+/* The reason for one sentence. In a wide window it takes the side panel's place (the summary comes back on
+   Close or Escape, where it was); in a narrow one it opens under the sentence's paragraph. Both copies are
+   built and a container query shows one, so nothing has to be measured or moved after drawing. */
+.chk-why .chk-card-head { justify-content: flex-start; }
+.chk-why .btn.chk-why-close { margin-left: auto; padding: 5px 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--sheet); font: 600 13px/1.2 var(--sans); color: var(--ink-2); }
+.chk-why .btn.chk-why-close:hover { color: var(--ink); background: var(--slate-soft); }
+.chk-why-lean { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 14px 0 0; font: 600 15px/1.3 var(--sans); color: var(--ink); }
+/* the sentence's number in the same serif as the report's big score */
+.chk-why-lean .chk-card-score { font: 500 34px/1 var(--serif); letter-spacing: -.02em; font-variant-numeric: lining-nums tabular-nums; }
+.chk-why-lean > span:first-child { display: inline-flex; align-items: baseline; gap: 6px; }
+.chk-why-rating { flex-basis: 100%; font: 500 12.5px/1.3 var(--sans); color: var(--ink-3); }
+.chk-why-rating b { font: 600 12.5px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.chk-why-h { margin: 14px 0 8px; }
+.chk-why .chk-quote { margin-bottom: 0; }
+.chk-why-foot { margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed var(--line); font: 400 12.5px/1.45 var(--sans); color: var(--ink-3); }
+.chk-why.inline { display: none; }
+.chk-ms .chk-why { margin: 4px 0 1em; font: 400 14px/1.45 var(--sans); }
+.chk-ms .chk-why p { white-space: normal; }
+@container checks (width > 940px) { .chk-slip.why-open > :not(.chk-why) { display: none; } }
+@container checks (max-width: 940px) { .chk-why.side { display: none; } .chk-why.inline { display: block; } }
+
+/* The key sits under the text and stays at the bottom of the window while the text is longer than it. */
+.chk-report.ai .chk-legend { position: sticky; bottom: 0; z-index: 2; justify-content: center; gap: 6px 16px; border-bottom: 0; border-top: 1px solid var(--line-soft); border-radius: 0 0 4px 4px; background: var(--sheet); }
+.chk-legend-hint { font-weight: 400; color: var(--ink-3); }
+.chk-key:is(.strong, .some, .few)::before { width: 20px; height: 13px; border-radius: 3px 2px 3px 2px; }
+@container checks (max-width: 940px) { .chk-report.ai .chk-legend { position: static; } }
 .chk-nv { display: inline-flex; align-items: center; padding: 2px 7px; border: 1px solid var(--rule); border-radius: 3px; color: var(--ink-2); font: 600 10.5px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .chk-status { margin: 0 0 12px; padding: 10px 12px; border-radius: 4px; border: 1px solid var(--line); font: 500 13.5px/1.45 var(--sans); color: var(--ink); }
 .chk-status.partial { background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 40%, var(--line)); }
@@ -349,6 +405,9 @@
 .chk-prov td.bad { color: var(--brick); }
 .chk-measured { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); }
 .chk-measured-head { font: 600 11px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+/* measured lines have no source tag, so they take the whole width (they were squeezed into the tag column) */
+.chk-measured .chk-reasons { margin-top: 8px; }
+.chk-measured .chk-reasons li { display: block; }
 .chk-h3 { margin: 18px 0 6px; font: 600 15px/1.3 var(--serif); color: var(--ink); }
 .chk-item-text .chk-note-line { display: block; margin-top: 3px; }
 .chk-summary .chk-from { margin-right: 8px; }
@@ -377,7 +436,7 @@
     --sheet: #FFFFFF; --desk: #FFFFFF; --ink: #18201C; --ink-2: #47514B; --ink-3: #5A645E;
     --line: #D3DAD4; --line-soft: #E4E9E4; --rule: #9AA79F; --sel: #4E7266; --slate-soft: #E2E8E3;
     --brick: #A3324D; --brick-soft: #FADDE7; --spruce: #2B6A37; --amber: #805B00; --amber-soft: #FAF0BC; --mark: #F7E64A;
-    --ai-likely: rgba(236, 128, 92, .36); --ai-likely-solid: #C9562F; --ai-possible: rgba(240, 205, 70, .42); --ai-possible-solid: #B98A10;
+    --red-ink: #A3324D; --red-soft: #FADDE7; --yellow-ink: #805B00; --yellow-soft: #FAF0BC; --green-ink: #2B6A37; --green-soft: #DDF2D6;
     --t1: #2B62A0; --t2: #8A6100; --t3: #3F7432; --t4: #A23A22; --t5: #146B6B; --t6: #7D4C93; --t7: #4E5E6C; --t8: #6A6A12;
     color: var(--ink); background: #fff; font: 400 10.5pt/1.5 var(--sans);
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
@@ -393,6 +452,7 @@
   .chk-print-sec > h2 { margin: 0 0 8pt; font: 600 13.5pt/1.3 var(--serif); break-after: avoid; }
   .chk-print h3 { display: flex; align-items: center; gap: 8pt; margin: 12pt 0 4pt; font: 600 11pt/1.35 var(--serif); break-after: avoid; }
   .chk-print .chk-legend { padding: 0 0 8pt; border: 0; font-size: 8.5pt; }
+  .chk-print .chk-legend-hint { display: none; }
   .chk-print .chk-ms { max-width: none; padding: 12pt 14pt; border: 1px solid var(--line); border-radius: 4px; font-size: 10.5pt; line-height: 1.75; }
   .chk-print .chk-ms p { break-inside: auto; orphans: 3; widows: 3; }
   .chk-print .chk-s, .chk-print .chk-m { cursor: default; }
@@ -427,3 +487,60 @@
 .picker-group-note { font-weight: 500; color: var(--ink-3); }
 .chk-model-picker .picker-btn { display: inline-flex; align-items: baseline; gap: 7px; }
 .chk-model-engine { color: var(--ink-3); font-weight: 500; }
+
+/* ---------- AI writing review: the note when the two readings disagree (2026-11-19, benchmark version 5) ---------- */
+/* Words carry the meaning ("The two readings disagree"); the amber wash only draws the eye. Palette roles only, so the
+   print copy's light values apply. Numbers are mono, words are sans. */
+.chk-differ { margin: 14px 0 0; padding: 10px 12px 11px; border-radius: 4px; background: var(--amber-soft); color: var(--ink); }
+.chk-differ p { margin: 0; }
+.chk-differ-lead { font: 600 14px/1.35 var(--sans); }
+.chk-differ .chk-differ-pair { display: flex; flex-wrap: wrap; gap: 2px 16px; margin-top: 5px; font: 500 13.5px/1.4 var(--sans); color: var(--ink-2); }
+.chk-differ-pair b { font: 600 14px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.chk-differ .chk-differ-why { margin-top: 6px; font: 400 13px/1.5 var(--sans); color: var(--ink-2); text-wrap: pretty; }
+
+/* ---------- Test bench: Lectern's AI check on texts whose source the tester knows (2026-11-19) ---------- */
+.chk-bench-intro { max-width: 68ch; margin: -6px 0 14px; font: 400 14.5px/1.55 var(--sans); color: var(--ink-2); }
+.chk-bench-sum { margin: 16px 0 6px; padding: 0 18px 14px; border: 1px solid var(--line); border-radius: 4px; background: var(--sheet); }
+.chk-bench-table { width: 100%; border-collapse: collapse; font: 400 13.5px/1.45 var(--sans); color: var(--ink); }
+.chk-bench-table th, .chk-bench-table td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: top; }
+.chk-bench-table thead th { font: 600 10.5px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.chk-bench-table tbody th { font-weight: 600; }
+.chk-bench-table b { font: 600 13.5px/1 var(--mono); font-variant-numeric: tabular-nums; }
+.chk-bench-what { font-weight: 400; color: var(--ink-3); }
+.chk-bench-iv { font: 500 12px/1.3 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-3); }
+.chk-bench-list { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 12px; }
+.chk-bench-item { border: 1px solid var(--line); border-radius: 4px; background: var(--sheet); padding: 10px 14px 12px; transition: border-color .3s var(--ease); }
+.chk-bench-item.is-running { border-color: var(--sel); }
+.chk-bench-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; }
+.chk-bench-n { font: 600 12px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-3); min-width: 1.6em; }
+.chk-bench-label .picker-btn { min-width: 15em; }
+.chk-bench-words { font: 500 12.5px/1.3 var(--sans); color: var(--ink-3); }
+.chk-bench-head .chk-link { margin-left: auto; }
+.chk-bench-text { display: block; width: 100%; min-height: 6.5em; resize: vertical; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 3px; background: var(--sheet); color: var(--ink); font: 400 15px/1.6 var(--serif); }
+.chk-bench-text:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.chk-bench-text[readonly] { color: var(--ink-2); }
+.chk-bench-source, .chk-bench-style { margin: 7px 0 0; font: 400 12.5px/1.45 var(--sans); color: var(--ink-3); overflow-wrap: anywhere; }
+/* the outcome: colour and a word together (caught / missed / wrongly flagged / not flagged / no score) */
+.chk-bench-out { display: inline-flex; align-items: baseline; gap: 3px; padding: 2px 9px; border-radius: 3px; font: 600 12.5px/1.4 var(--sans); background: var(--slate-soft); color: var(--ink-2); }
+.chk-bench-out b { font: 600 13px/1 var(--mono); font-variant-numeric: tabular-nums; }
+.chk-bench-out small { font: 500 11px/1 var(--mono); color: var(--ink-3); margin-right: 4px; }
+.chk-bench-out.caught { background: var(--spruce-soft); color: var(--spruce); }
+.chk-bench-out.missed { background: var(--amber-soft); color: var(--amber); }
+.chk-bench-out.wrong { background: var(--brick-soft); color: var(--brick); }
+.chk-bench-out.running { background: transparent; color: var(--ink-3); font-weight: 500; }
+.chk-bench-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 14px; }
+@media (max-width: 520px) {
+  .chk-bench-label .picker-btn { min-width: 0; }
+  .chk-bench-table th, .chk-bench-table td { padding-right: 6px; }
+}
+
+/* ---------- Rewrite: optional style sample (2026-11-19) ---------- */
+.chk-rw-sample { margin-top: 14px; border: 1px solid var(--line); border-radius: 4px; background: var(--sheet); padding: 0 14px; }
+.chk-rw-sample > summary { cursor: pointer; padding: 11px 0; font: 600 14px/1.3 var(--sans); color: var(--ink); list-style-position: inside; }
+.chk-rw-sample[open] { padding-bottom: 12px; }
+.chk-rw-sample-opt { font-weight: 400; color: var(--ink-3); }
+.chk-rw-sample-say { margin: 0 0 10px; font: 400 13.5px/1.5 var(--sans); color: var(--ink-2); max-width: 68ch; }
+.chk-rw-sample-top { padding: 0 0 8px; }
+.chk-rw-sample-text { display: block; width: 100%; min-height: 7em; resize: vertical; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 3px; background: var(--sheet); color: var(--ink); font: 400 15px/1.6 var(--serif); margin-bottom: 6px; }
+.chk-rw-sample-text:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.chk-rw-style-sample { font: 600 13.5px/1.2 var(--sans); color: var(--ink-2); }

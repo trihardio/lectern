@@ -1,6 +1,7 @@
 'use strict';
-// Measured style model (version 3): 30 interpretable writing-style features and a logistic regression trained on
-// public labelled data (bench/style/). It is a second, independent reading shown beside the model review; it is
+// Measured style model: interpretable writing-style features and a logistic regression trained on
+// public labelled data (bench/style/). Version 3 used 30 features; version 4 adds structure features that describe how
+// current models shape a text (evenness, closing sentences, lists of three) and keeps only features the model file names. It is a second, independent reading shown beside the model review; it is
 // never part of the headline score. Tested on a fresh holdout before use; the results and weak spots travel with
 // the weights in style-model.json and are shown in the window. See bench/PREREGISTRATION.md, versions 2 and 3.
 const T = require('./text');
@@ -28,7 +29,7 @@ const NAMES = ['sentLenMean', 'sentLenCV', 'wordLenMean', 'longWordRate', 'mattr
   'firstPersonRate', 'secondPersonRate', 'digitRate', 'properRate', 'strongLexRate', 'weakLexRate', 'phraseRate',
   'signpostShare', 'paraCV', 'lyRate', 'nominalRate', 'repeatTrigramRate', 'starterDiversity', 'lowerStartRate'];
 
-function features(raw) {
+function featureMap(raw) {
   const text = clean(raw);
   const { sentences, paragraphs } = T.segment(text);
   const sents = sentences.filter((s) => T.words(s.text).length >= 3);
@@ -37,8 +38,6 @@ function features(raw) {
   const lower = ws.map((w) => w.lower);
   const per = (k) => k / n;
   const lens = sents.map((s) => T.words(s.text).length);
-  const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
-  const cv = (a) => { if (a.length < 2) return 0; const m = mean(a); if (!m) return 0; return Math.sqrt(mean(a.map((x) => (x - m) ** 2))) / m; };
   // moving-average type-token ratio over 50-word windows (length-independent)
   let mattr = 0;
   if (lower.length >= 50) { let sum = 0, cnt = 0; for (let i = 0; i + 50 <= lower.length; i += 10) { sum += new Set(lower.slice(i, i + 50)).size / 50; cnt++; } mattr = sum / cnt; } else mattr = new Set(lower).size / n;
@@ -72,14 +71,75 @@ function features(raw) {
     repeatTrigramRate: repeatTri, starterDiversity: sents.length ? new Set(starters).size / sents.length : 1,
     lowerStartRate: sents.length ? sents.filter((s) => /^[a-z]/.test(s.text.trim())).length / sents.length : 0,
   };
-  return NAMES.map((k) => (Number.isFinite(v[k]) ? v[k] : 0));
+  Object.assign(v, structure(text, sents, lens, paragraphs, n));
+  return v;
 }
 
-/** Rates are skewed: compress with log1p after scaling to "per 100 words" where it applies. */
-const RATE = new Set(['longWordRate', 'semicolonRate', 'colonRate', 'dashRate', 'parenRate', 'quoteRate', 'questionRate', 'exclaimRate', 'contractionRate', 'firstPersonRate', 'secondPersonRate', 'digitRate', 'properRate', 'strongLexRate', 'weakLexRate', 'phraseRate', 'lyRate', 'nominalRate', 'repeatTrigramRate']);
-function transform(x) { return x.map((v, i) => (RATE.has(NAMES[i]) ? Math.log1p(v * 100) : v)); }
+const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+const cv = (a) => { if (a.length < 2) return 0; const m = mean(a); if (!m) return 0; return Math.sqrt(mean(a.map((x) => (x - m) ** 2))) / m; };
+// Version 4 features. All describe the shape of the text (paragraphs, sentence rhythm, how it opens and closes) or a
+// fixed construction. None counts spelling or grammar mistakes, vocabulary size or formality, because those track
+// English proficiency and would make the model wrongly flag non-native writers.
+const CLOSER = /^(?:in (?:short|essence|summary|conclusion|the end)|ultimately|overall|at (?:its|their) core|at the end of the day|together|taken together|in many ways|in the end)\b|\b(?:reminds? us|serves? as (?:a|an) (?:reminder|testament)|a testament to|underscor\w+|highlights? (?:the )?(?:importance|need|value)|matters? (?:because|more)|continues? to (?:shape|inspire|influence|evolve)|remains? (?:a|an|one of|essential|crucial|vital|important)|will (?:continue|likely continue) to)\b/i;
+const SUPERLATIVE = /\b(?:one of the (?:most|best|largest|biggest|oldest|first|few|key|main|many)|among the (?:most|best|largest|first)|(?:the|a) (?:most|best) (?:\w+ ){0,2}(?:of|in) (?:all|the)\b)/gi;
+const THREE = /\b[\w'’-]+(?: [\w'’-]+)?, [\w'’-]+(?: [\w'’-]+)?,? (?:and|or) [\w'’-]+/gi;
+const APPOS = /\b[A-Z][\w'’-]+(?: [A-Z][\w'’-]+)*, (?:a|an|the|one of) [^,.;:]{3,70},/g;
+const CONTRAST = /\bnot (?:just|only|merely|simply) [^.;!?]{2,60}(?:but|—)|\bnot (?:a|an|the|about) [^.;!?,]{2,40}, but\b|\b(?:isn't|wasn't|aren't|weren't|is not|was not) (?:just|only|merely|simply)\b|\brather than (?:simply|just|merely)\b/gi;
+const ING_TAIL = /, (?:\w+ing|which \w+s|allowing|enabling|making|helping|giving|leaving) (?:\w+ ){0,2}(?:the|a|an|its|their|that|how|more|both|many|it|them|these|those|new|future)\b/gi;
+const OPENER = /^(?:[^,.;:]{0,60} )?(?:has|have) (?:long|always|become|been|increasingly|recently)\b|\bplays? an? (?:crucial|key|vital|significant|central|important|major) role\b|^(?:in|with) (?:today's|the modern|the digital|recent years|an increasingly)|\b(?:is|are) (?:one of the most|a (?:complex|multifaceted|fascinating|powerful))\b/i;
+const HEDGE = /\b(?:often|typically|generally|tends? to|various|variety of|range of|several|many|often|can be|can help|may (?:be|also|not|have)|might|significant(?:ly)?|particularly|especially)\b/gi;
+const THE_START = /^(?:the|this|these|that|it|in|as|while|although|when|for)\b/i;
+const DEFINE = /^[A-Z][^,.;:]{0,70} (?:is|are|was|were) (?:a|an|the|one of the|among the) /;
+const ENT = (t) => (t.match(/\b\d[\d,.]*\b/g) || []).length + (t.match(/(?<=[a-z,;)] )(?:[A-Z][\p{L}'’-]+)(?: [A-Z][\p{L}'’-]+)*/gu) || []).length;
 
-function fit(X, y, { l2 = 1, iters = 3000, lr = 0.1, weights } = {}) {
+function structure(text, sents, lens, paragraphs, n) {
+  const ns = Math.max(1, sents.length);
+  const sentTexts = sents.map((s) => s.text.trim());
+  const sc = (re) => sentTexts.filter((t) => { re.lastIndex = 0; return re.test(t); }).length;
+  const total = (re) => sentTexts.reduce((a, t) => a + (t.match(re) || []).length, 0);
+  // rhythm: change from one sentence length to the next, relative to the mean (current models are even)
+  let adj = 0; for (let i = 1; i < lens.length; i++) adj += Math.abs(lens[i] - lens[i - 1]);
+  const adjDiff = lens.length > 1 ? adj / (lens.length - 1) / (mean(lens) || 1) : 0;
+  const band = lens.length ? lens.filter((l) => l >= 14 && l <= 30).length / lens.length : 0;
+  // paragraphs by sentences
+  const bySent = {}; for (const s of sents) bySent[s.para] = (bySent[s.para] || 0) + 1;
+  const pc = Object.values(bySent);
+  // the closing sentence of a text of at least two paragraphs, and its length against the mean
+  const last = sentTexts[sentTexts.length - 1] || '';
+  const lastPara = sents.length ? sents[sents.length - 1].para : 0;
+  const multi = paragraphs.length >= 2;
+  const closerSum = (CLOSER.test(last) ? 1 : 0) + (sentTexts.length > 3 && CLOSER.test(sentTexts[sentTexts.length - 2]) ? 0.5 : 0);
+  const lastParaStart = sentTexts.filter((_, i) => sents[i].para === lastPara)[0] || '';
+  const lastParaSum = multi && (CLOSER.test(lastParaStart) || CLOSER.test(last)) ? 1 : 0;
+  // evenness of named entities and numbers per sentence
+  const ent = sentTexts.map(ENT);
+  const entShare = ent.filter((e) => e > 0).length / ns;
+  const firstWords = sentTexts[0] ? T.words(sentTexts[0]).length : 0;
+  return {
+    adjDiff, lenBand: band, sentLenSD: Math.sqrt(mean(lens.map((x) => (x - mean(lens)) ** 2))),
+    paraSentCV: pc.length >= 3 ? cv(pc) : 0.5, paraSentMean: pc.length ? mean(pc) : sents.length,
+    closerSum, lastParaSum, superlativeRate: total(SUPERLATIVE) / ns, threeRate: total(THREE) / ns,
+    appositiveRate: total(APPOS) / ns, colonSentShare: sentTexts.filter((t) => /:(?!\/\/)/.test(t)).length / ns,
+    contrastRate: total(CONTRAST) / ns, ingTailRate: total(ING_TAIL) / ns, defineFirst: DEFINE.test(sentTexts[0] || '') ? 1 : 0,
+    entShare, entCV: cv(ent), entPerSent: mean(ent), firstLen: firstWords,
+    lastLenRatio: lens.length ? lens[lens.length - 1] / (mean(lens) || 1) : 1,
+    longSentShare: lens.length ? lens.filter((l) => l > 35).length / lens.length : 0,
+  };
+}
+
+/** The version 3 feature vector (kept so version 3 can still be scored and compared). */
+function features(raw) { const v = featureMap(raw); return NAMES.map((k) => (Number.isFinite(v[k]) ? v[k] : 0)); }
+const NAMES4 = ['adjDiff', 'lenBand', 'sentLenSD', 'paraSentCV', 'paraSentMean', 'closerSum', 'lastParaSum', 'superlativeRate', 'threeRate',
+  'appositiveRate', 'colonSentShare', 'openerGen', 'hedgeRate', 'commonStartShare', 'contrastRate', 'ingTailRate', 'defineFirst', 'entShare', 'entCV', 'entPerSent', 'firstLen', 'lastLenRatio', 'longSentShare'];
+const ALL_NAMES = [...NAMES, ...NAMES4];
+/** Feature vector for the named features (default: all), in that order. */
+function vector(raw, names = ALL_NAMES) { const v = featureMap(raw); return names.map((k) => (Number.isFinite(v[k]) ? v[k] : 0)); }
+
+/** Rates are skewed: compress with log1p after scaling to "per 100 words" where it applies. */
+const RATE = new Set(['hedgeRate', 'superlativeRate', 'threeRate', 'appositiveRate', 'contrastRate', 'ingTailRate', 'entPerSent', 'longWordRate', 'semicolonRate', 'colonRate', 'dashRate', 'parenRate', 'quoteRate', 'questionRate', 'exclaimRate', 'contractionRate', 'firstPersonRate', 'secondPersonRate', 'digitRate', 'properRate', 'strongLexRate', 'weakLexRate', 'phraseRate', 'lyRate', 'nominalRate', 'repeatTrigramRate']);
+function transform(x, names = NAMES) { return x.map((v, i) => (RATE.has(names[i]) ? Math.log1p(v * 100) : v)); }
+
+function fit(X, y, { l2 = 1, iters = 3000, lr = 0.1, weights, names = NAMES } = {}) {
   const d = X[0].length;
   const mu = Array(d).fill(0), sd = Array(d).fill(0);
   for (const x of X) x.forEach((v, j) => { mu[j] += v / X.length; });
@@ -101,19 +161,37 @@ function fit(X, y, { l2 = 1, iters = 3000, lr = 0.1, weights } = {}) {
     for (let j = 0; j < d; j++) w[j] -= lr * (gw[j] / wsum + (l2 * w[j]) / wsum);
     b -= lr * (gb / wsum);
   }
-  return { names: NAMES, mu, sd, w, b };
+  return { names, mu, sd, w, b };
 }
 function score(model, x) {
   let z = model.b;
   for (let j = 0; j < x.length; j++) z += model.w[j] * ((x[j] - model.mu[j]) / model.sd[j]);
   return 1 / (1 + Math.exp(-z));
 }
-/** The trained model's reading of a text: { probability, threshold, flagged, version, tested } (null under 80 words). */
-function styleReading(text) {
+/** One logistic model's probability for a text. */
+function scoreText(model, text) { return score(model, transform(vector(text, model.names), model.names)); }
+/** Map a model's probability so that its own line lands on 0.5: 0 to line becomes 0 to 0.5, line to 1 becomes 0.5 to 1. */
+function lift(p, cut) { return p < cut ? (0.5 * p) / cut : 0.5 + (0.5 * (p - cut)) / (1 - cut); }
+
+/**
+ * The trained model's reading of a text: { probability, threshold, flagged, version, tested } (null under 80 words).
+ * Version 4 ("either") holds two models, each with its own line: version 3 (older generators) and the version 4 core
+ * model (current Claude text). A text is flagged when either model reaches its line; the shown score is the higher of the
+ * two lifted readings, so 0.5 is the flag line. `parts` gives each model's own probability.
+ */
+function styleReading(text, model = MODEL) {
   if (T.words(text).length < 80) return null;
-  const x = transform(features(text));
-  const p = score(MODEL, x);
-  return { probability: +p.toFixed(3), threshold: MODEL.threshold, flagged: p >= MODEL.threshold, version: MODEL.version, tested: MODEL.tested };
+  if (model.kind === 'either') {
+    const parts = model.parts.map((m) => ({ name: m.name, probability: scoreText(m, text), cut: m.cut }));
+    const s = Math.max(...parts.map((q) => lift(q.probability, q.cut)));
+    return {
+      probability: +s.toFixed(3), threshold: model.threshold, flagged: parts.some((q) => q.probability >= q.cut),
+      version: model.version, tested: model.tested,
+      parts: parts.map((q) => ({ name: q.name, probability: +q.probability.toFixed(3), cut: q.cut, flagged: q.probability >= q.cut })),
+    };
+  }
+  const p = scoreText(model, text);
+  return { probability: +p.toFixed(3), threshold: model.threshold, flagged: p >= model.threshold, version: model.version, tested: model.tested };
 }
 
-module.exports = { NAMES, features, transform, fit, score, clean, styleReading, MODEL };
+module.exports = { NAMES, NAMES4, ALL_NAMES, features, featureMap, vector, transform, fit, score, scoreText, lift, clean, styleReading, MODEL };

@@ -1,7 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <!-- Lectern's app icon: an open book on a reading stand, one line swept with the highlighter.
-       Palette from ui/styles.css: cabinet green (--cab, --cab-2), sheet (--sheet), highlighter (--mark),
-       folder ochre (--f-trial) for the oak stand, folder red-brown (--f-meta) for the ribbon.
+       Palette from ui/styles.css: cabinet green (cab, cab-2), sheet (sheet), highlighter (mark),
+       folder ochre (f-trial) for the oak stand, folder red-brown (f-meta) for the ribbon. The token names are
+       written without their two leading hyphens: XML forbids two hyphens in a row inside a comment, and a browser
+       then refuses the whole file as an image (the README showed a broken icon on GitHub).
        The tile follows the macOS grid: an 824 x 824 rounded square inside the 1024 canvas. -->
   <defs>
     <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">

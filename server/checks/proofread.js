@@ -352,7 +352,7 @@ async function runProofread({ text, config, signal, emit = () => {}, engine: pre
     if (!choice || !choice.ready) throw new Error('The selected model provider is not connected. Sign in or choose a connected provider.');
     engine = preferred;
   } else engine = await llm.pickEngine(settings);
-  if (!engine) throw new Error('No model is connected. Sign in to Claude or ChatGPT to proofread.');
+  if (!engine) throw new Error('No model is connected. Sign in to Claude or ChatGPT, or add a Gemini API key in Settings, to proofread.');
   const requestedModel = selectedModel || settings.models[engine] || '';
 
   const units = unitsOf(text);

@@ -1,0 +1,28 @@
+{
+ "frozenAt": "2026-11-18T22:21:10.566Z",
+ "choice": {
+  "R1": {
+   "ship": true,
+   "reason": "dev: flags 3 of 10 v7 AI vs 2 for B0, 0 of 10 human for both"
+  },
+  "T1": {
+   "ship": false,
+   "reason": "dev: 3 vs 3 v7 AI flagged, v6 dev Claude 20 vs 21 (bench/results/style7-dev.json)"
+  },
+  "holdoutRuns": "B0 and R1 on the holdout review subset (20 texts each, 40 calls); B0 style on the whole holdout (free); T1 is not run on the holdout",
+  "shippingNote": "R1 is copied into server/prompts.js only after the holdout, and must equal bench/v7/review-r1.txt (frozen)"
+ },
+ "sha256": {
+  "server/prompts.js": "2b38b15c5d56bf5bdb79ed9afdf4ca86caa1970bfef19334e846edcf4d133fa1",
+  "server/checks/aiscore.js": "2a2be78ffedab91516da4c33fdc68906443dbe0c2e821e4c03bb9ab7e18ef0cf",
+  "server/checks/style.js": "6af7d4ba65b46683b6646b2e7f8e6ee297271bfca84166b261d2fe282e9b688a",
+  "server/checks/style-model.json": "0d377a856fbcdd6c5d74e1cb9c4b34fcaf26ff0346e02d289bcd373b61dce0a5",
+  "bench/data/v7/holdout.sha256": "0bbee9e1fd8fa988160675dcd4d745b2b3df773a70f5a838fa3e99b9c86d5b69",
+  "bench/v7/review-b0.txt": "130f3eed4fd451c537bf88c1a7b2ca20df2a69365ea110194b9b1a92abee9444",
+  "bench/v7/review-prompts.js": "df2d55b3310aff58d20953e33bd55a420074051c3a14060665eb387b54fb11cf",
+  "bench/v7/style-model-b0.json": "0d377a856fbcdd6c5d74e1cb9c4b34fcaf26ff0346e02d289bcd373b61dce0a5",
+  "bench/v7/review-r1.txt": "0ea6ae7415530fb17d63daf11dcdf083bc35523989c3492502f8561ace755ab7",
+  "bench/v7/style-model-t1.json": "ebf321144c0945c90fc3b8d83e595357440a985d59b9840d89ca378b1226e7b7"
+ },
+ "note": "Written before any holdout call (review or style)."
+}

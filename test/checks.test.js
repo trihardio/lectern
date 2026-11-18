@@ -202,8 +202,10 @@ test('AI check: the model rating decides the band, measured signals are evidence
   assert.ok(aiSent.why && aiSent.signals.length > 0, 'the model reason and the measured evidence are kept apart');
   assert.ok(aiSent.marks.some((m) => r.text.slice(m.start, m.end).toLowerCase() === 'delve'));
   assert.equal(r.reviewedWords, r.eligibleWords);
-  const strongWords = r.sentences.filter((s) => s.band === 'strong').reduce((n, s) => n + s.words, 0);
-  assert.equal(r.score, Math.round((100 * strongWords) / r.reviewedWords), 'the headline is strong words over reviewed words');
+  const rated = r.sentences.filter((s) => s.review === 'model');
+  const mean = rated.reduce((n, s) => n + s.rating * s.words, 0) / r.reviewedWords;
+  assert.equal(r.score, Math.round(mean), 'the headline is the mean rating, weighted by words, over reviewed words');
+  assert.equal(r.flagged, r.score >= 53, 'the line is 52.1 (scoring version 4), so a shown whole number of 53 or more is flagged');
   assert.equal(Object.values(r.bands).reduce((a, b) => a + b, 0), 100);
   assert.deepEqual(r.issues.map((i) => [i.kind, r.text.slice(i.start, i.end), i.fix]), [['spelling', 'recieve', 'receive'], ['grammar', 'informations', 'information']]);
   assert.equal(r.rejectedSuggestions, 1, 'the invented quote is dropped and counted');

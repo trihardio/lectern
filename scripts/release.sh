@@ -5,15 +5,19 @@
 #
 # 1. Checks: on main, not behind origin/main, gh signed in, the no-reply commit email, no private data in the files.
 # 2. Raises the patch version of the last published release by one (v0.2.0 -> v0.2.1 -> v0.2.2 ...) in package.json,
-#    package-lock.json and the download names in README.md.
+#    package-lock.json and the download names in README.md. It also saves the notes as docs/whats-new/vX.Y.Z.md under
+#    the heading "What's new in vX.Y.Z". README.md does not link to that page, so it stays off the front page.
 # 3. Builds every download into release/ with scripts/make-release.sh (which runs the tests first).
 # 4. Checks the Mac app inside the DMG (version, signature, voice helper) and launches a copy once.
 # 5. Commits the whole working tree as "Lectern X.Y.Z", pushes main, publishes the GitHub release with the notes,
 #    then downloads the files back and checks their checksums.
 #
-# --dry-run stops after step 4 and puts the version files back: nothing is committed or published.
+# --dry-run stops after step 4 and puts the version files back: nothing is committed or published, but the new
+# downloads and SHA256SUMS.txt are still written into release/, so a dry run also waits for the owner's word.
 # If anything fails before the commit, the version files are put back too. Saying "release" is the owner's approval
 # for exactly one release; nothing else in the repo publishes.
+# The downloads go only into release/ (the owner's release folder). Nothing is put on the Desktop: the DMG is mounted
+# hidden from Finder (-nobrowse) and is always ejected again, even when a step fails.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.local/bin:$PATH"
@@ -30,6 +34,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 fail() { echo "release: $*" >&2; exit 1; }
+# Eject a mounted DMG: diskutil first (hdiutil detach is deprecated on newer macOS), then hdiutil, then by force.
+eject_dmg() { diskutil eject "$1" >/dev/null 2>&1 || hdiutil detach "$1" -quiet 2>/dev/null || hdiutil detach "$1" -force -quiet 2>/dev/null; }
 [ -n "$NOTES" ] && [ -s "$NOTES" ] || fail "give --notes <file>: the release notes, written for ordinary users"
 NOTES="$(cd "$(dirname "$NOTES")" && pwd)/$(basename "$NOTES")"
 
@@ -57,15 +63,24 @@ PATTERN="$HOME|sk-[A-Za-z0-9]{20}|sk-ant-|@gmail\.com"
 if git ls-files -co --exclude-standard -z -- . ":!scripts/release.sh" | xargs -0 grep -nIE "$PATTERN" 2>/dev/null; then
   fail "the lines above may hold private data; nothing was changed"
 fi
+# The notes are published twice (the release page and docs/whats-new/), so they get the same check.
+if grep -nIE "$PATTERN" "$NOTES"; then
+  fail "the release notes above may hold private data; nothing was changed"
+fi
 
 echo "== version $NEW"
 BACKUP="$(mktemp -d)"
 cp package.json package-lock.json README.md "$BACKUP/"
 COMMITTED=0
+WHATSNEW="docs/whats-new/v$NEW.md"
+MOUNT=""
 on_exit() {
   local code=$?
+  # a DMG this script mounted is ejected whatever happened, so no disk is left behind (or on the Desktop)
+  if [ -n "$MOUNT" ]; then eject_dmg "$MOUNT" || true; fi
   if [ "$COMMITTED" = 0 ]; then
     cp "$BACKUP/package.json" "$BACKUP/package-lock.json" "$BACKUP/README.md" .
+    rm -f "$WHATSNEW"; rmdir docs/whats-new docs 2>/dev/null || true # only the page this run wrote; rmdir keeps a folder that still holds files
     [ "$code" = 0 ] || echo "release: stopped before the commit; package.json, package-lock.json and README.md are back as they were" >&2
   elif [ "$code" != 0 ]; then
     echo "release: committed locally but not finished. To finish by hand:" >&2
@@ -84,6 +99,9 @@ node -e '
     fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
   }' "$NEW"
 sed -i '' -E "s/Lectern-[0-9]+\.[0-9]+\.[0-9]+(\.dmg|-windows-x64\.zip)/Lectern-$NEW\1/g" README.md
+# "What's new in vX.Y.Z": the same notes, kept in the repo. README.md does not link to it, so the front page stays as it is.
+mkdir -p docs/whats-new
+{ printf "# What's new in v%s\n\n_Released %s._\n\n" "$NEW" "$(date +%Y-%m-%d)"; cat "$NOTES"; } > "$WHATSNEW"
 
 echo "== build: tests, Mac app, DMG, Windows zip, checksums"
 env -u OPENAI_API_KEY -u ELECTRON_RUN_AS_NODE bash scripts/make-release.sh
@@ -101,7 +119,7 @@ SIGNED=1; codesign --verify --deep --strict "$APP" 2>/dev/null || SIGNED=0
 VOICE=1; [ -d "$APP/Contents/Resources/app.asar.unpacked/native/Lectern Voice.app" ] || VOICE=0
 TRY="$(mktemp -d)"
 ditto "$APP" "$TRY/Lectern.app"
-hdiutil detach "$MOUNT" -quiet || true
+if eject_dmg "$MOUNT"; then MOUNT=""; fi # if this fails, on_exit tries again
 [ "$GOT" = "$NEW" ] || fail "the app in the DMG says version $GOT, expected $NEW"
 [ "$SIGNED" = 1 ] || fail "the app in the DMG fails 'codesign --verify --deep --strict'"
 [ "$VOICE" = 1 ] || fail "the voice helper is missing from the app in the DMG"
@@ -138,4 +156,5 @@ CHECK="$(mktemp -d)"
 ( cd "$CHECK" && gh release download "v$NEW" --repo "$REPO" && shasum -a 256 -c SHA256SUMS.txt )
 URL="$(gh release view "v$NEW" --repo "$REPO" --json url --jq .url)"
 echo "Released Lectern $NEW: $URL"
+echo "What's new page: $WHATSNEW (on origin/main, not linked from the README)"
 echo "Commit $(git rev-parse --short HEAD) is on origin/main. Downloads: $DMG ($(du -h "$DMG" | cut -f1 | tr -d ' ')), $ZIP ($(du -h "$ZIP" | cut -f1 | tr -d ' '))"

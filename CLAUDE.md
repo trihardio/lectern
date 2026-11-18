@@ -11,8 +11,8 @@ abstracts, and writes an answer in which every citation links to a real paper.
 - `npm run make-app` — build `dist/…/Lectern.app`
 - `node -r ./test/mock-fetch.js server/start.js` — click through the UI offline with sample data
 - `node scripts/ui-check.js --steps <file> --mock` — look at the window in headless Chrome: measure elements, record state changes, take pictures (see `Lectern/Playbooks/Check the UI in a browser.md`)
-- `bash scripts/make-release.sh` — build the Mac DMG, the Windows zip and checksums (publishing needs the owner's OK)
-- `bash scripts/release.sh --notes <file>` — what the owner's word **"release"** runs: next patch version (0.2.0 → 0.2.1), build, check, commit, push, publish (steps: `.claude/skills/release/SKILL.md`)
+- `bash scripts/make-release.sh` — build the Mac DMG, the Windows zip and checksums into `release/` (only after the owner says "release")
+- `bash scripts/release.sh --notes <file>` — what the owner's word **"release"** runs: next patch version (0.2.0 → 0.2.1), build, check, save `docs/whats-new/vX.Y.Z.md` ("What's new in vX.Y.Z", not linked from the README), commit, push, publish (steps: `.claude/skills/release/SKILL.md`)
 
 ## How it fits together
 
@@ -25,7 +25,7 @@ server/profile.js     reader's level and field of study: the lists, and the prom
 server/sources/*      one file per paper database -> common paper shape (sources/common.js)
 server/sources/figures.js  figures from open-access papers (Europe PMC lookup + PMC bucket on AWS)
 server/sources/index.js   fan-out, de-duplication, ranking
-server/llm/*          claudecode + codex only (the saved sign-in / user's plan)
+server/llm/*          claudecode + codex (the saved sign-in / user's plan) + gemini (the user's Gemini API key; HTTP, key in a header)
 server/config.js      settings file (keys stay server-side), store.js = threads + library
 scripts/               make-app.sh, make-release.sh (DMG + Windows zip), dmg-*.js/py, ui-check.js (look at the window)
 PRODUCT.md, DESIGN.md  product truth and the visual world (read by the design skill; keep DESIGN.md current)
@@ -62,9 +62,11 @@ bench/, bench/grammar/  AI-writing benchmark, and the proofreader benchmark (CWE
   element in the owner's screenshot *and every variant of it*, fix the cause, measure again, and look at the
   picture. Check dark mode, 390 px wide and Reduce motion. Say what was tested and what could not be (real
   microphone, real Windows PC, packaged app). `npm test` does not cover the window.
-- **Ask before anything public.** Commit, push and release only when asked; one approval does not carry over.
-  The owner's one-word message **"release"** is that ask for one patch release: follow `.claude/skills/release/SKILL.md`.
-  Checklist: `Lectern/Playbooks/Release a version.md`.
+- **Nothing public until "release".** Hold every commit, push, tag and GitHub release, and every build into
+  `release/` (`make-release.sh` and `release.sh --dry-run` write there too), until the owner's own message is the
+  trigger word **"release"**. Finished work waits uncommitted. Each "release" approves one patch release: follow
+  `.claude/skills/release/SKILL.md`. Files go to `release/` only, never the Desktop. Checklist:
+  `Lectern/Playbooks/Release a version.md`.
 - **UI rules** (full list in `Lectern/Playbooks/Change the UI.md`): no near-black outlines (selected = soft green
   `--sel`); violet only for citations; words are sans, mono only for numbers, stamps and tiny caps; never a system
   `<select>`, `confirm()`, `alert()` or `prompt()` (use `picker()` and `confirmDialog()`); give chart parts their
@@ -74,6 +76,12 @@ bench/, bench/grammar/  AI-writing benchmark, and the proofreader benchmark (CWE
 - Do not use subagents for this project's UI skills: a plugin hook rewrites every Agent call and auto mode
   refuses it. Do the work in the main thread and say so.
 - Replies are short; anything saved or shared (notes, comments, commits, README, release notes) is plain full sentences.
+- **Every prompt:** no mistakes, no hallucinations, and no loops or going back and forth on the same line (each pass
+  spends the owner's credits). Big tasks use the skills, plugins and a web search.
+- **Trigger words** (details in `Lectern/People/Owner.md`, "Trigger words"): **"release"** = one patch release plus a
+  clean-up of unused code, older builds, `dist/` and caches; **"obvault"** = update the vault and the shared memory,
+  then send "obvault" to the other Lectern tabs; **"im going to sleep"** = take the recommended option at every
+  question, try each option in 3 to 5 versions, keep the most usable one. No trigger word lifts any other rule.
 
 ## Second brain (Obsidian vault)
 

@@ -1,0 +1,235 @@
+{
+ "split": "holdout",
+ "version": 7,
+ "made": "2026-11-18T22:23:29.338Z",
+ "review": {
+  "b0": {
+   "promptSha256": "130f3eed4fd451c537bf88c1a7b2ca20df2a69365ea110194b9b1a92abee9444",
+   "flagAt": 52.1,
+   "scoringVersion": 4,
+   "scored": 20,
+   "texts": 20,
+   "ai": {
+    "k": 0,
+    "n": 10,
+    "rate": 0,
+    "lo": 0,
+    "hi": 0.278
+   },
+   "humanvoice": {
+    "k": 0,
+    "n": 7,
+    "rate": 0,
+    "lo": 0,
+    "hi": 0.354
+   },
+   "rewrite": {
+    "k": 0,
+    "n": 3,
+    "rate": 0,
+    "lo": 0,
+    "hi": 0.561
+   },
+   "human": {
+    "k": 0,
+    "n": 10,
+    "rate": 0,
+    "lo": 0,
+    "hi": 0.278
+   },
+   "nonNative": {
+    "k": 0,
+    "n": 3,
+    "rate": 0,
+    "lo": 0,
+    "hi": 0.561
+   },
+   "auroc": 0.635,
+   "flaggedHumanIds": [],
+   "missedAiIds": [
+    "hv10",
+    "hv08",
+    "hv04",
+    "hv12",
+    "hv16",
+    "hv25",
+    "hv30",
+    "rw01",
+    "rw08",
+    "rw13"
+   ],
+   "ratings": {
+    "hv10": 12.6,
+    "hv08": 8.6,
+    "hv04": 16.6,
+    "hv12": 25.9,
+    "hv16": 13.7,
+    "hv25": 15.4,
+    "hv30": 51.1,
+    "rw01": 22.5,
+    "rw08": 39.6,
+    "rw13": 22.3,
+    "v7h-ell-13": 10.2,
+    "v7h-ell-14": 6,
+    "v7h-ell-3": 9.8,
+    "v7h-ivy-2": 23.3,
+    "v7h-news-3": 11.3,
+    "v7h-wp-bat": 13.2,
+    "v7h-wp-chess": 27.3,
+    "v7h-wp-origami": 18.9,
+    "v7h-wp-saxophone": 22.5,
+    "v7h-wp-umbrella": 21.9
+   }
+  },
+  "r1": {
+   "promptSha256": "0ea6ae7415530fb17d63daf11dcdf083bc35523989c3492502f8561ace755ab7",
+   "flagAt": 52.1,
+   "scoringVersion": 4,
+   "scored": 20,
+   "texts": 20,
+   "ai": {
+    "k": 1,
+    "n": 10,
+    "rate": 0.1,
+    "lo": 0.018,
+    "hi": 0.404
+   },
+   "humanvoice": {
+    "k": 1,
+    "n": 7,
+    "rate": 0.143,
+    "lo": 0.026,
+    "hi": 0.513
+   },
+   "rewrite": {
+    "k": 0,
+    "n": 3,
+    "rate": 0,
+    "lo": 0,
+    "hi": 0.561
+   },
+   "human": {
+    "k": 0,
+    "n": 10,
+    "rate": 0,
+    "lo": 0,
+    "hi": 0.278
+   },
+   "nonNative": {
+    "k": 0,
+    "n": 3,
+    "rate": 0,
+    "lo": 0,
+    "hi": 0.561
+   },
+   "auroc": 0.915,
+   "flaggedHumanIds": [],
+   "missedAiIds": [
+    "hv10",
+    "hv08",
+    "hv04",
+    "hv12",
+    "hv16",
+    "hv25",
+    "rw01",
+    "rw13",
+    "rw08"
+   ],
+   "ratings": {
+    "hv10": 23.8,
+    "hv08": 40.3,
+    "hv04": 28,
+    "hv12": 44.8,
+    "hv16": 51.9,
+    "hv30": 53.6,
+    "hv25": 31.5,
+    "rw01": 31.9,
+    "rw13": 30,
+    "rw08": 46.2,
+    "v7h-ell-13": 19.7,
+    "v7h-ell-14": 8.4,
+    "v7h-ell-3": 23.8,
+    "v7h-ivy-2": 22.8,
+    "v7h-news-3": 23,
+    "v7h-wp-bat": 21.3,
+    "v7h-wp-chess": 30.5,
+    "v7h-wp-origami": 24.8,
+    "v7h-wp-saxophone": 29.2,
+    "v7h-wp-umbrella": 29.4
+   }
+  }
+ },
+ "style": {
+  "B0": {
+   "model": "version 4 either (server/checks/style-model.json at the start of version 7)",
+   "texts": 36,
+   "ai": {
+    "k": 5,
+    "n": 13,
+    "rate": 0.385,
+    "lo": 0.177,
+    "hi": 0.645
+   },
+   "humanvoice": {
+    "k": 3,
+    "n": 9,
+    "rate": 0.333,
+    "lo": 0.121,
+    "hi": 0.646
+   },
+   "rewrite": {
+    "k": 2,
+    "n": 4,
+    "rate": 0.5,
+    "lo": 0.15,
+    "hi": 0.85
+   },
+   "human": {
+    "k": 1,
+    "n": 23,
+    "rate": 0.043,
+    "lo": 0.008,
+    "hi": 0.21
+   },
+   "nonNative": {
+    "k": 0,
+    "n": 6,
+    "rate": 0,
+    "lo": 0,
+    "hi": 0.39
+   },
+   "wikipedia": {
+    "k": 1,
+    "n": 12,
+    "rate": 0.083,
+    "lo": 0.015,
+    "hi": 0.354
+   },
+   "student": {
+    "k": 0,
+    "n": 8,
+    "rate": 0,
+    "lo": 0,
+    "hi": 0.324
+   },
+   "auroc": 0.839,
+   "flaggedHumanIds": [
+    "v7h-wp-esperanto"
+   ]
+  }
+ },
+ "paired": {
+  "ai": {
+   "bothFlag": 0,
+   "onlyR1": 1,
+   "onlyB0": 0,
+   "neither": 9
+  },
+  "human": {
+   "bothFlag": 0,
+   "onlyR1": 0,
+   "onlyB0": 0,
+   "neither": 10
+  }
+ }
+}

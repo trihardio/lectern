@@ -32,3 +32,18 @@ may be in model training sets, and one kind of AI editing. They say nothing abou
 accuracy. A pass on the claim rule would be necessary, not sufficient: repeatability, a fresh temporal holdout
 with current models and consented student writing would still be needed. Until then the app labels its
 result "Not validated" (`DETECTOR_VALIDATED = false` in `server/checks/aiscore.js`).
+
+## Live review benchmark (version 4 of the pre-registration)
+`bench/review/` measures the model review itself on human, AI and AI-then-human-edited academic and student writing
+(150–700 words, one review request per document). Read the version 4 section of `PREREGISTRATION.md` first.
+
+```
+node bench/review/fetch-beemo.js       # once; the other sources are described in bench/review/manifest.json
+node bench/review/build.js             # dev (36) and holdout (54) texts in bench/data/review (git-ignored), manifest without texts
+node bench/review/run.js --system S0 --split dev --fake --code-dir <git HEAD copy>      # free pipeline check
+node bench/review/run.js --system S0 --split dev --code-dir <git HEAD copy> --yes-spend --team <folder with calls.jsonl>
+node bench/review/analyze.js dev       # free: S0 and the candidate scores; --freeze writes the choice before the holdout
+```
+Every paid call is added to `<team>/calls.jsonl` and the run stops before the allocation is exceeded; replies are cached by code
+version, model, prompt and text (`bench/data/review/reply-cache`), so nothing is paid twice. The run uses Claude Code only, points
+Codex at a missing program, and stops if the provider reports another model than the one asked for.

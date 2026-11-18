@@ -29,3 +29,16 @@ native/
 # The release skill (.claude/skills/release/) stays local too: the `release/` line above also matches it.
 /.claude/worktrees/
 /.claude/settings.local.json
+
+# Search benchmark: downloaded gold data, the database response cache and the request counter stay local.
+# The manifest, the splits (ids only), the hand-written SYNERGY and CLEF question files and the run summaries are kept; the long per-question
+# ranked lists (*.lists.json) stay local.
+/bench/search/data/*
+!/bench/search/data/manifest.json
+!/bench/search/data/splits.json
+!/bench/search/data/synergy-questions.json
+!/bench/search/data/clef-questions.json
+/bench/search/results/*.lists.json
+# The per-run JSON (plans and per-question metrics) stays local too: its queries are close copies of the questions,
+# and the LitSearch dataset states no licence. The markdown summaries are kept.
+/bench/search/results/*.json

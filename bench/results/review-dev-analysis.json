@@ -1,0 +1,686 @@
+{
+ "split": "dev",
+ "systems": {
+  "S0/headline": {
+   "threshold": 20,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0.4090909090909091,
+    "lo": 0.2325581619647187,
+    "hi": 0.6126518152368488,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 0.7272727272727273,
+    "lo": 0.43435469882387084,
+    "hi": 0.902539407099751,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0.09090909090909091,
+    "lo": 0.016232172885884855,
+    "hi": 0.37735843645159567,
+    "n": 11
+   },
+   "auroc": 0.762987012987013,
+   "abstained": 4
+  },
+  "S1/strongShare": {
+   "threshold": 16.000000001,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0.5,
+    "lo": 0.3072210627372502,
+    "hi": 0.6927789372627497,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 0.7272727272727273,
+    "lo": 0.43435469882387084,
+    "hi": 0.902539407099751,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0.2727272727272727,
+    "lo": 0.09746059290024889,
+    "hi": 0.5656453011761291,
+    "n": 11
+   },
+   "auroc": 0.762987012987013,
+   "aurocAI": 0.8311688311688312,
+   "aurocEdited": 0.6948051948051948,
+   "abstained": 4,
+   "humanByKind": {
+    "non-native (ELL students)": {
+     "flagged": 0,
+     "n": 4
+    },
+    "student": {
+     "flagged": 0,
+     "n": 5
+    },
+    "academic": {
+     "flagged": 0,
+     "n": 2
+    },
+    "other": {
+     "flagged": 0,
+     "n": 3
+    }
+   }
+  },
+  "S1/someShare": {
+   "threshold": 100.000000001,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.14865487460862087,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.2588329669680317,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.2588329669680317,
+    "n": 11
+   },
+   "auroc": 0.7743506493506493,
+   "aurocAI": 0.8506493506493507,
+   "aurocEdited": 0.698051948051948,
+   "abstained": 4,
+   "humanByKind": {
+    "non-native (ELL students)": {
+     "flagged": 0,
+     "n": 4
+    },
+    "student": {
+     "flagged": 0,
+     "n": 5
+    },
+    "academic": {
+     "flagged": 0,
+     "n": 2
+    },
+    "other": {
+     "flagged": 0,
+     "n": 3
+    }
+   }
+  },
+  "S1/meanRating": {
+   "threshold": 58.300000000999994,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0.2727272727272727,
+    "lo": 0.13150760287989469,
+    "hi": 0.4815173401240238,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 0.45454545454545453,
+    "lo": 0.21271271622459764,
+    "hi": 0.719908462590678,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0.09090909090909091,
+    "lo": 0.016232172885884855,
+    "hi": 0.37735843645159567,
+    "n": 11
+   },
+   "auroc": 0.801948051948052,
+   "aurocAI": 0.8831168831168831,
+   "aurocEdited": 0.7207792207792207,
+   "abstained": 4,
+   "humanByKind": {
+    "non-native (ELL students)": {
+     "flagged": 0,
+     "n": 4
+    },
+    "student": {
+     "flagged": 0,
+     "n": 5
+    },
+    "academic": {
+     "flagged": 0,
+     "n": 2
+    },
+    "other": {
+     "flagged": 0,
+     "n": 3
+    }
+   }
+  },
+  "S1/topQuartileMean": {
+   "threshold": 63.000000001,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0.5454545454545454,
+    "lo": 0.3465979532073494,
+    "hi": 0.7307970581918668,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 0.7272727272727273,
+    "lo": 0.43435469882387084,
+    "hi": 0.902539407099751,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0.36363636363636365,
+    "lo": 0.15166471095367573,
+    "hi": 0.6461988254921511,
+    "n": 11
+   },
+   "auroc": 0.7873376623376623,
+   "aurocAI": 0.8636363636363636,
+   "aurocEdited": 0.711038961038961,
+   "abstained": 4,
+   "humanByKind": {
+    "non-native (ELL students)": {
+     "flagged": 0,
+     "n": 4
+    },
+    "student": {
+     "flagged": 0,
+     "n": 5
+    },
+    "academic": {
+     "flagged": 0,
+     "n": 2
+    },
+    "other": {
+     "flagged": 0,
+     "n": 3
+    }
+   }
+  },
+  "S1/overall": {
+   "skipped": "not every scored document has this score"
+  },
+  "S1b/strongShare": {
+   "threshold": 16.000000001,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0.5454545454545454,
+    "lo": 0.3465979532073494,
+    "hi": 0.7307970581918668,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 0.8181818181818182,
+    "lo": 0.523019438039156,
+    "hi": 0.9486323102539149,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0.2727272727272727,
+    "lo": 0.09746059290024889,
+    "hi": 0.5656453011761291,
+    "n": 11
+   },
+   "auroc": 0.7922077922077922,
+   "aurocAI": 0.9090909090909091,
+   "aurocEdited": 0.6753246753246753,
+   "abstained": 2,
+   "humanByKind": {
+    "non-native (ELL students)": {
+     "flagged": 0,
+     "n": 4
+    },
+    "student": {
+     "flagged": 0,
+     "n": 5
+    },
+    "academic": {
+     "flagged": 0,
+     "n": 2
+    },
+    "other": {
+     "flagged": 0,
+     "n": 3
+    }
+   }
+  },
+  "S1b/someShare": {
+   "threshold": 100.000000001,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.14865487460862087,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.2588329669680317,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.2588329669680317,
+    "n": 11
+   },
+   "auroc": 0.8003246753246753,
+   "aurocAI": 0.9318181818181818,
+   "aurocEdited": 0.6688311688311688,
+   "abstained": 2,
+   "humanByKind": {
+    "non-native (ELL students)": {
+     "flagged": 0,
+     "n": 4
+    },
+    "student": {
+     "flagged": 0,
+     "n": 5
+    },
+    "academic": {
+     "flagged": 0,
+     "n": 2
+    },
+    "other": {
+     "flagged": 0,
+     "n": 3
+    }
+   }
+  },
+  "S1b/meanRating": {
+   "threshold": 58.300000000999994,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0.3181818181818182,
+    "lo": 0.1636059318135624,
+    "hi": 0.5268140225895723,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 0.5454545454545454,
+    "lo": 0.280091537409322,
+    "hi": 0.7872872837754024,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0.09090909090909091,
+    "lo": 0.016232172885884855,
+    "hi": 0.37735843645159567,
+    "n": 11
+   },
+   "auroc": 0.8295454545454546,
+   "aurocAI": 0.9675324675324676,
+   "aurocEdited": 0.6915584415584416,
+   "abstained": 2,
+   "humanByKind": {
+    "non-native (ELL students)": {
+     "flagged": 0,
+     "n": 4
+    },
+    "student": {
+     "flagged": 0,
+     "n": 5
+    },
+    "academic": {
+     "flagged": 0,
+     "n": 2
+    },
+    "other": {
+     "flagged": 0,
+     "n": 3
+    }
+   }
+  },
+  "S1b/topQuartileMean": {
+   "threshold": 63.000000001,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0.5909090909090909,
+    "lo": 0.3873481847631513,
+    "hi": 0.7674418380352814,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 0.8181818181818182,
+    "lo": 0.523019438039156,
+    "hi": 0.9486323102539149,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0.36363636363636365,
+    "lo": 0.15166471095367573,
+    "hi": 0.6461988254921511,
+    "n": 11
+   },
+   "auroc": 0.8051948051948052,
+   "aurocAI": 0.935064935064935,
+   "aurocEdited": 0.6753246753246753,
+   "abstained": 2,
+   "humanByKind": {
+    "non-native (ELL students)": {
+     "flagged": 0,
+     "n": 4
+    },
+    "student": {
+     "flagged": 0,
+     "n": 5
+    },
+    "academic": {
+     "flagged": 0,
+     "n": 2
+    },
+    "other": {
+     "flagged": 0,
+     "n": 3
+    }
+   }
+  },
+  "S1b/overall": {
+   "skipped": "not every scored document has this score"
+  },
+  "S2/strongShare": {
+   "threshold": 24.000000001,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0.5909090909090909,
+    "lo": 0.3873481847631513,
+    "hi": 0.7674418380352814,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 1,
+    "lo": 0.7411670330319684,
+    "hi": 1,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0.18181818181818182,
+    "lo": 0.05136768974608513,
+    "hi": 0.4769805619608442,
+    "n": 11
+   },
+   "auroc": 0.8603896103896104,
+   "aurocAI": 1,
+   "aurocEdited": 0.7207792207792207,
+   "abstained": 1,
+   "humanByKind": {
+    "non-native (ELL students)": {
+     "flagged": 0,
+     "n": 4
+    },
+    "student": {
+     "flagged": 0,
+     "n": 5
+    },
+    "academic": {
+     "flagged": 0,
+     "n": 2
+    },
+    "other": {
+     "flagged": 0,
+     "n": 3
+    }
+   }
+  },
+  "S2/someShare": {
+   "threshold": 100.000000001,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.14865487460862087,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.2588329669680317,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.2588329669680317,
+    "n": 11
+   },
+   "auroc": 0.7987012987012987,
+   "aurocAI": 0.922077922077922,
+   "aurocEdited": 0.6753246753246753,
+   "abstained": 1,
+   "humanByKind": {
+    "non-native (ELL students)": {
+     "flagged": 0,
+     "n": 4
+    },
+    "student": {
+     "flagged": 0,
+     "n": 5
+    },
+    "academic": {
+     "flagged": 0,
+     "n": 2
+    },
+    "other": {
+     "flagged": 0,
+     "n": 3
+    }
+   }
+  },
+  "S2/meanRating": {
+   "threshold": 53.800000000999994,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0.7727272727272727,
+    "lo": 0.5656004682477829,
+    "hi": 0.8987696001475147,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 1,
+    "lo": 0.7411670330319684,
+    "hi": 1,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0.5454545454545454,
+    "lo": 0.280091537409322,
+    "hi": 0.7872872837754024,
+    "n": 11
+   },
+   "auroc": 0.8506493506493507,
+   "aurocAI": 1,
+   "aurocEdited": 0.7012987012987013,
+   "abstained": 1,
+   "humanByKind": {
+    "non-native (ELL students)": {
+     "flagged": 0,
+     "n": 4
+    },
+    "student": {
+     "flagged": 0,
+     "n": 5
+    },
+    "academic": {
+     "flagged": 0,
+     "n": 2
+    },
+    "other": {
+     "flagged": 0,
+     "n": 3
+    }
+   }
+  },
+  "S2/topQuartileMean": {
+   "threshold": 67.700000001,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0.6363636363636364,
+    "lo": 0.42951708090131013,
+    "hi": 0.8026679532963387,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 1,
+    "lo": 0.7411670330319684,
+    "hi": 1,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0.2727272727272727,
+    "lo": 0.09746059290024889,
+    "hi": 0.5656453011761291,
+    "n": 11
+   },
+   "auroc": 0.8636363636363636,
+   "aurocAI": 1,
+   "aurocEdited": 0.7272727272727273,
+   "abstained": 1,
+   "humanByKind": {
+    "non-native (ELL students)": {
+     "flagged": 0,
+     "n": 4
+    },
+    "student": {
+     "flagged": 0,
+     "n": 5
+    },
+    "academic": {
+     "flagged": 0,
+     "n": 2
+    },
+    "other": {
+     "flagged": 0,
+     "n": 3
+    }
+   }
+  },
+  "S2/overall": {
+   "threshold": 52.000000001,
+   "humanFlagged": 0,
+   "humans": 14,
+   "detection": {
+    "p": 0.5909090909090909,
+    "lo": 0.3873481847631513,
+    "hi": 0.7674418380352814,
+    "n": 22
+   },
+   "detectionAI": {
+    "p": 0.9090909090909091,
+    "lo": 0.6226415635484043,
+    "hi": 0.9837678271141151,
+    "n": 11
+   },
+   "detectionEdited": {
+    "p": 0.2727272727272727,
+    "lo": 0.09746059290024889,
+    "hi": 0.5656453011761291,
+    "n": 11
+   },
+   "auroc": 0.8522727272727273,
+   "aurocAI": 0.9967532467532467,
+   "aurocEdited": 0.7077922077922078,
+   "abstained": 1,
+   "humanByKind": {
+    "non-native (ELL students)": {
+     "flagged": 0,
+     "n": 4
+    },
+    "student": {
+     "flagged": 0,
+     "n": 5
+    },
+    "academic": {
+     "flagged": 0,
+     "n": 2
+    },
+    "other": {
+     "flagged": 0,
+     "n": 3
+    }
+   }
+  }
+ },
+ "s0Rule": {
+  "falsePositive": {
+   "p": 0,
+   "lo": 1.3877787807814457e-17,
+   "hi": 0.2153108027376358,
+   "n": 14
+  },
+  "detection": {
+   "p": 0.4090909090909091,
+   "lo": 0.2325581619647187,
+   "hi": 0.6126518152368488,
+   "n": 22
+  },
+  "detectionAI": {
+   "p": 0.7272727272727273,
+   "lo": 0.43435469882387084,
+   "hi": 0.902539407099751,
+   "n": 11
+  },
+  "detectionEdited": {
+   "p": 0.09090909090909091,
+   "lo": 0.016232172885884855,
+   "hi": 0.37735843645159567,
+   "n": 11
+  },
+  "auroc": 0.762987012987013,
+  "abstained": 4,
+  "humanByKind": {
+   "non-native (ELL students)": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.4898908364545973,
+    "n": 4
+   },
+   "student": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.43448246478317476,
+    "n": 5
+   },
+   "academic": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.6576197724933469,
+    "n": 2
+   },
+   "other": {
+    "p": 0,
+    "lo": 5.551115123125783e-17,
+    "hi": 0.5614970317550454,
+    "n": 3
+   }
+  }
+ },
+ "chosen": {
+  "system": "S2",
+  "score": "meanRating",
+  "threshold": 53.800000000999994
+ },
+ "s1bNoScore": 2,
+ "n": {
+  "human": 14,
+  "ai": 11,
+  "edited": 11
+ }
+}

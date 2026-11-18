@@ -12,15 +12,18 @@
 //     "not reviewed": it is never filled in from other signals and never counted as "few patterns".
 //   - The model's reply is validated (JSON shape, integer sentence numbers inside the batch, ratings that are
 //     real numbers 0-100, no conflicting duplicates). Failed and partial batches are kept in the report.
-//   - The headline is the share of REVIEWED words in sentences rated strong; its denominator and the coverage
-//     are always reported. No score is given when coverage or length is too low.
+//   - The headline (since scoring version 3) is the mean of the sentence ratings, weighted by words, over the REVIEWED
+//     words only (documentScores().meanRating), 0-100; its denominator and the coverage are always reported. No score is
+//     given when coverage or length is too low. Since scoring version 4 (prompt version 6) `flagged` is true at 52.1 or
+//     more, a line chosen on development texts and tested once on held-back texts (BENCHMARK below; bench/PREREGISTRATION.md,
+//     version 6). The style model's reading (report.style) is a separate second reading and is never part of the score.
 //   - Long sentences are cut into parts the model reads whole, so no unseen text is rated.
 //   - Writing suggestions are kept only when the quoted words occur exactly once inside the sentence the
 //     model named.
 //   - The selected model is used or the check fails; the provider-reported model is recorded when the
 //     provider reports one.
-//   - The method has not been validated on an independent benchmark (see bench/). DETECTOR_VALIDATED stays
-//     false until a pre-registered holdout evaluation supports a stronger claim.
+//   - The method has been tested on a small held-back set (BENCHMARK below) but the pre-registered claim rule is
+//     not met (see bench/PREREGISTRATION.md, version 4). DETECTOR_VALIDATED stays false until it is.
 
 const llm = require('../llm');
 const Prompts = require('../prompts');
@@ -76,7 +79,8 @@ const SIGNPOSTS = /^(?:furthermore|moreover|additionally|in addition|consequentl
 
 const DETECTOR_VALIDATED = false;
 const SCORING = Object.freeze({
-  version: 2,
+  version: 4, // 4: the review prompt of version 6 and the line 52.1 (version 7's prompt was tested and not shipped: deviation 9 of version 7); 3: the same score with the version 5 prompt, line 53.8; 2: share of words rated 65 or more
+  flagAt: 52.1, // the line frozen on development texts before the held-back run (bench/results/review6-frozen.json, system S2)
   bands: Object.freeze({ strong: 65, some: 40 }), // display bands of the model's own 0-100 rating, not probabilities
   minReviewedWords: 80, // fewer reviewed words: no headline score
   minCoverage: 0.6, // less than this share of eligible words reviewed: no headline score
@@ -86,9 +90,49 @@ const SCORING = Object.freeze({
   maxSpanUnits: 8, // the prompt allows 6 sentences per span; wider spans are rejected, not truncated
   workers: 3,
 });
+// The held-back test of this score (bench/PREREGISTRATION.md "Version 6"; bench/results/review6-holdout.json; run once on
+// 2026-11-19, with the review prompt and the line 52.1 as they are now, one run per text, model claude-sonnet-5-5). The 36
+// texts are 18 written by Claude Haiku 5.5, Sonnet 5.5 or Opus 5.5 and 18 human texts (Wikipedia introductions from before
+// 2022-11-30 and school essays; 6 by non-native writers). `flagAt` is the line; the whole-number line is 53. The Claude Opus
+// model was checked on 9 development texts only (a gate, before the held-back run). Counts, not rates: the intervals are wide.
+const BENCHMARK = Object.freeze({
+  date: '2026-11-19', model: 'claude-sonnet-5-5', texts: 36, writers: 'Claude Haiku 5.5, Sonnet 5.5 and Opus 5.5',
+  human: 18, humanFlagged: 1, ai: 18, aiFlagged: 10, claude: 18, claudeFlagged: 10, nonNative: 6, nonNativeFlagged: 0,
+  flagAt: 52.1, opusTexts: 9, auroc: 0.861,
+  // the previous prompt and line (version 5 prompt, 53.8) on the same 36 texts
+  previous: { flagAt: 53.8, ai: 18, aiFlagged: 4, human: 18, humanFlagged: 1, auroc: 0.767 },
+  // the style model alone ("either" of two models) on the whole held-back set of 98 texts, run without a model call
+  styleOnly: { texts: 98, ai: 37, aiFlagged: 19, human: 61, humanFlagged: 6, nonNative: 22, nonNativeFlagged: 1, auroc: 0.852 },
+  // The version 7 test (bench/PREREGISTRATION.md "Version 7"; bench/results/review7-holdout.json, review7-dev.json; run once on 2026-11-19 on
+  // texts never used for any choice). It is about AI text written or rewritten to sound human, all of it by Claude Haiku 5.5: 30 texts written to
+  // requests for a natural, student-like or casual voice, and 13 put through Lectern's own Rewrite tool. aiFlagged and the fields beside it are the
+  // version 7 prompt (tested, NOT shipped: deviation 9); "previous" is the shipped version 6 prompt on the same texts. Intervals are 95% Wilson intervals in percent.
+  v7: {
+    date: '2026-11-19', model: 'claude-sonnet-5-5', texts: 20, ai: 10, aiFlagged: 1, aiInterval: [2, 40], voiceAi: 7, voiceAiFlagged: 1, rewriteAi: 3, rewriteAiFlagged: 0,
+    human: 10, humanFlagged: 0, humanInterval: [0, 28], nonNative: 3, nonNativeFlagged: 0, auroc: 0.915,
+    previous: { ai: 10, aiFlagged: 0, human: 10, humanFlagged: 0, auroc: 0.635 },
+    development: { ai: 10, aiFlagged: 3, human: 10, humanFlagged: 0, previousAiFlagged: 2, previousHumanFlagged: 0 }, // used to choose the prompt: optimistic
+    styleOnly: { texts: 36, ai: 13, aiFlagged: 5, aiInterval: [18, 65], human: 23, humanFlagged: 1, humanInterval: [1, 21], nonNative: 6, nonNativeFlagged: 0, auroc: 0.839 },
+  },
+});
+// The version 5 test (bench/PREREGISTRATION.md, version 5; bench/results/review5-candidates.md, run 2026-11-19): 78 texts that
+// Claude Haiku 5.5 and Sonnet 5.5 were asked to write (18 of them then edited) and 40 human texts, reviewed once each by
+// claude-sonnet-5-5. The version 5 prompt missed nearly all of them; the earlier style model (version 3, replaced in
+// version 6) flagged most of them but also 3 human texts (2 of the 8 TOEFL essays).
+const CURRENT_MODELS_TEST = Object.freeze({
+  date: '2026-11-19', model: 'claude-sonnet-5-5', writers: 'Claude Haiku 5.5 and Sonnet 5.5',
+  ai: 78, patternFlagged: 1, styleFlagged: 59, human: 40, patternHumanFlagged: 0, styleHumanFlagged: 3, toefl: 8, styleToeflFlagged: 2,
+});
+const pct = (k, n) => `${Math.round((100 * k) / n)}%`;
 const LIMITS = [
-  'This is a writing-pattern review, not an AI detector. It has not been validated on an independent benchmark, and its numbers are not probabilities that a person or a model wrote the text.',
-  'Human writing can show these patterns (formal, formulaic or carefully edited prose), and AI-assisted writing can avoid them. Non-native English, short texts and heavily edited texts are judged least reliably.',
+  'This is a writing-pattern review, not an AI detector, and its numbers are not probabilities that a person or a model wrote the text.',
+  `The review prompt (version 6) and the line (${BENCHMARK.flagAt}) were chosen on development texts and then tested once on ${BENCHMARK.texts} held-back texts (${BENCHMARK.date}, ${BENCHMARK.model}, one run each). The review flagged (an exact mean of ${BENCHMARK.flagAt} or more, shown as ${Math.ceil(BENCHMARK.flagAt)} or more) ${BENCHMARK.aiFlagged} of ${BENCHMARK.ai} texts written by ${BENCHMARK.writers} (${pct(BENCHMARK.aiFlagged, BENCHMARK.ai)}, 95% interval 34 to 75%) and on ${BENCHMARK.humanFlagged} of ${BENCHMARK.human} human texts (${BENCHMARK.nonNativeFlagged} of ${BENCHMARK.nonNative} by non-native writers; interval for the human texts 1 to 26%). That is too few texts for a reliable rate, and the pre-registered claim rule was not met.`,
+  `The headline was chosen after that test: the system frozen before it (a mix of this score and the style model) flagged 3 of the same 18 human texts, so this score, one of the three candidates registered in advance, was used instead. The numbers above may therefore be optimistic; by how much is not known. The earlier prompt, on the same texts, scored ${BENCHMARK.previous.aiFlagged} of ${BENCHMARK.previous.ai} of the Claude texts and ${BENCHMARK.previous.humanFlagged} of ${BENCHMARK.previous.human} human texts.`,
+  `The style reading is separate and not part of the score. On all ${BENCHMARK.styleOnly.texts} held-back texts it flagged ${BENCHMARK.styleOnly.aiFlagged} of ${BENCHMARK.styleOnly.ai} written by Claude (${pct(BENCHMARK.styleOnly.aiFlagged, BENCHMARK.styleOnly.ai)}) and ${BENCHMARK.styleOnly.humanFlagged} of ${BENCHMARK.styleOnly.human} human texts, ${BENCHMARK.styleOnly.nonNativeFlagged} of ${BENCHMARK.styleOnly.nonNative} by non-native writers. Of those human texts, 25 were Wikipedia introductions, the kind of encyclopedic writing current models produce, and it flagged 4 of them.`,
+  `Text written or rewritten to sound human was tested separately (version 7): on ${BENCHMARK.v7.texts} held-back texts (${BENCHMARK.v7.ai} AI texts, all by Claude Haiku 5.5: ${BENCHMARK.v7.voiceAi} written to a request for a natural, casual or student-like voice and ${BENCHMARK.v7.rewriteAi} put through Lectern's own Rewrite tool; and ${BENCHMARK.v7.human} human texts; one run each, ${BENCHMARK.v7.model}), this review flagged ${BENCHMARK.v7.previous.aiFlagged} of ${BENCHMARK.v7.previous.ai} AI texts and ${BENCHMARK.v7.previous.humanFlagged} of ${BENCHMARK.v7.previous.human} human texts. Most AI text written to sound human, including Rewrite output, is not flagged. A newer prompt with an added pattern for such text flagged ${BENCHMARK.v7.aiFlagged} of ${BENCHMARK.v7.ai} (interval ${BENCHMARK.v7.aiInterval[0]} to ${BENCHMARK.v7.aiInterval[1]}%) and ${BENCHMARK.v7.humanFlagged} of ${BENCHMARK.v7.human} human texts; it is not used, because one text in ten is too small a gain to tell from chance and its new cues were never tested on casual human writing, where people use them too.`,
+  `On all ${BENCHMARK.v7.styleOnly.texts} held-back texts of that set the style reading flagged ${BENCHMARK.v7.styleOnly.aiFlagged} of ${BENCHMARK.v7.styleOnly.ai} AI texts (interval ${BENCHMARK.v7.styleOnly.aiInterval[0]} to ${BENCHMARK.v7.styleOnly.aiInterval[1]}%) and ${BENCHMARK.v7.styleOnly.humanFlagged} of ${BENCHMARK.v7.styleOnly.human} human texts (interval ${BENCHMARK.v7.styleOnly.humanInterval[0]} to ${BENCHMARK.v7.styleOnly.humanInterval[1]}%; ${BENCHMARK.v7.styleOnly.nonNativeFlagged} of ${BENCHMARK.v7.styleOnly.nonNative} by non-native writers). The human texts were Wikipedia introductions, student essays, news and abstracts, with no casual blog or email writing by people, so the false-positive rate on casual human writing was not measured.`,
+  `Every AI text in the version 6 test was written by Claude, so nothing from other current models was tested; the Claude Opus model was checked on ${BENCHMARK.opusTexts} development texts only; the 18 human texts were Wikipedia introductions (6), school essays by non-native learners (6), college essays (2), research abstracts (2) and news articles (2).`,
+  'Human writing can show these patterns (formal, formulaic or carefully edited prose, as in encyclopedia articles), and AI-assisted writing can avoid them. Non-native English, short texts and heavily edited texts are judged least reliably. A low score never clears a text.',
   'Do not use this result as evidence against a writer. A person should review the reasons and the text itself.',
 ];
 
@@ -223,14 +267,22 @@ const numOf = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v
 /**
  * Validate a model reply for one batch. `ids` are the 1-based unit numbers in the batch.
  * Returns { status: 'complete'|'partial'|'failed', ratings: Map(n -> { rating, why }), missing: [n], problems: {...},
- *           issues: [...], summary, error }.
+ *           overall: whole-text rating 0-100 or null, issues: [...], summary, error }.
  */
 function parseReview(raw, ids) {
   const idSet = new Set(ids);
-  const problems = { invalidSpans: 0, outOfBatch: 0, tooWide: 0, conflicts: 0 };
+  const problems = { invalidSpans: 0, outOfBatch: 0, tooWide: 0, conflicts: 0, invalidOverall: 0 };
   const json = extractJson(raw);
   if (!json || typeof json !== 'object' || !Array.isArray(json.spans)) {
-    return { status: 'failed', ratings: new Map(), missing: ids.slice(), problems, issues: [], summary: '', error: 'The model’s reply could not be read, so nothing in this part was reviewed. Run the check again.' };
+    return { status: 'failed', ratings: new Map(), missing: ids.slice(), problems, overall: null, issues: [], summary: '', error: 'The model’s reply could not be read, so nothing in this part was reviewed. Run the check again.' };
+  }
+  // Optional whole-text rating for this part, read as strictly as a sentence rating: a whole number 0-100.
+  // Missing stays null; a value that is not valid becomes null and is counted, and the part is kept.
+  let overall = null;
+  if (json.overall != null) {
+    const o = intOf(json.overall);
+    if (Number.isInteger(o) && o >= 0 && o <= 100) overall = o;
+    else problems.invalidOverall++;
   }
   const ratings = new Map();
   const conflicted = new Set();
@@ -240,12 +292,15 @@ function parseReview(raw, ids) {
     const to = sp.to == null ? from : intOf(sp.to);
     const rating = numOf(sp.ai);
     if (!Number.isInteger(from) || !Number.isInteger(to) || from > to || !(rating >= 0 && rating <= 100)) { problems.invalidSpans++; continue; }
-    if (to - from + 1 > SCORING.maxSpanUnits) { problems.tooWide++; continue; }
-    let outside = false;
-    for (let k = from; k <= to; k++) if (!idSet.has(k)) outside = true;
-    if (outside) { problems.outOfBatch++; continue; }
+    // The numbers the model sees skip headings and other text that is not reviewed, so a span such as 6-8 may
+    // legitimately cover a number (7) that was never shown. Both ends must be sentences of this part; the span
+    // rates the shown sentences inside it, and its width counts shown sentences only. A span reaching outside
+    // the part is still rejected whole.
+    if (!idSet.has(from) || !idSet.has(to)) { problems.outOfBatch++; continue; }
+    const covered = ids.filter((k) => k >= from && k <= to);
+    if (covered.length > SCORING.maxSpanUnits) { problems.tooWide++; continue; }
     const why = typeof sp.why === 'string' ? sp.why.slice(0, 240) : '';
-    for (let k = from; k <= to; k++) {
+    for (const k of covered) {
       const had = ratings.get(k);
       if (had && had.rating !== Math.round(rating)) conflicted.add(k);
       else if (!had) ratings.set(k, { rating: Math.round(rating), why });
@@ -255,7 +310,7 @@ function parseReview(raw, ids) {
   const missing = ids.filter((k) => !ratings.has(k));
   const status = ratings.size === 0 ? 'failed' : missing.length ? 'partial' : 'complete';
   return {
-    status, ratings, missing, problems,
+    status, ratings, missing, problems, overall,
     issues: Array.isArray(json.issues) ? json.issues.slice(0, 40) : [],
     summary: typeof json.summary === 'string' ? json.summary.slice(0, 400) : '',
     error: status === 'failed' ? 'The model’s reply rated none of the sentences in this part validly.' : '',
@@ -276,6 +331,43 @@ function percents(parts, total) {
 }
 
 const bandOf = (rating) => (rating >= SCORING.bands.strong ? 'strong' : rating >= SCORING.bands.some ? 'some' : 'few');
+
+/**
+ * Candidate document-level scores, computed only from the per-sentence ratings already in a report, so the
+ * benchmark in bench/ and the app compute them the same way. All values are on a 0-100 scale; none is a probability.
+ *   strongShare     share of reviewed words in sentences rated at the strong band (65+): the headline, rounded
+ *   someShare       share of reviewed words in sentences rated 40 or more (includes the strong band), rounded
+ *   meanRating      mean sentence rating weighted by words, over reviewed words, one decimal
+ *   topQuartileMean word-weighted mean of the highest-rated quarter of reviewed words (a sentence at the cut
+ *                   counts for the part of its words needed), one decimal
+ *   overall         the model's whole-text rating if its reply had a valid one, else null
+ * When the report would withhold a score (nothing reviewed, fewer than minReviewedWords reviewed, or less than
+ * minCoverage of the eligible words reviewed) the four sentence-based scores are null. Not-reviewed sentences
+ * are never counted.
+ */
+function documentScores(report) {
+  const rev = ((report && report.sentences) || []).filter((s) => s && s.eligible && s.review === 'model' && Number.isFinite(s.rating) && s.words > 0);
+  const reviewedWords = rev.reduce((n, s) => n + s.words, 0);
+  const eligibleWords = report && Number.isFinite(report.eligibleWords) ? report.eligibleWords : reviewedWords;
+  const coverage = eligibleWords ? reviewedWords / eligibleWords : 0;
+  const overall = report && Number.isInteger(report.overall) && report.overall >= 0 && report.overall <= 100 ? report.overall : null;
+  const out = { strongShare: null, someShare: null, meanRating: null, topQuartileMean: null, overall, reviewedWords, coverage: +coverage.toFixed(3) };
+  if (!rev.length || reviewedWords < SCORING.minReviewedWords || coverage < SCORING.minCoverage) return out;
+  const share = (min) => (100 * rev.filter((s) => s.rating >= min).reduce((n, s) => n + s.words, 0)) / reviewedWords;
+  out.strongShare = Math.round(share(SCORING.bands.strong));
+  out.someShare = Math.round(share(SCORING.bands.some));
+  out.meanRating = +(rev.reduce((n, s) => n + s.rating * s.words, 0) / reviewedWords).toFixed(1);
+  let need = reviewedWords / 4;
+  let total = 0;
+  for (const s of [...rev].sort((a, b) => b.rating - a.rating || a.i - b.i)) {
+    const take = Math.min(s.words, need);
+    total += take * s.rating;
+    need -= take;
+    if (need <= 0) break;
+  }
+  out.topQuartileMean = +(total / (reviewedWords / 4)).toFixed(1);
+  return out;
+}
 
 /**
  * Run the whole AI-writing check.
@@ -312,7 +404,7 @@ async function runAiCheck({ text: input, config, signal, emit = () => {}, engine
   let stopReason = '';
 
   if (!engine) {
-    stopReason = 'No model is connected, so nothing was reviewed. Sign in to Claude or ChatGPT to run the review.';
+    stopReason = 'No model is connected, so nothing was reviewed. Sign in to Claude or ChatGPT, or add a Gemini API key in Settings, to run the review.';
   } else {
     const groups = batches(m.prose);
     emit('step', { id: 'model', state: 'now', detail: groups.length > 1 ? `0 of ${groups.length} parts read` : '' });
@@ -323,7 +415,7 @@ async function runAiCheck({ text: input, config, signal, emit = () => {}, engine
         const k = next++;
         const batch = groups[k];
         const ids = batch.map((s) => s.i + 1);
-        const entry = { n: k + 1, from: ids[0], to: ids[ids.length - 1], units: ids.length, words: batch.reduce((n, s) => n + T.words(s.text).length, 0), status: 'failed', error: '', problems: null, unrated: ids.length, reportedModel: null, ms: 0 };
+        const entry = { n: k + 1, from: ids[0], to: ids[ids.length - 1], units: ids.length, words: batch.reduce((n, s) => n + T.words(s.text).length, 0), status: 'failed', error: '', problems: null, unrated: ids.length, overall: null, reportedModel: null, ms: 0 };
         batchLog[k] = entry;
         const t0 = Date.now();
         try {
@@ -335,7 +427,7 @@ async function runAiCheck({ text: input, config, signal, emit = () => {}, engine
           });
           entry.reportedModel = out && typeof out.model === 'string' ? out.model : null;
           const r = parseReview(out && out.text, ids);
-          entry.status = r.status; entry.error = r.error; entry.problems = r.problems; entry.unrated = r.missing.length;
+          entry.status = r.status; entry.error = r.error; entry.problems = r.problems; entry.unrated = r.missing.length; entry.overall = r.overall;
           for (const [n, v] of r.ratings) ratings.set(n - 1, v);
           for (const n of r.missing) unreviewedWhy.set(n - 1, r.status === 'failed' ? r.error : 'The model did not give this sentence a valid rating.');
           issuesByBatch[k] = { ids: new Set(ids), issues: r.issues };
@@ -393,12 +485,29 @@ async function runAiCheck({ text: input, config, signal, emit = () => {}, engine
   const lengthCategory = eligibleWords < SCORING.minReviewedWords ? 'short' : eligibleWords < 300 ? 'brief' : 'standard';
 
   let score = null;
+  let flagged = null;
   let withheld = '';
   const firstError = (batchLog.find((b) => b && b.error) || {}).error;
   if (status === 'unavailable') withheld = stopReason || (firstError ? `Nothing was reviewed. ${firstError}` : 'The model reviewed none of the text, so there is no score.');
   else if (reviewedWords < SCORING.minReviewedWords) withheld = `Only ${reviewedWords} words were reviewed; a score needs at least ${SCORING.minReviewedWords}.`;
   else if (coverage < SCORING.minCoverage) withheld = `Only ${Math.round(coverage * 100)}% of the eligible text was reviewed; a score needs at least ${Math.round(SCORING.minCoverage * 100)}%.`;
-  else score = Math.round((100 * wordsIn('strong')) / reviewedWords);
+
+  // ---- the model's whole-text rating (optional in its reply). With several parts it is the word-weighted mean of the
+  // parts' ratings, and only when every part that was read gave one; otherwise null. Kept in the report, not in the headline.
+  const readParts = batchLog.filter((b) => b && b.status !== 'failed' && b.status !== 'not sent');
+  const overall = readParts.length && readParts.every((b) => b.overall != null)
+    ? Math.round(readParts.reduce((n, b) => n + b.overall * b.words, 0) / readParts.reduce((n, b) => n + b.words, 0))
+    : null;
+
+  // ---- the headline: the mean rating over reviewed words (documentScores, shared with bench/), a whole number
+  // that always agrees with the flag: the flag is the frozen line on the exact mean, and the whole number is
+  // kept on the same side of 54 as the flag.
+  const scores = documentScores({ sentences, eligibleWords, overall });
+  const lineWhole = Math.ceil(SCORING.flagAt); // 53: a shown whole number at or above it is flagged, below it is not
+  if (!withheld && scores.meanRating != null) {
+    flagged = scores.meanRating >= SCORING.flagAt;
+    score = flagged ? Math.max(lineWhole, Math.round(scores.meanRating)) : Math.min(lineWhole - 1, Math.round(scores.meanRating));
+  }
 
   if (status === 'partial') notes.push(`The model reviewed ${reviewedWords.toLocaleString('en')} of ${eligibleWords.toLocaleString('en')} eligible words (${Math.round(coverage * 100)}%). The rest is marked “not reviewed” and is not counted either way.`);
   if (lengthCategory === 'short') notes.push('Short text: the result describes very little writing, so read the individual sentences rather than the totals.');
@@ -427,7 +536,11 @@ async function runAiCheck({ text: input, config, signal, emit = () => {}, engine
   return {
     kind: 'writing-pattern-review',
     text, words: T.words(text).length,
-    status, score, scoreWithheld: withheld,
+    status, score, flagged, scoreWithheld: withheld, overall,
+    scoreExact: scores.meanRating, // the mean rating before rounding; `score` and `flagged` come from it
+    scores, // every candidate document score (documentScores), for the evidence view and bench/
+    benchmark: BENCHMARK,
+    currentModelsTest: CURRENT_MODELS_TEST,
     eligibleWords, reviewedWords, coverage: +coverage.toFixed(3),
     bands: percents({ strong: wordsIn('strong'), some: wordsIn('some'), few: wordsIn('few'), notReviewed: eligibleWords - reviewedWords }, eligibleWords),
     bandWords: { strong: wordsIn('strong'), some: wordsIn('some'), few: wordsIn('few'), notReviewed: eligibleWords - reviewedWords },
@@ -452,4 +565,4 @@ async function runAiCheck({ text: input, config, signal, emit = () => {}, engine
   };
 }
 
-module.exports = { runAiCheck, measure, unitsOf, batches, parseReview, percents, STRONG, WEAK, PHRASES, SCORING, LIMITS, DETECTOR_VALIDATED };
+module.exports = { runAiCheck, measure, unitsOf, batches, parseReview, percents, documentScores, STRONG, WEAK, PHRASES, SCORING, LIMITS, BENCHMARK, CURRENT_MODELS_TEST, DETECTOR_VALIDATED };

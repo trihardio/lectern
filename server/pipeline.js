@@ -23,32 +23,128 @@ const { extractJson, clip, urlKey } = require('./util');
 
 const STOPWORDS = new Set('a an and are as at be by can could did do does for from has have how in is it its of on or should than that the their there these this to was were what when where which who why will with would about into between among effect effects impact affect'.split(' '));
 
+/** The question's content words, lower case, without filler words. Letters of any script count (not only a-z). */
+function contentWords(question) {
+  return String(question).toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, ' ').split(/\s+/).filter((w) => w && !STOPWORDS.has(w));
+}
+
 function keywords(question) {
-  const words = String(question).toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/).filter((w) => w && !STOPWORDS.has(w));
+  const words = contentWords(question);
   return words.slice(0, 9).join(' ') || String(question).slice(0, 80);
 }
 
-function looksYesNo(question) {
-  return /^\s*(does|do|is|are|can|could|should|will|would|has|have|did|was|were)\b/i.test(question);
+/**
+ * Words that belong to the way a question is asked, not to its topic. On the dev questions of bench/search
+ * (agent A's miss analysis, 2026-11-18) most gold papers that a keyword query missed lacked such words
+ * ("accurate", "good", "say", "people", "makes", "new", "check", "support"); OpenAlex needs every query word.
+ * Used only for the no-model fallback: keywords() keeps its own shorter list so that the recorded baseline stays comparable.
+ * Topic words that can also be filler ("work", "higher") are left in on purpose.
+ */
+const QUESTION_FILLER = new Set(('well good better best accurate accurately say says said makes make made people research researchers study studies paper papers ' +
+  'improve improves improved effective effectively effectiveness new check checks support supports first which whom some any most many much more less ' +
+  'you your we our me my suggest suggests provide reference references discuss discusses discussed find finding looking look interested specific specifically ' +
+  'focus focusing focused context realm idea particular regarding related relating article articles literature like need know tell explain list summarise summarize ' +
+  'evidence exist exists available currently also very not no if whether because using use used versus vs').split(' '));
+
+/**
+ * The queries used when no model plan is available. OpenAlex requires every word of a query
+ * to be present (checked 2026-11-18: an 8-word query matched 2,189 works, the first 3 words
+ * 441,342), so one long query is a single point of failure. The first query keeps the first six
+ * content words; the second keeps only the three longest words, which are usually the most
+ * specific terms, and is added only when the question is long enough to make it different.
+ */
+function fallbackQueries(question) {
+  // Hyphens become spaces first, so "first-time" counts as the two words OpenAlex will see.
+  const words = contentWords(question).flatMap((w) => w.split('-')).filter((w) => w.length > 1 && !STOPWORDS.has(w) && !QUESTION_FILLER.has(w));
+  if (!words.length) return [cleanQuery(String(question).slice(0, 80))].filter(Boolean);
+  const first = words.slice(0, 6);
+  const out = [first.join(' ')];
+  if (words.length >= 5) {
+    const longest = new Set([...words].sort((a, b) => b.length - a.length).slice(0, 3));
+    const core = words.filter((w) => longest.has(w)).slice(0, 3);
+    out.push(core.join(' '));
+  }
+  return dedupeQueries(out.map(cleanQuery));
 }
 
+/**
+ * True for a question that can be answered yes or no. A polite request ("Can you explain ...")
+ * and a choice ("Does X raise or lower Y?") start like a yes/no question but are not one: a
+ * yes/no question makes the reading pass sort every paper into for or against.
+ */
+function looksYesNo(question) {
+  const q = String(question || '');
+  if (!/^\s*(does|do|is|are|can|could|should|will|would|has|have|did|was|were)\b/i.test(q)) return false;
+  if (/^\s*(can|could|would|will)\s+(you|we|i)\b/i.test(q)) return false;
+  if (/\bor\b/i.test(q.replace(/\bwhether or not\b/ig, ''))) return false;
+  return true;
+}
+
+/** Most words one query may keep. Every word must match on OpenAlex, so extra words only remove papers. */
+const MAX_QUERY_WORDS = 8;
+
+/**
+ * Makes one planned query safe for all three databases: plain words only. Semantic Scholar's
+ * relevance search has no query syntax and finds nothing for a hyphenated term, so hyphens and every
+ * other mark become spaces; the possessive 's is dropped; AND/OR/NOT would be read as operators by OpenAlex.
+ */
 function cleanQuery(q) {
-  return String(q || '').replace(/["'()]/g, ' ').replace(/\b(AND|OR|NOT)\b/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140);
+  return String(q || '')
+    .replace(/['’]s\b/gi, '')
+    .replace(/\b(AND|OR|NOT)\b/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ').trim()
+    .split(' ').slice(0, MAX_QUERY_WORDS).join(' ')
+    .slice(0, 140).trim();
+}
+
+/** Drops queries that repeat another one, including the same words in a different order. */
+function dedupeQueries(queries) {
+  const seen = new Set();
+  const out = [];
+  for (const q of queries) {
+    const key = q.toLowerCase().split(' ').sort().join(' ');
+    if (!q || seen.has(key)) continue;
+    seen.add(key);
+    out.push(q);
+  }
+  return out;
+}
+
+/**
+ * Reads the planner's reply. The prompt asks for {"queries": [...], "yes_no": bool, "topic": "..."},
+ * but a small model sometimes sends the queries as one string, as a bare array or as objects.
+ * Returns { queries (cleaned, de-duplicated, at most max), yesNo (true, false or null when not stated), topic }.
+ */
+function parsePlan(text, max = 4) {
+  const json = extractJson(text);
+  let raw = json && json.queries;
+  if (typeof raw === 'string') raw = raw.split(/\n|;|\|/);
+  if (!Array.isArray(raw)) {
+    const arr = String(text || '').match(/\[[^\[\]]*\]/);
+    try { raw = arr ? JSON.parse(arr[0]) : []; } catch { raw = []; }
+  }
+  const items = Array.isArray(raw) ? raw : [];
+  const queries = dedupeQueries(items.map((x) => cleanQuery(x && typeof x === 'object' ? x.query : x)).filter((q) => q.length > 2)).slice(0, max);
+  return {
+    queries,
+    yesNo: json && typeof json.yes_no === 'boolean' ? json.yes_no : null,
+    topic: clip(json && typeof json.topic === 'string' ? json.topic : '', 60),
+  };
 }
 
 /** Step 1. Never throws: if the model is unavailable, fall back to plain keywords. */
 async function planQueries({ engine, settings, question, history, signal, system = prompts.PLAN_SYSTEM, max = 4 }) {
-  const fallback = { queries: [keywords(question)], yesNo: looksYesNo(question), topic: '', planned: false };
+  const fallback = { queries: fallbackQueries(question), yesNo: looksYesNo(question), topic: '', planned: false };
   try {
     const out = await llm.complete({
       engine, role: 'helper', settings, signal,
       system: system + (system === prompts.PLAN_SYSTEM ? prompts.EVIDENCE_PLANNING_ADDENDUM : '') + prompts.planAudience(settings.profile),
       prompt: prompts.planPrompt(question, history),
     });
-    const json = extractJson(out.text);
-    const queries = [...new Set(((json && json.queries) || []).map(cleanQuery).filter((q) => q.length > 2))].slice(0, max);
-    if (!queries.length) return fallback;
-    return { queries, yesNo: json.yes_no === true || looksYesNo(question), topic: clip(json.topic || '', 60), planned: true, usage: out.usage };
+    const plan = parsePlan(out.text, max);
+    if (!plan.queries.length) return fallback;
+    return { queries: plan.queries, yesNo: plan.yesNo === true || looksYesNo(question), topic: plan.topic, planned: true, usage: out.usage };
   } catch (e) {
     if (signal && signal.aborted) throw e;
     return { ...fallback, error: e.message };
@@ -122,7 +218,12 @@ async function searchStep(c, plan, max) {
   c.emit('plan', { queries: plan.queries, yesNo: plan.yesNo, topic: plan.topic, planned: plan.planned });
   c.turn.queries = plan.queries;
   c.emit('stage', { id: 'search' });
-  const found = await gather({ queries: plan.queries, filters: c.filters, settings: c.settings, signal: c.signal, onSource: c.onSource, max });
+  // The student's own words go along with the planned queries, so ranking can score each paper against both.
+  // A follow-up ("and in schools?") leans on earlier questions, so ranking is told when the question is one.
+  const found = await gather({
+    queries: plan.queries, question: c.question, followUp: !!(c.history && c.history.length),
+    filters: c.filters, settings: c.settings, signal: c.signal, onSource: c.onSource, max,
+  });
   found.notices.forEach(c.note);
   return found;
 }
@@ -134,7 +235,8 @@ const PREPARE = {
     const { papers } = await searchStep(c, plan, c.settings.maxPapers);
     return {
       papers, yesNo: plan.yesNo, readQuestion: c.question,
-      system: prompts.ANSWER_SYSTEM + prompts.answerAudience(c.settings.profile),
+      // The table rule depends on whether the window will build its own study table from the reading pass.
+      system: prompts.answerSystem({ profile: c.settings.profile, readingOn: !!c.settings.insights }),
       prompt: prompts.answerPrompt(c.question, papers, c.history),
     };
   },
@@ -267,7 +369,7 @@ async function runAsk({ question, mode = 'answer', threadId, parentId, filters =
   const settings = config.get();
   if (typeof overrides.model === 'string' && overrides.engine) settings.models[overrides.engine] = overrides.model;
   const engine = await llm.pickEngine(settings, overrides.engine);
-  if (!engine) throw new Error('No model is connected yet. Sign in to Claude or ChatGPT on this computer, then open Settings.');
+  if (!engine) throw new Error('No model is connected yet. Sign in to Claude or ChatGPT on this computer, or add a Gemini API key in Settings, then try again.');
   const effort = overrides.effort || settings.effort;
   const web = overrides.web != null ? !!overrides.web : settings.web;
   const model = settings.models[engine] || '';
@@ -330,10 +432,9 @@ async function runAsk({ question, mode = 'answer', threadId, parentId, filters =
         .catch(() => { /* no figures: the answer and the evidence views still stand */ })
       : Promise.resolve();
 
-    // Both engines run a signed-in CLI, which cites web pages as markdown links (read back below).
-    const system = job.system + (mode === 'answer' ? prompts.EVIDENCE_ANSWER_ADDENDUM : '')
-      + (settings.insights ? '\nThe structured abstract-reading pass is enabled.' : '\nThe structured abstract-reading pass is disabled; include a cited comparison table when useful.')
-      + (web ? prompts.WEB_ADDENDUM_LINKS : '');
+    // Each tool's system prompt is complete as PREPARE built it (the answer's table rule already reflects the
+    // reading pass). Both engines run a signed-in CLI, which cites web pages as markdown links (read back below).
+    const system = job.system + (web ? prompts.WEB_ADDENDUM_LINKS : '');
     const addWebSource = (url, title) => {
       let i = turn.webSources.findIndex((w) => w.url === url);
       if (i === -1) { turn.webSources.push({ url, title }); i = turn.webSources.length - 1; emit('websource', { n: i + 1, url, title }); }
@@ -392,4 +493,4 @@ async function runAsk({ question, mode = 'answer', threadId, parentId, filters =
   return saved;
 }
 
-module.exports = { runAsk, planQueries, readPapers, findFigures, keywords, looksYesNo };
+module.exports = { runAsk, planQueries, readPapers, findFigures, keywords, looksYesNo, cleanQuery, parsePlan, fallbackQueries };

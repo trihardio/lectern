@@ -142,30 +142,40 @@ function parseSseBlock(raw) {
   return data.length ? { event, data: data.join('\n') } : null;
 }
 
-/** Pull the first JSON object out of model text (handles ```json fences and stray prose). */
+/**
+ * Pull the first JSON object out of model text (handles ```json fences and stray prose). Models sometimes put raw line
+ * breaks or tabs inside a string (a rewrite with paragraph breaks), which JSON forbids: when the object does not parse as
+ * it is, it is read once more with those control characters escaped, inside strings only. Valid JSON is read unchanged.
+ */
 function extractJson(text) {
   if (!text) return null;
   const s = String(text);
   const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidates = fenced ? [fenced[1], s] : [s];
+  const ESC = { '\n': '\\n', '\r': '\\r', '\t': '\\t' };
   for (const c of candidates) {
     const start = c.indexOf('{');
     if (start === -1) continue;
-    let depth = 0, inStr = false, esc = false;
+    let depth = 0, inStr = false, esc = false, raw = false;
+    let repaired = '';
     for (let i = start; i < c.length; i++) {
       const ch = c[i];
       if (inStr) {
         if (esc) esc = false;
         else if (ch === '\\') esc = true;
         else if (ch === '"') inStr = false;
+        else if (ch < ' ') { raw = true; repaired += ESC[ch] || `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`; continue; }
       } else if (ch === '"') inStr = true;
       else if (ch === '{') depth++;
       else if (ch === '}') {
         depth--;
         if (depth === 0) {
-          try { return JSON.parse(c.slice(start, i + 1)); } catch { break; }
+          try { return JSON.parse(c.slice(start, i + 1)); } catch { /* try the repaired copy below */ }
+          if (raw) { try { return JSON.parse(repaired + ch); } catch { /* not JSON after all */ } }
+          break;
         }
       }
+      repaired += ch;
     }
   }
   return null;

@@ -41,6 +41,7 @@ const STATIC = {
   '/proofread.js': ['ui/proofread.js', 'text/javascript; charset=utf-8'],
   '/proofread.css': ['ui/proofread.css', 'text/css; charset=utf-8'],
   '/proofrules.js': ['shared/proofrules.js', 'text/javascript; charset=utf-8'],
+  '/testbench.js': ['shared/testbench.js', 'text/javascript; charset=utf-8'],
   '/misspellings.js': ['shared/misspellings.js', 'text/javascript; charset=utf-8'],
   '/icon.svg': ['ui/icon.svg', 'image/svg+xml; charset=utf-8'],
 };
@@ -285,7 +286,7 @@ function createApp({ dataDir, voice, pdf } = {}) {
       const result = kind === 'proofread'
         ? await runProofread({ text, config, signal: abort.signal, emit, engine, selectedModel: model, variant: typeof body.variant === 'string' ? body.variant : 'auto' })
         : kind === 'rewrite'
-        ? await runRewrite({ text, config, signal: abort.signal, emit, engine, selectedModel: model })
+        ? await runRewrite({ text, config, signal: abort.signal, emit, engine, selectedModel: model, style: typeof body.style === 'string' ? body.style.slice(0, 40) : undefined, sample: typeof body.sample === 'string' ? body.sample.slice(0, 20000) : undefined })
         : kind === 'ai'
         ? await runAiCheck({ text, config, signal: abort.signal, emit, engine, selectedModel: model })
         : await runSimilarityCheck({

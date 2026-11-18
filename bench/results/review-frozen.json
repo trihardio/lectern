@@ -1,0 +1,18 @@
+{
+ "system": "S2",
+ "score": "meanRating",
+ "threshold": 53.800000000999994,
+ "frozenAt": "2026-11-18T14:49:13.347Z",
+ "devFiles": {
+  "s0": "review-S0-dev-claude-sonnet-5-5.json",
+  "s2": "review-S2-dev-claude-sonnet-5-5.json"
+ },
+ "sha256": {
+  "server/checks/aiscore.js": "1d90b2f8e051ca5ac787dbf190617ec0408c7731faf4f48dcc9621e1d39ac456",
+  "server/prompts.js": "e6ec3872eabb3519f70ecd69d06c8fd247afb8016c760a05fdc5fb6355bdb553",
+  "bench/review/analyze.js": "3000d9510628d524ba8fa0f29e581d0ab04ab26f11f25faaad891c1781fb7a4f",
+  "bench/review/run.js": "df6f162ad5e8f46df55c715d8f321018fdb6574029102228a2c987433d08b5cd",
+  "bench/review/lib.js": "1b51ac1980ae5fb57e89b02cd1a8c3314fa9bc339afe96a1d397381c20ae3ad8",
+  "bench/review/manifest.json": "32ea4f85482e00914008724182944f9ec8744660b80382a1e116fc72345b2be6"
+ }
+}

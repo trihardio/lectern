@@ -205,47 +205,96 @@
     }
 
     // A row of choices whose picked look is one box that slides to the choice (Flow's SlideSeg and Pick).
-    // The row's choices are its children; the picked one has aria-checked="true" or the class "on". The box
-    // remembers where it was under `name`, so a row that is drawn again slides from the old choice.
-    const same = (a, b) => !!(a && b && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h);
+    // The row's choices are its children; the picked one has aria-checked="true", the class "on" or "active".
+    // The window builds such a row again on every change, so the box is remembered under `name`: the new row's
+    // box starts where the old row's box is drawn at that moment (part way, if it was still sliding) and goes on
+    // from there. It never waits a frame, fades in, or jumps to the end, and the picked choice's own look never
+    // shows under it.
+    const SLIDE_MS = 340; // how long the move takes: `[data-slide] > .slide-box.go` in ui/styles.css
+    const near = (a, b) => Math.abs(a - b) < 0.5;
+    const same = (a, b) => !!(a && b && near(a.x, b.x) && near(a.y, b.y) && near(a.w, b.w) && near(a.h, b.h));
+    const isPicked = (c) => c.getAttribute('aria-checked') === 'true' || c.classList.contains('on') || c.classList.contains('active');
+    const placeOf = (c) => ({ x: c.offsetLeft, y: c.offsetTop, w: c.offsetWidth, h: c.offsetHeight });    const putBox = (box, q) => { box.style.transform = `translate(${q.x}px, ${q.y}px)`; box.style.width = `${q.w}px`; box.style.height = `${q.h}px`; };
+    /** Where the box is drawn right now, part way through a move included. */
+    function boxNow(box) {
+      const cs = getComputedStyle(box);
+      const m = cs.transform && cs.transform !== 'none' ? new DOMMatrixReadOnly(cs.transform) : null;
+      return { x: m ? m.m41 : 0, y: m ? m.m42 : 0, w: parseFloat(cs.width) || 0, h: parseFloat(cs.height) || 0 };
+    }
+    /** Put the box at `q` at once, shown or hidden. */
+    function snapBox(box, q, shown) {
+      box.classList.remove('go');
+      if (q) putBox(box, q);
+      box.style.opacity = shown ? '1' : '0';
+      void box.offsetWidth; // commit this place before the move transitions are turned back on
+      box.classList.add('go');
+    }
+    /** Slide the box from `a` to `b`, starting `elapsed` ms into the move (a rebuilt row's box carries on). */
+    function runBox(box, a, b, elapsed) {
+      snapBox(box, a, true);
+      if (elapsed > 0) box.style.transitionDelay = `${-Math.round(elapsed)}ms`;
+      putBox(box, b);
+      if (elapsed > 0) { void box.offsetWidth; box.style.transitionDelay = ''; } // this move started part way; later ones start at the beginning
+    }
     function slide(group, name) {
       group.dataset.slide = name;
-      requestAnimationFrame(() => placeSlide(group, name, true));
+      // Set before the row is first styled. Added later, the picked choice was first drawn with its own look,
+      // which then faded out under the box while the box was still on its way (two highlights at once).
+      group.classList.add('slide-ready');
+      const mem = recall('slide', name);
+      let start = null; // null: nothing to slide from (the first drawing, or a row opened again a while later)
+      if (mem && mem.group !== group) {
+        const old = mem.group;
+        if (old && old.isConnected && old.getClientRects().length) {
+          // The row this one replaces is still on screen: start where its box is drawn now.
+          const b = mem.to && old.querySelector(':scope > .slide-box');
+          start = { at: b ? boxNow(b) : mem.to, mem };
+        } else if (now() - mem.t < 1500) start = { at: mem.to, mem }; // a row closed and built again at once (the model menu)
+      }
+      const used = () => { const m = recall('slide', name); if (m && m.group === group) m.t = now(); };
+      group.addEventListener('pointerdown', used, true);
+      group.addEventListener('keydown', used, true);
+      // Placed as soon as the code that built the row has put it on the page, before the next frame is drawn.
+      let tries = 60;
+      const place = () => {
+        if (group.isConnected) placeSlide(group, name, start);
+        else if (tries-- > 0) requestAnimationFrame(place);
+        else group.classList.remove('slide-ready'); // never shown: if it is shown later, its choices keep their own look
+      };
+      queueMicrotask(place);
       return group;
     }
-    function placeSlide(group, name, fromMemory) {
-      if (!group.isConnected) return;
-      let box = group.querySelector(':scope > .slide-box');
-      if (!box) {
-        box = h('i', { class: 'slide-box', 'aria-hidden': 'true' });
-        group.append(box); // last, so code that counts the choices by index is not thrown off
-        group.classList.add('slide-ready');
-        if (window.ResizeObserver) new ResizeObserver(() => placeSlide(group, name, false)).observe(group);
-      }
-      const on = [...group.children].find((c) => c !== box && (c.getAttribute('aria-checked') === 'true' || c.classList.contains('on') || c.classList.contains('active')));
-      if (!on) { box.style.opacity = '0'; box._at = null; keep('slide', name, null); return; }
-      const r = { x: on.offsetLeft, y: on.offsetTop, w: on.offsetWidth, h: on.offsetHeight };
-      if (!fromMemory && same(box._at, r)) return;
-      const put = (q) => { box.style.transform = `translate(${q.x}px, ${q.y}px)`; box.style.width = `${q.w}px`; box.style.height = `${q.h}px`; };
-      const rec = fromMemory ? recall('slide', name) : null;
-      const was = rec && now() - rec.t < 1500 ? rec : null; // a memory from long ago (a dialog opened again) is not slid from
-      box.classList.remove('go');
-      if (was && !same(was, r) && !calm()) {
-        put(was);
-        box.style.opacity = '1';
-        void box.offsetWidth; // commit the old place before moving
-        box.classList.add('go');
-        put(r);
-        on.classList.add('slide-arrive');
-        setTimeout(() => on.classList.remove('slide-arrive'), 400);
-      } else {
-        put(r);
-        box.style.opacity = '1';
-        void box.offsetWidth;
-        box.classList.add('go');
-      }
-      box._at = r;
-      keep('slide', name, { ...r, t: now() });
+    function placeSlide(group, name, start) {
+      const on = [...group.children].find(isPicked);
+      const r = on ? placeOf(on) : null;
+      const box = h('i', { class: 'slide-box', 'aria-hidden': 'true' });
+      box.style.opacity = '0';
+      group.append(box); // last, so code that counts the choices by index is not thrown off
+      if (window.ResizeObserver) new ResizeObserver(() => resizedSlide(group, name, box)).observe(group);
+      const t = now();
+      const mem = start && start.mem;
+      let from = null;
+      let t0 = -Infinity;
+      if (!start || calm()) snapBox(box, r, !!r); // first drawing, or Reduce motion: the end state at once
+      else if (!r) { snapBox(box, start.at, !!start.at); box.style.opacity = '0'; } // the pick was cleared: fade out where it was
+      else if (!start.at) { snapBox(box, r, false); box.style.opacity = '1'; } // nothing was picked: fade in
+      else if (mem.from && same(mem.to, r) && t - mem.t0 < SLIDE_MS) { from = mem.from; t0 = mem.t0; runBox(box, from, r, t - t0); } // still on its way here: carry on
+      else if (!same(start.at, r)) { from = start.at; t0 = t; runBox(box, from, r, 0); } // slide from where the box is now
+      else snapBox(box, r, true);
+      keep('slide', name, { group, to: r, from, t0, t });
+    }
+    /** The row changed size (a label grew, the window narrowed): the box follows the picked choice. */
+    function resizedSlide(group, name, box) {
+      const mem = recall('slide', name);
+      if (!group.isConnected || !mem || mem.group !== group) return; // a row that has been replaced
+      const on = [...group.children].find((c) => c !== box && isPicked(c));
+      const r = on ? placeOf(on) : null;
+      if (!r || same(mem.to, r)) return;
+      const t = now();
+      if (!calm() && mem.from && t - mem.t0 < SLIDE_MS) { const at = boxNow(box); runBox(box, at, r, 0); mem.from = at; mem.t0 = t; } // part way: turn to the new place
+      else { snapBox(box, r, true); mem.from = null; mem.t0 = -Infinity; }
+      mem.to = r;
+      mem.t = t;
     }
 
     /** A highlight that glides to the item under the pointer or keyboard focus, and fades when it leaves. */
@@ -434,7 +483,11 @@
     opus: 'Opus (latest)', sonnet: 'Sonnet (latest)', haiku: 'Haiku (latest)', fable: 'Fable (latest)',
     'gpt-6-astra': 'GPT-6 Astra', 'gpt-6.1-sol': 'GPT-6.1 Sol', 'gpt-6.1-terra': 'GPT-6.1 Terra', 'gpt-6-luna': 'GPT-6 Luna',
     'gpt-6-sol': 'GPT-6 Sol', 'gpt-5.6-sol': 'GPT-5.6 Sol', 'gpt-5.6-terra': 'GPT-5.6 Terra', 'gpt-5.6-luna': 'GPT-5.6 Luna',
+    'gemini-4-hydrogen': 'Gemini 4 Hydrogen', 'gemini-4-argon': 'Gemini 4 Argon', 'gemini-4-carbon': 'Gemini 4 Carbon',
+    'gemini-3.8-flash': 'Gemini 3.8 Flash', 'gemini-3.5-flash-lite': 'Gemini 3.5 Flash-Lite',
   };
+  // Engines the menus offer: Gemini only once its key is linked and accepted (the owner's rule, 2026-11-19).
+  const menuEngines = () => S.app.engines.filter((e) => !e.hiddenUntilReady || e.ready);
   const prettyModel = (id, engine) => MODEL_NAMES[id] || id || (engine === 'codex' ? 'Codex default' : 'Default');
   const EFFORT_LABEL = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra', max: 'Max' };
   const STANCE_LABEL = { supports: 'Supports', conditional: 'Conditional', mixed: 'Mixed', against: 'Against', na: 'Not tested' };
@@ -951,7 +1004,7 @@
       const eng = engineInfo(c.engine);
       return [
         Motion.slide(h('div', { class: 'cmenu-engines', role: 'group', 'aria-label': 'Which plan to use' },
-          S.app.engines.map((e) => h('button', {
+          menuEngines().map((e) => h('button', {
             type: 'button', role: 'menuitemradio', 'aria-checked': String(e.id === c.engine), disabled: !e.ready || null,
             title: e.detail,
             onclick: () => { menuQuiet = performance.now(); c.engine = e.id; c.model = S.app.settings.models[e.id] || ''; savePrefs(); closeMenu(); render(); requestAnimationFrame(() => $('.model-btn')?.click()); },
@@ -963,7 +1016,7 @@
         eng && h('div', { class: 'cmenu-sep', role: 'separator' }),
         eng && h('button', { type: 'button', class: 'cmenu-row', role: 'menuitem', 'aria-haspopup': 'menu', onclick: () => redrawMenu(modelMenu('effort')) },
           h('b', null, 'Effort'), h('span', { class: 'cmenu-value' }, EFFORT_LABEL[c.effort]), icon('right')),
-        h('p', { class: 'cmenu-note', role: 'none' }, eng ? `${eng.billing}. ${eng.detail}.` : 'Sign in to Claude or ChatGPT on this computer to start.',
+        h('p', { class: 'cmenu-note', role: 'none' }, eng ? `${eng.billing}. ${String(eng.detail || '').replace(/\.$/, '')}.` : 'Sign in to Claude or ChatGPT on this computer, or add a Gemini API key in Settings, to start.',
           ' ', h('button', { type: 'button', class: 'linkish', role: 'menuitem', onclick: () => { closeMenu(); openSettings(); } }, 'Settings')),
       ];
     }
@@ -1274,7 +1327,7 @@
       buildComposer({ placeholder: 'Ask a research question', autofocus: !noEngine }),
       noEngine && h('div', { class: 'setup' },
         h('h2', null, 'Sign in to Claude or ChatGPT to start'),
-        h('p', null, 'Lectern uses the plan you already have, through the login saved on this computer. No API key needed. Open the Claude app or the ChatGPT app and sign in, then come back here.'),
+        h('p', null, 'Lectern uses the plan you already have, through the login saved on this computer. No API key needed. Open the Claude app or the ChatGPT app and sign in, then come back here. To use Gemini instead, add a Gemini API key in Settings.'),
         h('button', { class: 'btn primary', onclick: async () => { try { await refreshState(); if (!S.app.activeEngine) openSettings(); } catch (e) { toast(e.message); } } }, 'I have signed in'), ' ',
         h('button', { class: 'btn quiet', onclick: openSettings }, 'Settings')),
       // OpenAlex works without a key; the note appears only once it has turned a search away for want of one.
@@ -2764,6 +2817,16 @@
         else if (e.key === 'Tab') close(false);
       });
       wrap.append(menu);
+      // A picker low on the page (the Rewrite style under the text box) opens upward when the menu does not fit
+      // below the button and there is more room above. Room is counted inside the window and inside the nearest box
+      // that scrolls or clips (a dialog), so the menu is not cut off by either. Nothing is scrolled to show it.
+      const at = btn.getBoundingClientRect();
+      let top = 0, bottom = innerHeight;
+      for (let p = wrap.parentElement; p && p !== document.body; p = p.parentElement) {
+        if (!/auto|scroll|hidden|clip/.test(getComputedStyle(p).overflowY)) continue;
+        const r = p.getBoundingClientRect(); top = Math.max(top, r.top); bottom = Math.min(bottom, r.bottom); break;
+      }
+      if (menu.offsetHeight + 12 > bottom - at.bottom && at.top - top > bottom - at.bottom) menu.classList.add('up');
       btn.setAttribute('aria-expanded', 'true');
       document.addEventListener('mousedown', onDocDown, true);
       (menu.querySelector('.picker-opt.on') || menu.querySelector('.picker-opt')).focus();
@@ -3034,15 +3097,20 @@
       const [works, signIn] = {
         'claude-code': ['Uses your saved Claude sign-in through Claude Code.', 'To sign in, open Claude Code in the Claude app, or run "claude" in Terminal.'],
         codex: ['Uses your saved ChatGPT sign-in through Codex. Answers arrive in one piece.', 'To sign in, open Codex in the ChatGPT app, or run "codex login" in Terminal.'],
+        gemini: ['Uses your own Gemini API key from Google AI Studio. Google bills the key, not a Google AI Pro or Ultra plan: Google does not let other apps use those plans or the Gemini app\'s sign-in.', 'Make a key in Google AI Studio and paste it below.'],
       }[e.id] || ['', ''];
       const blurb = e.signedIn ? works : `${works} ${signIn}`.trim();
+      const stateWord = e.ready ? 'Ready' : e.usesKey ? (e.found ? 'Key not accepted' : 'No key') : (e.found ? 'Not signed in' : 'Not installed');
       return h('div', { class: `engine${isDefault ? ' active' : ''}` },
         h('div', { class: 'engine-top' },
           h('strong', null, e.label),
-          h('span', { class: `engine-state${e.ready ? ' ready' : ''}` }, e.ready ? 'Ready' : (e.found ? 'Not signed in' : 'Not installed')),
-          !isDefault && h('button', { class: 'btn small', onclick: () => { draft.engine = e.id; draw(); } }, 'Make default')), // the default carries its own DEFAULT tab
+          h('span', { class: `engine-state${e.ready ? ' ready' : ''}` }, stateWord),
+          // an engine that is not linked cannot be made the default (Gemini stays out of the menus until then)
+          !isDefault && (!e.hiddenUntilReady || e.ready) && h('button', { class: 'btn small', onclick: () => { draft.engine = e.id; draw(); } }, 'Make default')), // the default carries its own DEFAULT tab
         h('p', { class: 'engine-detail' }, e.detail),
         h('p', null, blurb),
+        e.usesKey && keyField(e.id, 'Gemini API key', 'https://aistudio.google.com/apikey'),
+        e.usesKey && h('p', { class: 'help' }, 'Privacy: on a free key Google uses what you send to improve its products, and people may read it, so use a paid key for drafts or data you would not share. Web search needs a paid key. Lectern asks Google not to keep the conversation.'),
         modelField(e.id, 'models', 'Answer model'),
         modelField(e.id, 'helperModels', 'Helper model'),
         h('datalist', { id: `models-${e.id}` }, e.models.map((m) => h('option', { value: m }))),

@@ -461,7 +461,7 @@ async function runSimilarityCheck({ text: input, options = {}, config, store, si
       notes.push('The selected model provider is not connected, so the web was not searched. Sign in, or choose a connected provider, to include web pages.');
       emit('step', { id: 'web', state: 'skipped', detail: 'selected provider not connected' });
     } else if (!engine) {
-      notes.push('No model is connected, so the web was not searched. Sign in to Claude or ChatGPT to include web pages.');
+      notes.push('No model is connected, so the web was not searched. Sign in to Claude or ChatGPT, or add a Gemini API key in Settings, to include web pages.');
       emit('step', { id: 'web', state: 'skipped', detail: 'no model connected' });
     } else if (!passages.length) {
       emit('step', { id: 'web', state: 'skipped', detail: 'no passages long enough to search' });

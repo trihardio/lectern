@@ -1,0 +1,113 @@
+{
+ "frozenAt": "2026-11-18T20:52:13.056Z",
+ "choice": "S3weighted",
+ "headline": {
+  "name": "S3 weighted",
+  "formula": "0.3 * meanRating(S2) + 0.7 * styleScore(S1)",
+  "patternWeight": 0.3,
+  "styleWeight": 0.7,
+  "flagAt": 41.1
+ },
+ "lines": {
+  "S0": 53.8,
+  "S1": 50,
+  "S2": 52.1,
+  "S3": 41.1
+ },
+ "development": {
+  "candidates": [
+   {
+    "name": "S1",
+    "ai": 7,
+    "pass": true,
+    "line": 50
+   },
+   {
+    "name": "S2",
+    "ai": 7,
+    "pass": true,
+    "line": 52.1
+   },
+   {
+    "name": "S3weighted",
+    "ai": 16,
+    "pass": true,
+    "line": 41.1
+   },
+   {
+    "name": "S3logistic",
+    "ai": 16,
+    "pass": false,
+    "line": 59.8
+   }
+  ],
+  "gates": {
+   "S2": {
+    "stability": {
+     "n": 15,
+     "medianAbsChange": 2.3999999999999986,
+     "maxAbsChange": 14.8,
+     "flips": 0,
+     "limitFlips": 1,
+     "pass": true
+    },
+    "opus": {
+     "n": 9,
+     "withScore": 9,
+     "humanFlagged": 0,
+     "aiFlagged": 2,
+     "pass": true
+    }
+   },
+   "S3weighted": {
+    "stability": {
+     "n": 15,
+     "medianAbsChange": 0.7199999999999989,
+     "maxAbsChange": 4.439999999999998,
+     "flips": 1,
+     "limitFlips": 1,
+     "pass": true
+    },
+    "opus": {
+     "n": 9,
+     "withScore": 9,
+     "humanFlagged": 0,
+     "aiFlagged": 4,
+     "pass": true
+    }
+   },
+   "S3logistic": {
+    "stability": {
+     "n": 15,
+     "medianAbsChange": 1.4000000000000057,
+     "maxAbsChange": 36.00000000000001,
+     "flips": 2,
+     "limitFlips": 1,
+     "pass": false
+    },
+    "opus": {
+     "n": 9,
+     "withScore": 9,
+     "humanFlagged": 0,
+     "aiFlagged": 4,
+     "pass": true
+    }
+   }
+  },
+  "styleVersion": 4,
+  "reviewSetSize": 40
+ },
+ "sha256": {
+  "server/prompts.js": "2b38b15c5d56bf5bdb79ed9afdf4ca86caa1970bfef19334e846edcf4d133fa1",
+  "server/checks/aiscore.js": "933fdbaf6797a5cac122b5a656ea375e6c91e5b88e29d7ff01326d3f08d3cd81",
+  "server/checks/text.js": "31e7dbf2257196d334993aec7eda1308cb49fd49372a7deb1edd2bd595027ae5",
+  "server/checks/style.js": "6af7d4ba65b46683b6646b2e7f8e6ee297271bfca84166b261d2fe282e9b688a",
+  "server/checks/style-model.json": "0b0ca04e8adbdf6a1214c40b94fc63c5f6ac67acc11db401f9aeb28499629b5b",
+  "bench/data/v6/holdout.sha256": "f49b2b4c58842551d6f8e563f95d1638663834142529804ae00082c34a0a5f07",
+  "bench/v6/review-prompts.js": "f956311ee7c6274836499f63939975eda0e77c96a2d28d481a877e6f96e52fbf"
+ },
+ "reviewSets": {
+  "devReviewIdsSha256": "ecea1ef0ecd0e36b42cd1c4e84188b406b81eca380faddd7a7b2a1adf85a71dd"
+ },
+ "note": "Written before any holdout call. The S2 development results are in bench/results/review6-dev.json."
+}

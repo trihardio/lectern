@@ -6,52 +6,105 @@
    (ui/fonts, SIL Open Font License): Literata to read, Atkinson Hyperlegible Next for controls,
    Atkinson Hyperlegible Mono only for label data (numbers, years, samples). The specimen components are in world.css. */
 
+/* ---------- Base palette ----------
+   Lectern's colours, in eight families. Every colour in the window is a step of one of them: the role
+   tokens further down (--sheet, --ink, --spruce, --stamp ...) only point at steps. Dark mode changes the
+   step values (in the dark block below), never the roles, so a family keeps its hue in both themes.
+   Steps are named by job, not by lightness: "-ink" is the strong value for text, marks and outlines on
+   the sheet, "-soft" a pale fill behind ink, "-wash" a see-through highlighter laid over text.
+   A new colour starts here, as a step of a family, with a light and a dark value (DESIGN.md, "Base palette"). */
 :root {
-  --desk: #EBEFEA;
-  --sheet: #FCFDFB;
-  --ink: #18201C;
-  --ink-2: #47514B;
-  --ink-3: #636D67;
-  --line: #D3DAD4;
-  --line-soft: #E4E9E4;
-  --mark: #F7E64A;           /* the highlighter: mixed or context */
-  --mark-soft: #FBF3B4;
-  --spruce: #2B6A37;          /* finds higher / supports */
-  --spruce-soft: #DDF2D6;
-  --amber: #805B00;           /* depends on conditions */
-  --amber-soft: #FAF0BC;
-  --slate-soft: #E2E8E3;
-  --brick: #A3324D;           /* finds lower / against */
-  --brick-soft: #FADDE7;
-  --focus: #1F6FB2;
-  /* the cabinet: the rail and anything that files */
-  --cab: #1F3A33;
-  --cab-2: #284A40;
-  --cab-3: #36594E;
-  --cab-line: #3B5D53;
-  --cab-ink: #EAF1EC;
-  --cab-ink-2: #A8C1B7;
-  /* the rail's own layers: its field, a hovered row, the open row, its hairlines (lifted a step in the dark) */
-  --rail-bg: var(--cab);
-  --rail-2: var(--cab-2);
-  --rail-3: var(--cab-3);
-  --rail-line: var(--cab-line);
-  /* the accession stamp: citations only */
-  --stamp: #5B3FA8;
-  --stamp-soft: #EEE8FB;
-  --stamp-ink: #FFFFFF;
-  /* herbarium folder colours, one per kind of study */
+  /* Sage: the paper and the ink. 0 is the sheet, each step is further from it; in the dark, 0 is the dark sheet. */
+  --sage-0: #FCFDFB;   /* sheet */
+  --sage-1: #EBEFEA;   /* desk */
+  --sage-2: #E4E9E4;   /* soft hairline */
+  --sage-3: #E2E8E3;   /* quiet fill (hover, chosen tab) */
+  --sage-4: #D3DAD4;   /* hairline */
+  --sage-5: #9AA79F;   /* rule */
+  --sage-6: #636D67;   /* faint ink, the lightest text allowed on the sheet (AA) */
+  --sage-7: #47514B;   /* second ink */
+  --sage-8: #18201C;   /* ink */
+  /* Cabinet: the green-black rail and anything that files; "-sel" is the soft green of a selected thing */
+  --cabinet-1: #1F3A33;
+  --cabinet-2: #284A40;
+  --cabinet-3: #36594E;
+  --cabinet-line: #3B5D53;
+  --cabinet-ink: #EAF1EC;
+  --cabinet-ink-2: #A8C1B7;
+  --cabinet-sel: #4E7266;
+  --cabinet-rail-1: #1F3A33; /* the rail's field, hovered row, open row and hairline (lifted a step in the dark) */
+  --cabinet-rail-2: #284A40;
+  --cabinet-rail-3: #36594E;
+  --cabinet-rail-line: #3B5D53;
+  /* Green: finds higher, supports, few writing patterns */
+  --green-ink: #2B6A37;
+  --green-soft: #DDF2D6;
+  --green-wash: rgba(150, 226, 128, .62);
+  /* Yellow: the highlighter; depends, mixed, some writing patterns */
+  --yellow-mark: #F7E64A;
+  --yellow-pale: #FBF3B4;
+  --yellow-ink: #805B00;
+  --yellow-soft: #FAF0BC;
+  --yellow-wash: rgba(247, 230, 74, .66);
+  /* Red: finds lower, against, errors, strong writing patterns */
+  --red-ink: #A3324D;
+  --red-soft: #FADDE7;
+  --red-wash: rgba(246, 150, 190, .58);
+  /* Violet: the accession stamp, citations only */
+  --violet-ink: #5B3FA8;
+  --violet-soft: #EEE8FB;
+  --violet-on: #FFFFFF;
+  /* Blue: keyboard focus */
+  --blue-ink: #1F6FB2;
+  /* Folders: one herbarium colour per kind of study (a categorical set, always with a word) */
   --f-meta: #B5482F;
   --f-trial: #B88412;
   --f-cohort: #2F6DA3;
   --f-cross: #5E8C4A;
   --f-qual: #8A5A9E;
   --f-other: #9AA39D;
+
+  /* ---------- Roles: what each colour is for (these point at the base palette) ---------- */
+  --desk: var(--sage-1);
+  --sheet: var(--sage-0);
+  --ink: var(--sage-8);
+  --ink-2: var(--sage-7);
+  --ink-3: var(--sage-6);
+  --line: var(--sage-4);
+  --line-soft: var(--sage-2);
+  --rule: var(--sage-5);
+  --sel: var(--cabinet-sel);
+  --mark: var(--yellow-mark);         /* the highlighter: mixed or context */
+  --mark-soft: var(--yellow-pale);
+  --spruce: var(--green-ink);         /* finds higher / supports */
+  --spruce-soft: var(--green-soft);
+  --amber: var(--yellow-ink);         /* depends on conditions */
+  --amber-soft: var(--yellow-soft);
+  --slate-soft: var(--sage-3);
+  --brick: var(--red-ink);            /* finds lower / against */
+  --brick-soft: var(--red-soft);
+  --focus: var(--blue-ink);
+  /* the cabinet: the rail and anything that files */
+  --cab: var(--cabinet-1);
+  --cab-2: var(--cabinet-2);
+  --cab-3: var(--cabinet-3);
+  --cab-line: var(--cabinet-line);
+  --cab-ink: var(--cabinet-ink);
+  --cab-ink-2: var(--cabinet-ink-2);
+  /* the rail's own layers: its field, a hovered row, the open row, its hairlines (lifted a step in the dark) */
+  --rail-bg: var(--cabinet-rail-1);
+  --rail-2: var(--cabinet-rail-2);
+  --rail-3: var(--cabinet-rail-3);
+  --rail-line: var(--cabinet-rail-line);
+  /* the accession stamp: citations only */
+  --stamp: var(--violet-ink);
+  --stamp-soft: var(--violet-soft);
+  --stamp-ink: var(--violet-on);
   /* highlighter washes laid over a claim */
-  --hl-supports: rgba(150, 226, 128, .62);
-  --hl-against: rgba(246, 150, 190, .58);
-  --hl-mixed: rgba(247, 230, 74, .66);
-  --hl-plain: rgba(247, 230, 74, .66);
+  --hl-supports: var(--green-wash);
+  --hl-against: var(--red-wash);
+  --hl-mixed: var(--yellow-wash);
+  --hl-plain: var(--yellow-wash);
   --serif: "Literata", Charter, "Iowan Old Style", Georgia, serif;
   --sans: "Atkinson Hyperlegible Next", "Avenir Next", "Segoe UI", system-ui, sans-serif;
   --mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -64,48 +117,50 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* the cabinet after dark: the sheet dims to deep green-black, the stamp and washes glow softly */
-    --desk: #0D1512;
-    --sheet: #131D19;
-    --ink: #E5EDE8;
-    --ink-2: #B2C0B8;
-    --ink-3: #8B9A92;
-    --line: #283731;
-    --line-soft: #1E2B26;
-    --mark: #F2DE4C;
-    --mark-soft: #3D3818;
-    --spruce: #8AD596;
-    --spruce-soft: #1C3523;
-    --amber: #E5C15A;
-    --amber-soft: #3A3218;
-    --slate-soft: #22302A;
-    --brick: #F29DBB;
-    --brick-soft: #3E2230;
-    --focus: #7DB7F0;
-    --cab: #0A110F;
-    --cab-2: #15211D;
-    --cab-3: #1F2F29;
-    --cab-line: #21302A;
-    --cab-ink: #DDE8E2;
-    --cab-ink-2: #8FA79C;
+    /* the base palette after dark: the sheet dims to deep green-black, the stamp and washes glow softly.
+       Only step values change here; the roles above keep pointing at the same steps. */
+    --sage-0: #131D19;
+    --sage-1: #0D1512;
+    --sage-2: #1E2B26;
+    --sage-3: #22302A;
+    --sage-4: #283731;
+    --sage-5: #52665D;
+    --sage-6: #8B9A92;
+    --sage-7: #B2C0B8;
+    --sage-8: #E5EDE8;
+    --cabinet-1: #0A110F;
+    --cabinet-2: #15211D;
+    --cabinet-3: #1F2F29;
+    --cabinet-line: #21302A;
+    --cabinet-ink: #DDE8E2;
+    --cabinet-ink-2: #8FA79C;
+    --cabinet-sel: #7FA394;
     /* the rail is lifted one step off the desk, with a hairline edge, so it does not melt into it */
-    --rail-bg: var(--cab-2);
-    --rail-2: #22332C;
-    --rail-3: #2A3E35;
-    --rail-line: #2E4038;
-    --stamp: #B9A6F5;
-    --stamp-soft: #2A2247;
-    --stamp-ink: #160F2E;
+    --cabinet-rail-1: #15211D;
+    --cabinet-rail-2: #22332C;
+    --cabinet-rail-3: #2A3E35;
+    --cabinet-rail-line: #2E4038;
+    --green-ink: #8AD596;
+    --green-soft: #1C3523;
+    --green-wash: rgba(138, 213, 150, .26);
+    --yellow-mark: #F2DE4C;
+    --yellow-pale: #3D3818;
+    --yellow-ink: #E5C15A;
+    --yellow-soft: #3A3218;
+    --yellow-wash: rgba(242, 222, 76, .24);
+    --red-ink: #F29DBB;
+    --red-soft: #3E2230;
+    --red-wash: rgba(242, 157, 187, .26);
+    --violet-ink: #B9A6F5;
+    --violet-soft: #2A2247;
+    --violet-on: #160F2E;
+    --blue-ink: #7DB7F0;
     --f-meta: #E07A5F;
     --f-trial: #E2B24A;
     --f-cohort: #6FA8DC;
     --f-cross: #8DC077;
     --f-qual: #C39BD3;
     --f-other: #6E7A73;
-    --hl-supports: rgba(138, 213, 150, .26);
-    --hl-against: rgba(242, 157, 187, .26);
-    --hl-mixed: rgba(242, 222, 76, .24);
-    --hl-plain: rgba(242, 222, 76, .24);
     color-scheme: dark;
   }
 }

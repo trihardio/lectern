@@ -1,0 +1,134 @@
+{
+ "version": 5,
+ "check": "opus direction",
+ "model": "claude-opus-5-5",
+ "finishedAt": "2026-11-18T18:48:30.595Z",
+ "paid": 12,
+ "cached": 0,
+ "opusBudgetUsed": 12,
+ "opusBudget": 12,
+ "meanOpusMinusSonnetU": 11.52,
+ "agreeing": 9,
+ "rows": [
+  {
+   "id": "hu-toefl-2",
+   "label": "human",
+   "reported": "claude-opus-5-5",
+   "opusU": 57.84,
+   "sonnetU": 41.18,
+   "style": 0.179,
+   "opusFlag": false,
+   "sonnetFlag": false
+  },
+  {
+   "id": "hu-news-6",
+   "label": "human",
+   "reported": "claude-opus-5-5",
+   "opusU": 92.5,
+   "sonnetU": 54.17,
+   "style": 0.258,
+   "opusFlag": true,
+   "sonnetFlag": false
+  },
+  {
+   "id": "hu-news-2",
+   "label": "human",
+   "reported": "claude-opus-5-5",
+   "opusU": 94.07,
+   "sonnetU": 77.97,
+   "style": 0.426,
+   "opusFlag": true,
+   "sonnetFlag": true
+  },
+  {
+   "id": "hu-abstracts-2",
+   "label": "human",
+   "reported": "claude-opus-5-5",
+   "opusU": 79.02,
+   "sonnetU": 65.37,
+   "style": 0.789,
+   "opusFlag": true,
+   "sonnetFlag": true
+  },
+  {
+   "id": "hu-cs224n-2",
+   "label": "human",
+   "reported": "claude-opus-5-5",
+   "opusU": 73.74,
+   "sonnetU": 37.37,
+   "style": 0.322,
+   "opusFlag": true,
+   "sonnetFlag": false
+  },
+  {
+   "id": "hu-collegeessay-4",
+   "label": "human",
+   "reported": "claude-opus-5-5",
+   "opusU": 7.54,
+   "sonnetU": 44.31,
+   "style": 0.267,
+   "opusFlag": false,
+   "sonnetFlag": false
+  },
+  {
+   "id": "hk-labreport-plain",
+   "label": "ai",
+   "reported": "claude-opus-5-5",
+   "opusU": 77.04,
+   "sonnetU": 68.55,
+   "style": 0.931,
+   "opusFlag": true,
+   "sonnetFlag": true
+  },
+  {
+   "id": "hk-blog-concise",
+   "label": "ai",
+   "reported": "claude-opus-5-5",
+   "opusU": 78.1,
+   "sonnetU": 78.1,
+   "style": 0.912,
+   "opusFlag": true,
+   "sonnetFlag": true
+  },
+  {
+   "id": "sn-litreview-humanlike",
+   "label": "ai",
+   "reported": "claude-opus-5-5",
+   "opusU": 77.08,
+   "sonnetU": 69.79,
+   "style": 0.447,
+   "opusFlag": true,
+   "sonnetFlag": true
+  },
+  {
+   "id": "sn-labreport-esl",
+   "label": "ai",
+   "reported": "claude-opus-5-5",
+   "opusU": 63.16,
+   "sonnetU": 50.24,
+   "style": 0.895,
+   "opusFlag": true,
+   "sonnetFlag": true
+  },
+  {
+   "id": "ed-abstract-3",
+   "label": "edited",
+   "reported": "claude-opus-5-5",
+   "opusU": 78.14,
+   "sonnetU": 82.59,
+   "style": 0.183,
+   "opusFlag": true,
+   "sonnetFlag": true
+  },
+  {
+   "id": "ed-blog-1",
+   "label": "edited",
+   "reported": "claude-opus-5-5",
+   "opusU": 83.74,
+   "sonnetU": 54.13,
+   "style": 0.773,
+   "opusFlag": true,
+   "sonnetFlag": false
+  }
+ ]
+}

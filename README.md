@@ -14,10 +14,14 @@ It runs on your Mac or Windows PC. Your chats and saved papers stay on your comp
 - A **Claude** or **ChatGPT** plan, signed in on this computer through **Claude Code** or **Codex**
   (either on its own, or inside the Claude or ChatGPT desktop app). Lectern uses that sign-in,
   so there is no API key to buy or paste. Questions count against that plan.
+- **Or** a **Gemini API key** from [Google AI Studio](https://aistudio.google.com/apikey), pasted into
+  Settings. Google bills the key; it is not your Google AI Pro or Ultra plan, because Google does not let
+  other apps use those plans or the Gemini app's sign-in. Gemini appears in the model menu once Google accepts
+  the key. On a free key Google may use what you send to improve its products, and web search needs a paid key.
 
 ## Install on a Mac
 
-1. Open the [latest release](../../releases/latest) and download **Lectern-0.2.1.dmg**.
+1. Open the [latest release](../../releases/latest) and download **Lectern-0.2.2.dmg**.
 2. Open the downloaded file and drag **Lectern** onto **Applications**.
 3. Open Lectern from Applications. The first time, macOS says it cannot check the app for
    malicious software. Click **Done**, then open **System Settings > Privacy & Security**, scroll
@@ -28,7 +32,7 @@ It runs on your Mac or Windows PC. Your chats and saved papers stay on your comp
 
 ## Install on Windows (preview)
 
-1. From the [latest release](../../releases/latest), download **Lectern-0.2.1-windows-x64.zip**.
+1. From the [latest release](../../releases/latest), download **Lectern-0.2.2-windows-x64.zip**.
 2. Right-click the file, choose **Extract All**, and put the **Lectern** folder somewhere that suits you
    (for example your Documents folder).
 3. Open the folder and double-click **Lectern.exe**. The first time, Windows SmartScreen may say it
@@ -135,6 +139,8 @@ desktop app it asks where to save the file; in a browser it opens the print dial
 | "Lectern is damaged" | Run `xattr -dr com.apple.quarantine /Applications/Lectern.app` in Terminal, then open it again. Only do this for a copy you downloaded from this page |
 | "Not installed" in Settings | Install Claude Code or Codex, or the Claude or ChatGPT desktop app |
 | "Not signed in" | Run `claude` or `codex login` in Terminal and sign in |
+| Gemini "No key" or "Key not accepted" | Paste a key from Google AI Studio in Settings, then click **Save and test** |
+| Gemini is not in the model menu | It appears only after Google accepts the key in Settings |
 | OpenAlex "needs a free API key" | First run step 3 |
 | Semantic Scholar "is busy" | Normal without a key; the other databases still answer |
 

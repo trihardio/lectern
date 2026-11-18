@@ -1,0 +1,44 @@
+{
+ "model": "claude-sonnet-5-5",
+ "finishedAt": "2026-11-18T18:49:35.902Z",
+ "paid": 5,
+ "budgetUsed": 270,
+ "budget": 270,
+ "rows": [
+  {
+   "id": "hu-toefl-2",
+   "label": "human",
+   "first": 41.18,
+   "second": 63.73,
+   "reported": "claude-sonnet-5-5"
+  },
+  {
+   "id": "hu-news-6",
+   "label": "human",
+   "first": 54.17,
+   "second": 95.83,
+   "reported": "claude-sonnet-5-5"
+  },
+  {
+   "id": "hu-news-2",
+   "label": "human",
+   "first": 77.97,
+   "second": 97.03,
+   "reported": "claude-sonnet-5-5"
+  },
+  {
+   "id": "hk-labreport-plain",
+   "label": "ai",
+   "first": 68.55,
+   "second": 93.71,
+   "reported": "claude-sonnet-5-5"
+  },
+  {
+   "id": "hk-blog-concise",
+   "label": "ai",
+   "first": 78.1,
+   "second": 90.88,
+   "reported": "claude-sonnet-5-5"
+  }
+ ]
+}

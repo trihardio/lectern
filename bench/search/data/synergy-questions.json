@@ -1,0 +1,262 @@
+[
+ {
+  "key": "Cinquin_2018",
+  "discipline": "social-business-education",
+  "question": "How well does online e-learning work for students with cognitive disabilities?"
+ },
+ {
+  "key": "Filges_2022",
+  "discipline": "social-business-education",
+  "question": "Does service learning improve academic achievement for K-12 students?"
+ },
+ {
+  "key": "Oliveira_2021",
+  "discipline": "social-business-education",
+  "question": "What effect do social and emotional learning programs for teachers have on teachers' own wellbeing and outcomes?"
+ },
+ {
+  "key": "Quevedo_2023",
+  "discipline": "social-business-education",
+  "question": "What are the main uses of natural language processing in the legal domain since 2015?"
+ },
+ {
+  "key": "Sanchez-Acedo_2023",
+  "discipline": "social-business-education",
+  "question": "How are the metaverse and virtual reality being used in journalism?"
+ },
+ {
+  "key": "Xu_2022",
+  "discipline": "social-business-education",
+  "question": "What do international students say makes a good learning environment in higher education?"
+ },
+ {
+  "key": "Zinsser_2022",
+  "discipline": "social-business-education",
+  "question": "How common is exclusionary discipline, like suspension and expulsion, in early childhood education?"
+ },
+ {
+  "key": "Noetel_2021",
+  "discipline": "social-business-education",
+  "question": "What does research say about how multimedia design affects learning?"
+ },
+ {
+  "key": "Roberts_2021",
+  "discipline": "social-business-education",
+  "question": "How much reading intervention time do struggling readers need before it pays off?"
+ },
+ {
+  "key": "Theobald_2021",
+  "discipline": "social-business-education",
+  "question": "Do self-regulated learning training programs improve university students' grades?"
+ },
+ {
+  "key": "Toffalini_2021",
+  "discipline": "social-business-education",
+  "question": "Which treatments actually help children with dyslexia?"
+ },
+ {
+  "key": "Verdugo-Castro_2022",
+  "discipline": "social-business-education",
+  "question": "Why are there fewer women than men in higher education STEM courses?"
+ },
+ {
+  "key": "Anmarkrud_2021",
+  "discipline": "social-business-education",
+  "question": "How do individual differences affect whether people check the source of information they read?"
+ },
+ {
+  "key": "Sanchez-Gomez_2024",
+  "discipline": "social-business-education",
+  "question": "How can oral storytelling skills be assessed in children and teenagers with intellectual disability?"
+ },
+ {
+  "key": "Ward_2020",
+  "discipline": "social-business-education",
+  "question": "Do ADHD training programs for teachers improve outcomes for teachers and pupils?"
+ },
+ {
+  "key": "Brouwer_2019",
+  "discipline": "social-business-education",
+  "question": "Which psychological factors predict relapse and recurrence of depression?"
+ },
+ {
+  "key": "Maciel_2024",
+  "discipline": "social-business-education",
+  "question": "Is insecure attachment in adults linked to suicidal thoughts and behaviour?"
+ },
+ {
+  "key": "Oud_2018",
+  "discipline": "social-business-education",
+  "question": "Which psychotherapies work best for adults with borderline personality disorder?"
+ },
+ {
+  "key": "van_Dis_2019",
+  "discipline": "social-business-education",
+  "question": "Do the benefits of cognitive behavioural therapy for anxiety last in the long term?"
+ },
+ {
+  "key": "Smid_2019",
+  "discipline": "social-business-education",
+  "question": "Are Bayesian methods better than frequentist ones for structural equation models with small samples?"
+ },
+ {
+  "key": "Adamo_2021",
+  "discipline": "social-business-education",
+  "question": "What elements make up a business process model, according to research on BPM meta-models?"
+ },
+ {
+  "key": "Nobrega-Dos_Santos_2023",
+  "discipline": "social-business-education",
+  "question": "How is teamwork quality measured in agile software development teams?"
+ },
+ {
+  "key": "Harms_2024",
+  "discipline": "environment-other",
+  "question": "How can cities be planned with nature to support sustainability?"
+ },
+ {
+  "key": "Kapuka_2021",
+  "discipline": "environment-other",
+  "question": "How will climate change affect ecosystems in southern Africa, and what adaptation options exist?"
+ },
+ {
+  "key": "Low_2023",
+  "discipline": "environment-other",
+  "question": "What are the value chain implications of mixed farming and agroforestry systems?"
+ },
+ {
+  "key": "Williamson_2023",
+  "discipline": "environment-other",
+  "question": "What drives eel movement in lakes and other still water bodies?"
+ },
+ {
+  "key": "Wassenaar_2017",
+  "discipline": "environment-other",
+  "question": "Does early-life exposure to bisphenol A cause obesity?"
+ },
+ {
+  "key": "Menon_2022",
+  "discipline": "environment-other",
+  "question": "How rigorous are systematic reviews in environmental health?"
+ },
+ {
+  "key": "Abgaz_2023",
+  "discipline": "cs",
+  "question": "What approaches exist for breaking a monolithic application into microservices?"
+ },
+ {
+  "key": "Chakraborty_2023",
+  "discipline": "cs",
+  "question": "What guidance exists for software engineers on how to model software systems?"
+ },
+ {
+  "key": "Deckers_2022",
+  "discipline": "cs",
+  "question": "What techniques are used for domain-oriented specification in software development?"
+ },
+ {
+  "key": "Greca_2023",
+  "discipline": "cs",
+  "question": "How practical is current research on regression testing for use in industry?"
+ },
+ {
+  "key": "Lewowski_2021",
+  "discipline": "cs",
+  "question": "How reproducible is research on code smell detection?"
+ },
+ {
+  "key": "Radjenovic_2013",
+  "discipline": "cs",
+  "question": "Which software metrics are best at predicting faults in code?"
+ },
+ {
+  "key": "van_Heugten_Breurkes_2022",
+  "discipline": "cs",
+  "question": "How much do automated unit tests and acceptance tests overlap?"
+ },
+ {
+  "key": "Zakeri-Nasrabadi_2023a",
+  "discipline": "cs",
+  "question": "What datasets exist for code smell detection and how are they validated?"
+ },
+ {
+  "key": "Dornauer_2023",
+  "discipline": "cs",
+  "question": "How can mobile web apps use less energy, and how is that measured?"
+ },
+ {
+  "key": "Brons_2024",
+  "discipline": "cs",
+  "question": "Can machine learning personalise persuasive messages in mHealth apps to get people more physically active?"
+ },
+ {
+  "key": "Appenzeller-Herzog_2019",
+  "discipline": "health",
+  "question": "Which treatments work best for Wilson disease?"
+ },
+ {
+  "key": "Bos_2018",
+  "discipline": "health",
+  "question": "Does cerebral small vessel disease increase the risk of dementia?"
+ },
+ {
+  "key": "Chou_2003",
+  "discipline": "health",
+  "question": "How do long-acting oral opioids compare for chronic pain that is not caused by cancer?"
+ },
+ {
+  "key": "Dolinska_2022",
+  "discipline": "health",
+  "question": "Can blood or urine tests diagnose endometriosis without surgery?"
+ },
+ {
+  "key": "Hamaker_2022",
+  "discipline": "health",
+  "question": "Does geriatric assessment improve the care of older patients with cancer?"
+ },
+ {
+  "key": "Hanlon_2022",
+  "discipline": "health",
+  "question": "How common is frailty in people with rheumatoid arthritis?"
+ },
+ {
+  "key": "Pijls_2018",
+  "discipline": "health",
+  "question": "Does early migration of total knee replacements, measured by RSA, predict later implant failure?"
+ },
+ {
+  "key": "Wolters_2018",
+  "discipline": "health",
+  "question": "Do coronary heart disease and heart failure raise the risk of dementia?"
+ },
+ {
+  "key": "Ruggeri_2019",
+  "discipline": "health",
+  "question": "Does motor and physical activity training help motor skills in children with autism?"
+ },
+ {
+  "key": "Pinos-Cisneros_2023",
+  "discipline": "health",
+  "question": "Can games and new technologies help hand therapy for children with cerebral palsy?"
+ },
+ {
+  "key": "Seghers_2022",
+  "discipline": "health",
+  "question": "What treatment outcomes matter most to older patients with cancer?"
+ },
+ {
+  "key": "Giesen_2021",
+  "discipline": "health",
+  "question": "Which pain management interventions are available to nurses in hospital and community care?"
+ },
+ {
+  "key": "Bakker-Jacobs_2022",
+  "discipline": "health",
+  "question": "What wound care interventions can hospital and community nurses use?"
+ },
+ {
+  "key": "van_der_Waal_2022",
+  "discipline": "health",
+  "question": "How much of a role do older adults with cancer want in decisions about their treatment?"
+ }
+]

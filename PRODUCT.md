@@ -30,7 +30,8 @@ reader trusts the answer because every claim is one click from the paper behind 
 ## Positioning
 
 - Runs on the user's own computer and uses the Claude or ChatGPT plan they already have (through
-  the Claude Code or Codex sign-in). No account, no API key, no server of ours.
+  the Claude Code or Codex sign-in). No account, no server of ours. Gemini is the one exception: it needs the
+  user's own Gemini API key, because Google does not let other apps use a Google AI plan (since 2026-11-19).
 - Papers, DOIs, links, figures and licences come only from the databases, never from the model.
   The model cites by number; any number not in the list is dropped.
 - Shows the evidence, not just the prose: study comparison, direction and design charts, a coverage

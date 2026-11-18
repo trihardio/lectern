@@ -1,0 +1,22 @@
+{
+ "system": "T1: style model version 5 (version 4 core model retrained with the version 7 train split; core line chosen on v6 + v7 dev under the version 4 limits)",
+ "coreLine": { "T1": 0.786, "B0": 0.77 },
+ "trainRows": { "base": 5510, "v7Train": 56, "v7TrainAi": 20 },
+ "parity": "the retraining code reproduces the shipped version 4 core model exactly (max score difference 0.0000 on 105 v6 dev texts)",
+ "dev": {
+  "v6DevClaude": { "n": 56, "B0": 21, "T1": 20 },
+  "v6DevHuman": { "n": 49, "B0": 0, "T1": 0 },
+  "v6DevNonNative": { "n": 14, "B0": 0, "T1": 0 },
+  "v7DevAi": { "n": 10, "B0": 3, "T1": 3 },
+  "v7DevHumanvoice": { "n": 7, "B0": 1, "T1": 1 },
+  "v7DevRewrite": { "n": 3, "B0": 2, "T1": 2 },
+  "v7DevHuman": { "n": 20, "B0": 3, "T1": 3 },
+  "v7DevNonNative": { "n": 5, "B0": 0, "T1": 0 },
+  "toefl": { "n": 86, "B0": 2, "T1": 1 },
+  "nativeStudent": { "n": 209, "B0": 3, "T1": 3 },
+  "dactylHuman": { "n": 200, "B0": 2, "T1": 2 },
+  "dactylAi": { "n": 895, "B0": 467, "T1": 451 }
+ },
+ "rule": "ship only if it flags more v7 AI texts than B0 on dev, no more human texts, v6 dev Claude detection not lower, and every v4 limit kept",
+ "decision": "T1 not shipped: v7 dev AI flagged 3 vs 3 (not more) and v6 dev Claude detection 20 vs 21 (lower). B0 style model kept. No second round."
+}

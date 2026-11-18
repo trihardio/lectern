@@ -112,7 +112,8 @@ test('settings: database keys are stored privately and never sent back to the wi
     assert.equal(st.maxPapers, 30, 'clamped');
     assert.equal(st.engine, '', 'engines other than Claude and ChatGPT are ignored');
     assert.equal(res.json.activeEngine, null, 'nothing is signed in');
-    assert.deepEqual(res.json.engines.map((e) => e.id), ['claude-code', 'codex']);
+    assert.deepEqual(res.json.engines.map((e) => e.id), ['claude-code', 'codex', 'gemini']);
+    assert.equal(res.json.engines.find((e) => e.id === 'gemini').ready, false, 'no Gemini key: not offered');
 
     const file = path.join(s.dataDir, 'settings.json');
     assert.equal(fs.statSync(file).mode & 0o777, 0o600);
@@ -175,8 +176,11 @@ test('asking a question: plan, search, cited answer, per-paper notes, saved conv
     const answer = events.filter((e) => e.event === 'delta').map((e) => e.data.text).join('');
     assert.equal(answer, fx.ANSWER_TEXT);
     assert.equal(first('insights').data.insights.length, papers.length);
-    assert.equal(first('insights').data.insights[0].stance, 'supports');
-    const firstReading = first('insights').data.insights[0];
+    // Judge the call-centre trial (sample record 2) by its identity, not by its place in the ranking.
+    const trial = papers.find((p) => p.doi === fx.doi(fx.BASE[1]));
+    assert.ok(trial, 'the call-centre trial is among the papers');
+    const firstReading = first('insights').data.insights.find((i) => i.n === trial.n);
+    assert.equal(firstReading.stance, 'supports');
     assert.ok(firstReading.facts.result.quote, 'structured study results survive the SSE pipeline');
     assert.ok(papers.find((p) => p.n === firstReading.n).abstract.includes(firstReading.facts.result.quote));
     assert.ok(events.some((e) => e.event === 'thinking'));
@@ -197,7 +201,9 @@ test('asking a question: plan, search, cited answer, per-paper notes, saved conv
     assert.match(main.input, /Abstract: /);
     assert.ok(!main.args.includes('WebSearch,WebFetch'), 'no web search unless asked');
     assert.ok(runs.every((r) => !r.hasApiKey), 'runs on the signed-in plan, never an API key');
-    assert.equal(mock.calls.find((c) => c.host === 'api.openalex.org').params.api_key, 'oa');
+    const oaCall = mock.calls.find((c) => c.host === 'api.openalex.org');
+    assert.equal(oaCall.headers.authorization, 'Bearer oa', 'the OpenAlex key travels in a header');
+    assert.equal(oaCall.params.api_key, undefined, 'and never in the URL');
 
     const done = first('done').data;
     const saved = (await s.call('GET', `/api/thread?id=${done.threadId}`)).json;
@@ -357,15 +363,16 @@ test('an answer is saved after the turn it was asked from, even if another versi
   } finally { await s.stop(); mock.reset(); }
 });
 
-test('the same question runs on Claude and on ChatGPT', async () => {
-  for (const [engine, bins] of [
-    ['claude-code', { claude: CLAUDE, codex: NO_BIN }],
-    ['codex', { codex: CODEX, claude: NO_BIN }],
+test('the same question runs on Claude, on ChatGPT and on Gemini', async () => {
+  for (const [engine, bins, keys] of [
+    ['claude-code', { claude: CLAUDE, codex: NO_BIN }, {}],
+    ['codex', { codex: CODEX, claude: NO_BIN }, {}],
+    ['gemini', { codex: NO_BIN, claude: NO_BIN }, { gemini: 'test-gemini-key-5678' }], // the Gemini API mock in mock-fetch.js
   ]) {
     mock.reset();
     const s = await start();
     try {
-      const state = (await s.call('PUT', '/api/settings', { bins, models: { codex: 'configured-model' } })).json;
+      const state = (await s.call('PUT', '/api/settings', { bins, keys, models: { codex: 'configured-model' } })).json;
       assert.equal(state.activeEngine, engine, `${engine} becomes the active engine once it is signed in`);
       const events = await s.askStream({ question: 'Does remote work improve employee productivity?',
         overrides: engine === 'codex' ? { engine, model: '' } : {} });
@@ -381,7 +388,13 @@ test('the same question runs on Claude and on ChatGPT', async () => {
       const tested = (await s.call('POST', '/api/test-engine', { engine })).json;
       assert.equal(tested.ok, true, tested.error);
       assert.equal(tested.reply, 'ready');
-      assert.equal(tested.model, engine === 'codex' ? 'configured-model' : 'claude-opus-5-5', 'the model the test used');
+      assert.equal(tested.model, { codex: 'configured-model', gemini: 'gemini-4-hydrogen' }[engine] || 'claude-opus-5-5', 'the model the test used');
+      if (engine === 'gemini') {
+        const sent = mock.calls.filter((c) => c.host === 'generativelanguage.googleapis.com');
+        assert.ok(sent.length >= 3, 'the plan, the reading and the answer all went to Gemini');
+        assert.ok(sent.every((c) => !c.url.includes('test-gemini-key-5678') && c.headers['x-goog-api-key'] === 'test-gemini-key-5678'));
+        assert.ok(!JSON.stringify(state).includes('test-gemini-key-5678'), 'the window never receives the key');
+      }
       s.app.config.update({ models: { [engine]: '' } });
       assert.equal((await s.call('POST', '/api/test-engine', { engine })).json.model, '', 'no model set: an empty name, never the word "default"');
     } finally { await s.stop(); }

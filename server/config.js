@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 const Profile = require('./profile');
 
-const ENGINES = ['claude-code', 'codex'];
+const ENGINES = ['claude-code', 'codex', 'gemini'];
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 const DEFAULTS = {
@@ -15,11 +15,13 @@ const DEFAULTS = {
   models: {
     'claude-code': 'claude-opus-5-5',
     codex: '', // '' = whatever model Codex itself is set to use
+    gemini: 'gemini-4-hydrogen', // has a free tier, so a new free key works at once
   },
   // A small, fast model plans the search and reads each abstract; the main model writes the answer.
   helperModels: {
     'claude-code': 'claude-haiku-5-5',
     codex: '',
+    gemini: 'gemini-3.5-flash-lite',
   },
   effort: 'medium',
   web: false,
@@ -29,7 +31,9 @@ const DEFAULTS = {
   citeStyle: 'apa',
   citeMarks: 'author', // how a citation reads inside an answer: 'author' (Rahman 2019) or 'number' (3)
   sources: { openalex: true, semanticscholar: true, crossref: true, europepmc: false },
-  keys: { openalex: '', semanticscholar: '' }, // paper databases only; models use your saved sign-in
+  // Paper databases, and Gemini (the one model engine with a key; Claude and ChatGPT use your saved sign-in).
+  // Gemini's key is read only from here, never from a GEMINI_API_KEY in the shell, so it cannot leak into tests.
+  keys: { openalex: '', semanticscholar: '', gemini: '' },
   email: '',
   bins: { claude: '', codex: '' },
   // Who the answers are written for (level of study and field). See server/profile.js.

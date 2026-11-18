@@ -46,19 +46,29 @@ const ABBREV = new Set(['e.g', 'i.e', 'etc', 'et al', 'al', 'vs', 'cf', 'fig', '
 /**
  * Blocks of text separated by blank lines. A short line without end punctuation (a heading such as
  * "References" or "2. Method") becomes a block of its own even with no blank line after it.
+ * Text copied from a PDF or an e-mail is often wrapped at a fixed width, so a short line that stops in the middle
+ * of a sentence is not a heading: a line is a paragraph line when it starts in lower case, when the next line
+ * starts in lower case, or when the line before it was paragraph text that stopped mid-sentence.
  */
 function blocks(text) {
   const out = [];
-  const isHeading = (line) => line.trim() && !/[.!?:;,]["'\u201d\u2019)]*\s*$/.test(line) && line.trim().split(/\s+/).length <= 12;
+  const lines = text.split('\n');
+  const startsLower = (line) => /^\s*[a-z]/.test(line || '');
+  const endsSentence = (line) => /[.!?\u2026]["'\u201d\u2019)\]]*\s*$/.test(line);
+  const isHeading = (line, next, afterMidSentence) => line.trim() && !/[.!?:;,]["'\u201d\u2019)]*\s*$/.test(line) && line.trim().split(/\s+/).length <= 12
+    && !startsLower(line) && !startsLower(next) && !afterMidSentence;
   let start = -1;
   let pos = 0;
+  let midSentence = false; // the line before was paragraph text that did not end a sentence
   const close = (end) => { if (start !== -1) out.push({ index: start, 0: text.slice(start, end) }); start = -1; };
-  for (const line of text.split('\n')) {
+  for (let k = 0; k < lines.length; k++) {
+    const line = lines[k];
     const lineStart = pos;
     pos += line.length + 1;
-    if (!line.trim()) { close(lineStart - 1); continue; }
-    if (isHeading(line)) { close(lineStart - 1); out.push({ index: lineStart, 0: line }); continue; }
+    if (!line.trim()) { close(lineStart - 1); midSentence = false; continue; }
+    if (isHeading(line, lines[k + 1], midSentence)) { close(lineStart - 1); out.push({ index: lineStart, 0: line }); midSentence = false; continue; }
     if (start === -1) start = lineStart;
+    midSentence = !endsSentence(line);
   }
   close(text.length);
   return out.map((b) => { const t = b[0].replace(/\n$/, ''); return { index: b.index, 0: t }; });

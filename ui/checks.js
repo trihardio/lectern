@@ -105,9 +105,18 @@
       say: 'A writing-pattern review, not a validated AI detector. Do not use it as evidence against a writer.',
       more: 'Its numbers are not probabilities that a person or a model wrote the text. Formal or carefully edited human writing can show these patterns, and short texts, edited texts and writing by non-native English speakers are judged least reliably.',
     },
+    bench: {
+      label: 'Test bench',
+      title: 'How well does the AI check do on texts you know the source of?',
+      run: 'Run the AI check',
+      min: 0,
+      steps: [],
+      say: 'Tests Lectern’s own AI check on texts you label. It measures the check, never a writer.',
+      more: 'Each text is reviewed once by the selected model, exactly as the AI writing tool reviews it. Counts from a small set are uncertain, and the intervals show by how much. The built-in examples come from Lectern’s benchmark: AI texts written by Claude models for it (some asked to sound human, some put through Rewrite), and Wikipedia introductions written by people before ChatGPT (CC BY-SA 4.0).',
+    },
     rewrite: {
       label: 'Rewrite',
-      title: 'Rewrite for clarity and a more natural voice',
+      title: 'Rewrite for clarity, in the style you choose',
       run: 'Rewrite text',
       min: 1,
       steps: [['rewrite', 'Rewrite the passage']],
@@ -126,15 +135,36 @@
     },
   };
   const STRICT = 'If the selected model is unavailable, the request stops instead of switching to another one.';
+  // Rewrite styles: the same ids, in the same order, as STYLES in server/checks/rewrite.js (test/rewrite.test.js checks it).
+  const REWRITE_STYLES = [
+    { value: 'general', label: 'General' }, { value: 'academic', label: 'Academic' }, { value: 'blog', label: 'Blog' },
+    { value: 'casual', label: 'Casual' }, { value: 'email', label: 'Email' }, { value: 'professional', label: 'Professional' },
+    { value: 'scientific', label: 'Scientific' }, { value: 'technical', label: 'Technical' },
+  ];
+  const styleLabel = (v) => (REWRITE_STYLES.find((s) => s.value === v) || REWRITE_STYLES[0]).label;
 
   window.LecternChecks = function create(deps) {
     const { h, fill, api, toast, Motion, TOKEN, picker, state, prettyModel } = deps;
     const fresh = () => ({ text: '', file: null, phase: 'input', steps: {}, notices: [], result: null, error: '', abort: null, pick: null, tab: 'flags', source: null, extracting: false,
       options: { web: true, papers: true, quotes: true, references: true } });
-    const st = { tool: 'proof', proof: fresh(), ai: fresh(), sim: fresh(), rewrite: fresh() };
+    const st = { tool: 'proof', proof: fresh(), ai: fresh(), sim: fresh(), rewrite: fresh(), bench: { ...fresh(), items: [] } };
     // The page's model: the one the writer picked here (remembered), or else the model the composer uses.
     let savedChoice = null;
     try { savedChoice = localStorage.getItem('lectern.aiScoreModel'); } catch { /* use the composer's model */ }
+    // The Rewrite style is remembered like the model; a saved id the list no longer has means General.
+    let rewriteStyle = 'general';
+    try { const s = localStorage.getItem('lectern.rewriteStyle'); if (REWRITE_STYLES.some((o) => o.value === s)) rewriteStyle = s; } catch { /* General */ }
+    const sampleActive = (t) => countWords(t.sample || '') >= 30; // the server's SAMPLE_MIN_WORDS
+    function stylePicker() {
+      if (sampleActive(st.rewrite)) return h('span', { class: 'chk-rw-style' }, h('span', { class: 'chk-model-label' }, 'Style'), h('span', { class: 'chk-rw-style-sample' }, 'Matches your sample'));
+      const pick = picker({ label: 'Rewrite style', options: REWRITE_STYLES, value: rewriteStyle, cls: 'chk-rw-style-picker', onChange: (v) => {
+        rewriteStyle = v;
+        try { localStorage.setItem('lectern.rewriteStyle', v); } catch { /* storage unavailable */ }
+      } });
+      pick.dataset.focus = 'style';
+      // Its own class: .chk-style is the AI-writing report's style-model line, and its margin would leak in.
+      return h('span', { class: 'chk-rw-style' }, h('span', { class: 'chk-model-label' }, 'Style'), pick);
+    }
     // Model menu in sections: one per provider, with ChatGPT's earlier generations in a section of their own.
     // Names read as people say them ("Opus 5.5", "GPT-6.1 Sol"); the provider is the section heading, not repeated.
     const EARLIER = /^gpt-5|^gpt-6-sol$/;
@@ -143,7 +173,8 @@
       return engine === 'claude-code' ? name.replace(/^Claude\s+/, '') : name;
     };
     function choices() {
-      return (state.app?.engines || []).flatMap((e) => {
+      // Gemini is offered only once its key is linked and accepted (hiddenUntilReady; the owner's rule, 2026-11-19).
+      return (state.app?.engines || []).filter((e) => !e.hiddenUntilReady || e.ready).flatMap((e) => {
         const ids = new Set([...(e.models || []), state.app.settings.models[e.id]]);
         if (e.id === 'codex') ids.add('gpt-6.1-sol');
         const note = e.ready ? '' : 'not connected';
@@ -346,6 +377,7 @@
     function draw({ focus = null } = {}) {
       const had = focus != null ? focus : focusedKey(root); // read first: building the proofreader's view moves its controls
       const t = cur();
+      hideTip(true); // its sentence is about to be replaced
       const key = `${st.tool}:${t.phase}`;
       const changed = built && key !== drawnKey;
       drawnKey = key;
@@ -355,7 +387,7 @@
         h('header', { class: 'chk-head' },
           h('h1', null, 'Writing desk'),
           toolSwitch()),
-        h('div', { class: `chk-body${changed ? ' chk-enter' : ''}` }, st.tool === 'proof' && proofreader() ? proofreader().view() : t.phase === 'report' && t.result ? report() : t.phase === 'running' ? running() : input()));
+        h('div', { class: `chk-body${changed ? ' chk-enter' : ''}` }, st.tool === 'proof' && proofreader() ? proofreader().view() : st.tool === 'bench' ? bench() : t.phase === 'report' && t.result ? report() : t.phase === 'running' ? running() : input()));
       const slip = root.querySelector('.chk-slip');
       if (slip && slipTop) slip.scrollTop = slipTop;
       if (had != null) focusKey(root, had);
@@ -377,7 +409,7 @@
     const scoreText = (id) => {
       const r = st[id].result;
       if (!r) return '';
-      return r.score == null ? '–' : `${r.score}%`;
+      return r.score == null ? '–' : id === 'ai' ? String(r.score) : `${r.score}%`;
     };
 
     // ---------------------------------------------------------------- input
@@ -424,14 +456,194 @@
         h('p', { class: 'chk-lede' }, tool.title),
         modelPicker(),
         sheet,
+        st.tool === 'rewrite' && sampleBlock(t),
         t.error && h('p', { class: 'chk-error', role: 'alert' }, t.error),
         st.tool === 'sim' && simOptions(t),
-        h('div', { class: 'chk-actions' }, runBtn, count,
+        h('div', { class: 'chk-actions' }, st.tool === 'rewrite' && stylePicker(), runBtn, count,
           h('span', { class: 'chk-who' }, whoLine())),
         tool.say && about(`input-${st.tool}`, tool.say, 'Limits',
           st.tool === 'sim' && h('p', null, tool.limits),
           h('p', null, tool.more),
           h('p', null, STRICT)));
+    }
+
+    /**
+     * Rewrite's optional style sample: pasted, or read from a file like the main text. The rewrite takes its voice
+     * (rhythm, vocabulary, tone, punctuation) and nothing else; the fact check afterwards flags any name or number it adds.
+     */
+    function sampleBlock(t) {
+      const sampleNote = () => {
+        const n = countWords(t.sample || '');
+        if (!n) return '';
+        if (n < 30) return `${fmt(n)} words · at least 30 are needed for a style sample`;
+        return `${fmt(n)} words${(t.sample || '').trim().length > 8000 ? ' · only the first 8,000 characters are used' : ''}`;
+      };
+      const note = h('span', { class: 'chk-count' }, sampleNote());
+      const file = h('input', { type: 'file', accept: ACCEPT, hidden: true, onchange: (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) loadFile(f, 'sample'); } });
+      const area = h('textarea', {
+        class: 'chk-rw-sample-text', rows: '5', spellcheck: 'false', 'aria-label': 'Writing sample', 'data-focus': 'sample',
+        placeholder: 'Paste a sample of the style you want, such as your own earlier writing.',
+        oninput: (e) => { t.sample = e.target.value; if (t.sampleFile && !t.sample.trim()) t.sampleFile = null; note.textContent = sampleNote(); },
+        onchange: () => draw(),
+      });
+      area.value = t.sample || '';
+      return h('details', { class: 'chk-rw-sample', open: !!(t.sampleOpen || (t.sample || '').trim()), ontoggle: (e) => { t.sampleOpen = e.target.open; } },
+        h('summary', null, 'Match a writing sample', h('span', { class: 'chk-rw-sample-opt' }, ' · optional')),
+        h('p', { class: 'chk-rw-sample-say' }, 'The rewrite takes the sample’s voice: sentence rhythm, vocabulary, tone and punctuation. It takes nothing else: no facts, names or sentences come from the sample.'),
+        h('div', { class: 'chk-sheet-top chk-rw-sample-top' },
+          t.sampleFile
+            ? h('span', { class: 'chk-file' }, h('span', { class: 'chk-file-name' }, t.sampleFile.name), h('span', { class: 'chk-file-kind' }, t.sampleFile.kind),
+              h('button', { type: 'button', class: 'chk-link', onclick: () => { t.sampleFile = null; t.sample = ''; draw(); } }, 'Remove'))
+            : h('span', { class: 'chk-hint' }, t.sampleExtracting ? 'Reading the document…' : 'Paste text or choose a document'),
+          h('button', { type: 'button', class: 'btn small', 'data-focus': 'sample-choose', title: `${FILE_TYPES}, up to 12 MB`, onclick: () => file.click() }, 'Choose a file'), file),
+        area, note);
+    }
+
+    // ---------------------------------------------------------------- test bench
+    // The tester pastes texts whose source they know, says what each is, and runs the AI writing check on all of them,
+    // one review each, exactly as the AI writing tool would. The counts describe this set only. Nothing is saved.
+    const TB = window.LecternTestBench;
+    const BENCH_MAX = 30; // one model call each: a set this size is a few minutes and a known number of calls
+    let benchSeq = 0;
+    const benchReady = (it) => !!it.label && countWords(it.text) >= TOOLS.ai.min;
+    /** What one result means for a text of this label: caught or missed for AI, wrongly flagged or not for human. */
+    function benchOutcome(it) {
+      const r = it.result;
+      if (!r) return null;
+      if (r.score == null) return { cls: 'none', word: 'No score' };
+      const ai = TB.labelOf(it.label).isAi;
+      return r.flagged ? (ai ? { cls: 'caught', word: 'Caught' } : { cls: 'wrong', word: 'Wrongly flagged' }) : (ai ? { cls: 'missed', word: 'Missed' } : { cls: 'clear', word: 'Not flagged' });
+    }
+    const benchCount = (k, n, iv) => [h('b', null, `${k}`), ' of ', h('b', null, `${n}`), iv ? h('span', { class: 'chk-bench-iv' }, ` (${iv[0]}–${iv[1]}%)`) : ''];
+
+    function benchSummary(t) {
+      const sum = TB.summarize(t.items);
+      const rows = sum.rows.filter((r) => r.n || r.noScore);
+      if (!rows.length) return null;
+      return h('section', { class: 'chk-bench-sum', 'aria-label': 'Test bench results' },
+        h('div', { class: 'chk-score-head' }, h('span', null, 'Results on this set'), h('span', { class: 'chk-nv' }, 'Your labels')),
+        h('table', { class: 'chk-bench-table' },
+          h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Texts you marked'), h('th', { scope: 'col' }, 'Flagged by the review'), h('th', { scope: 'col' }, 'Flagged by the style reading'))),
+          h('tbody', null, rows.map((r) => h('tr', { class: r.isAi ? 'is-ai' : 'is-human' },
+            h('th', { scope: 'row' }, r.label, h('span', { class: 'chk-bench-what' }, r.isAi ? ' · flagged means caught' : ' · flagged means wrongly flagged')),
+            h('td', null, r.n ? benchCount(r.flagged, r.n, r.interval) : '–', r.noScore ? h('span', { class: 'chk-bench-iv' }, ` · ${r.noScore} with no score`) : ''),
+            h('td', null, r.styleN ? benchCount(r.styleFlagged, r.styleN) : '–'))))),
+        h('p', { class: 'chk-note' }, sum.ai.n ? ['All AI texts together: the review caught ', ...benchCount(sum.ai.flagged, sum.ai.n, sum.ai.interval), '. '] : '',
+          sum.human.n ? ['Human texts: ', ...benchCount(sum.human.flagged, sum.human.n, sum.human.interval), ' wrongly flagged. '] : '',
+          'The ranges are 95% intervals: with few texts they are wide, so a small set cannot show how often the check is right in general.'));
+    }
+
+    function benchRow(t, it, i) {
+      const running = t.phase === 'running';
+      const out = benchOutcome(it);
+      const pick = picker({
+        label: `What text ${i + 1} is`, cls: 'chk-bench-label', value: it.label || '',
+        options: [{ value: '', label: 'Choose what it is' }, ...TB.LABELS.map((l) => ({ value: l.value, label: l.label }))],
+        onChange: (v) => { it.label = v; draw(); },
+      });
+      pick.dataset.focus = `bench-label:${it.id}`;
+      const area = h('textarea', {
+        class: 'chk-bench-text', rows: '5', spellcheck: 'false', 'aria-label': `Text ${i + 1}`, 'data-focus': `bench-text:${it.id}`,
+        readonly: running, placeholder: 'Paste a text whose source you know.',
+        oninput: (e) => { it.text = e.target.value; it.result = null; it.error = ''; if (it.example) it.edited = true; },
+        onchange: () => draw(),
+      });
+      area.value = it.text;
+      const words = countWords(it.text);
+      return h('li', { class: `chk-bench-item${it.state === 'running' ? ' is-running' : ''}`, 'data-bench': it.id },
+        h('div', { class: 'chk-bench-head' },
+          h('span', { class: 'chk-bench-n' }, String(i + 1)),
+          pick,
+          h('span', { class: 'chk-bench-words' }, `${fmt(words)} words${words && words < TOOLS.ai.min ? ` · at least ${TOOLS.ai.min}` : ''}`),
+          it.state === 'running'
+            ? h('span', { class: 'chk-bench-out running', role: 'status' }, 'Checking…')
+            : out && h('span', { class: `chk-bench-out ${out.cls}` }, it.result.score != null && h('b', null, `${it.result.score}`), it.result.score != null && h('small', null, '/100'), ` ${out.word}`),
+          h('button', { type: 'button', class: 'chk-link', disabled: running, 'aria-label': `Remove text ${i + 1}`, onclick: () => { t.items = t.items.filter((x) => x !== it); draw(); } }, 'Remove')),
+        area,
+        it.source && h('p', { class: 'chk-bench-source' }, it.edited ? `${it.source} (edited here)` : it.source),
+        it.result && it.result.style && h('p', { class: 'chk-bench-style' }, `Style reading ${Math.round(it.result.style.probability * 100)} of 100, ${it.result.style.flagged ? 'at or over its line' : 'under its line'}.`),
+        it.error && h('p', { class: 'chk-error', role: 'alert' }, it.error));
+    }
+
+    function bench() {
+      const t = st.bench;
+      const running = t.phase === 'running';
+      const todo = t.items.filter(benchReady);
+      const full = t.items.length >= BENCH_MAX;
+      const add = (extra) => { if (t.items.length < BENCH_MAX) t.items.push({ id: `b${++benchSeq}`, text: '', label: '', result: null, error: '', state: '', ...extra }); };
+      const have = new Set(t.items.map((x) => x.example).filter(Boolean));
+      const missing = TB.EXAMPLES.filter((e) => !have.has(e.id));
+      const runBtn = h('button', {
+        type: 'button', class: 'btn primary chk-run', 'data-focus': 'run', disabled: running || !todo.length || !modelReady(), onclick: runBench,
+      }, running ? 'Checking…' : todo.length ? `${TOOLS.bench.run} on ${todo.length} ${todo.length === 1 ? 'text' : 'texts'}` : TOOLS.bench.run);
+      return h('div', { class: 'chk-input chk-bench' },
+        h('p', { class: 'chk-lede' }, TOOLS.bench.title),
+        h('p', { class: 'chk-bench-intro' }, 'Paste texts whose source you know, say what each one is, and run Lectern’s AI check on all of them. You see what it caught, what it missed and which human texts it wrongly flagged.'),
+        modelPicker(),
+        benchSummary(t),
+        t.items.length
+          ? h('ol', { class: 'chk-bench-list' }, t.items.map((it, i) => benchRow(t, it, i)))
+          : h('p', { class: 'chk-empty' }, 'No texts yet. Add your own, or load the examples: AI texts (some told to sound human, some rewritten) and human ones.'),
+        h('div', { class: 'chk-bench-add' },
+          h('button', { type: 'button', class: 'btn', 'data-focus': 'bench-add', disabled: running || full, onclick: () => { add(); draw({ focus: `bench-text:b${benchSeq}` }); } }, 'Add a text'),
+          missing.length > 0 && h('button', { type: 'button', class: 'btn quiet', 'data-focus': 'bench-examples', disabled: running || full,
+            onclick: () => { for (const e of missing) add({ text: e.text, label: e.label, source: e.source, example: e.id }); draw(); } },
+          `Load ${missing.length} example${missing.length === 1 ? '' : 's'}`),
+          full && h('span', { class: 'chk-model-help' }, `Up to ${BENCH_MAX} texts at a time.`)),
+        t.error && h('p', { class: 'chk-error', role: 'alert' }, t.error),
+        h('div', { class: 'chk-actions' }, runBtn,
+          running && h('button', { type: 'button', class: 'btn', onclick: () => { if (t.abort) t.abort.abort(); } }, 'Stop'),
+          !running && t.items.some((x) => x.result) && h('button', { type: 'button', class: 'btn quiet', onclick: () => copyText(benchText(t)).then(() => toast('Results copied'), () => toast('Could not copy')) }, 'Copy results'),
+          h('span', { class: 'chk-who' }, todo.length ? `One review per text through your plan: ${todo.length} model ${todo.length === 1 ? 'call' : 'calls'}. Lectern saves nothing.` : 'Each text needs a label and at least 40 words.')),
+        about('input-bench', TOOLS.bench.say, 'Limits', h('p', null, TOOLS.bench.more), h('p', null, STRICT)));
+    }
+
+    async function runBench() {
+      const t = st.bench;
+      const todo = t.items.filter(benchReady);
+      if (!todo.length) return;
+      t.phase = 'running'; t.error = ''; t.abort = new AbortController();
+      for (const it of todo) { it.result = null; it.error = ''; it.state = ''; }
+      draw();
+      for (const it of todo) {
+        if (t.abort.signal.aborted) break;
+        it.state = 'running';
+        if (st.tool === 'bench') draw();
+        try {
+          const res = await fetch('/api/checks/ai', {
+            method: 'POST', signal: t.abort.signal, headers: { 'x-lectern-token': TOKEN, 'content-type': 'application/json' },
+            body: JSON.stringify({ text: it.text, options: st.ai.options, ...selected() }),
+          });
+          if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `Request failed (${res.status})`); }
+          let result = null, err = '';
+          await readEvents(res, (event, data) => { if (event === 'result') result = data; else if (event === 'error') err = data.message; });
+          // keep only what the bench shows: the headline, its flag and the style reading
+          it.result = result ? { score: result.score, flagged: !!result.flagged, status: result.status, style: result.style ? { probability: result.style.probability, flagged: !!result.style.flagged } : null } : null;
+          it.error = result ? '' : err || 'The check stopped before it finished.';
+        } catch (e) {
+          if (e.name === 'AbortError') { it.state = ''; break; }
+          it.error = e.message;
+        }
+        it.state = '';
+      }
+      t.abort = null;
+      t.phase = 'input';
+      if (st.tool === 'bench') draw(); else swapSwitch();
+      if (st.tool !== 'bench' || !root.isConnected || state.view !== 'score') toast('Test bench finished');
+    }
+
+    /** The results as plain text, for a spreadsheet or a note. */
+    function benchText(t) {
+      const sum = TB.summarize(t.items);
+      let out = 'Lectern test bench: the AI writing check on texts whose source the tester knows (NOT VALIDATED; counts describe this set only)\n';
+      for (const r of sum.rows.filter((x) => x.n)) out += `${r.label}: the review flagged ${r.flagged} of ${r.n}${r.interval ? ` (95% interval ${r.interval[0]}-${r.interval[1]}%)` : ''}${r.isAi ? '' : ' (wrongly)'}; style reading ${r.styleFlagged} of ${r.styleN}\n`;
+      out += '\n#\tWhat it is\tWords\tScore\tResult\tStyle reading\n';
+      t.items.forEach((it, i) => {
+        const o = benchOutcome(it);
+        if (!o) return;
+        out += `${i + 1}\t${TB.labelOf(it.label).label}\t${countWords(it.text)}\t${it.result.score == null ? '-' : it.result.score}\t${o.word}\t${it.result.style ? Math.round(it.result.style.probability * 100) : '-'}\n`;
+      });
+      return out;
     }
 
     // Web search runs through the page's selected model (strictly, as the other tools do), so when that model cannot
@@ -474,14 +686,15 @@
 
     const hasFiles = (e) => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
 
-    async function loadFile(file) {
+    async function loadFile(file, into = 'text') {
       const t = cur();
+      const busy = into === 'sample' ? 'sampleExtracting' : 'extracting';
       // Two documents dropped one after the other: only the newer one is used, and only it ends "reading".
       const ticket = (t.loads = (t.loads || 0) + 1);
       const redraw = () => { if (st[st.tool] === t) draw(); };
-      if (file.size > 12 * 1024 * 1024) { t.error = 'That file is larger than 12 MB. Paste the text instead.'; t.extracting = false; redraw(); return; }
+      if (file.size > 12 * 1024 * 1024) { t.error = 'That file is larger than 12 MB. Paste the text instead.'; t[busy] = false; redraw(); return; }
       t.error = '';
-      t.extracting = true;
+      t[busy] = true;
       redraw();
       try {
         const buf = new Uint8Array(await file.arrayBuffer());
@@ -489,13 +702,12 @@
         for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
         const r = await api('POST', '/api/checks/extract', { name: file.name, data: btoa(bin) });
         if (ticket !== t.loads) return;
-        t.text = r.text;
-        t.file = { name: file.name, kind: r.kind };
+        if (into === 'sample') { t.sample = r.text; t.sampleFile = { name: file.name, kind: r.kind }; t.sampleOpen = true; } else { t.text = r.text; t.file = { name: file.name, kind: r.kind }; }
       } catch (e) {
         if (ticket !== t.loads) return;
         t.error = e.message;
       }
-      t.extracting = false;
+      t[busy] = false;
       redraw();
     }
 
@@ -512,7 +724,7 @@
         const res = await fetch(id === 'ai' ? '/api/checks/ai' : id === 'rewrite' ? '/api/checks/rewrite' : '/api/checks/similarity', {
           method: 'POST', signal: t.abort.signal,
           headers: { 'x-lectern-token': TOKEN, 'content-type': 'application/json' },
-          body: JSON.stringify({ text: t.text, options: id === 'sim' ? simSend(t) : t.options, ...selected() }),
+          body: JSON.stringify({ text: t.text, options: id === 'sim' ? simSend(t) : t.options, ...selected(), ...(id === 'rewrite' ? { style: rewriteStyle, sample: sampleActive(t) ? t.sample : undefined } : {}) }),
         });
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `Request failed (${res.status})`); }
         await readEvents(res, (event, data) => onEvent(id, event, data));
@@ -642,7 +854,7 @@
           h('p', null, TOOLS.rewrite.more)),
         h('div', { class: 'chk-rewrite-grid' },
           h('div', { class: 'chk-rewrite-panel' }, h('h2', null, 'Original'), h('div', { class: 'chk-rewrite-original' }, t.text)),
-          h('div', { class: 'chk-rewrite-panel' }, h('h2', null, 'Rewrite · editable'), output)));
+          h('div', { class: 'chk-rewrite-panel' }, h('h2', null, `Rewrite · ${r.style === 'sample' ? 'your sample’s style' : styleLabel(r.style)} · editable`), output)));
     }
 
     /** Paragraphs of the submitted text, with outer ranges (sentences or matches) and inner marks. */
@@ -721,6 +933,71 @@
     const pct = (x) => `${Math.round(x * 100)}%`;
     const cls = (s) => (s.review === 'model' ? s.band : 'unreviewed');
 
+    /**
+     * The number shown for a sentence, from the model's 0-100 rating of AI-like patterns: a red or yellow sentence
+     * says how AI-like it reads (the rating), a green one how human-like (100 minus the rating). The owner chose this
+     * wording on 2026-11-19; "-like" and the line under it keep it a description of patterns, not a probability of
+     * who wrote the sentence.
+     */
+    const leanOf = (s) => (s.band === 'few' ? { n: 100 - s.rating, word: 'human-like' } : { n: s.rating, word: 'AI-like' });
+
+    // One floating label for the sentence under the pointer or the keyboard focus. It lives in <body> with
+    // position: fixed, so showing it never moves the text, and it hides on any scroll and on every redraw.
+    let tipEl = null;
+    let tipFor = null;
+    let tipLine = -1;
+    let tipTimer = 0;
+    function hideTip(now = false) {
+      clearTimeout(tipTimer);
+      const go = () => { tipFor = null; tipLine = -1; if (tipEl) tipEl.classList.remove('on'); };
+      if (now) go(); else tipTimer = setTimeout(go, 40); // a move straight to the next sentence cancels this, so nothing blinks
+    }
+    function showTip(el, s, x, y, keyboard) {
+      if (!el || !s || !el.isConnected) return;
+      clearTimeout(tipTimer);
+      if (!tipEl) {
+        tipEl = h('div', { class: 'chk-tip', 'aria-hidden': 'true' }); // the same words are the sentence's description
+        document.body.append(tipEl);
+        addEventListener('scroll', () => hideTip(true), { capture: true, passive: true });
+        addEventListener('resize', () => hideTip(true), { passive: true });
+      }
+      const rects = [...el.getClientRects()].filter((q) => q.width > 0);
+      if (!rects.length) return;
+      const li = y == null ? 0 : Math.max(0, rects.findIndex((q) => y >= q.top - 2 && y <= q.bottom + 2));
+      if (tipFor === el && tipLine === li) return; // same line of the same sentence: leave it where it is
+      if (tipFor !== el) {
+        const lean = s.review === 'model' ? leanOf(s) : null;
+        tipEl.className = `chk-tip ${cls(s)}${tipEl.classList.contains('on') ? ' on' : ''}`; // the band colours its top tab
+        const hint = keyboard ? 'Press Enter for the reason.' : 'Click for the reason.';
+        fill(tipEl,
+          h('div', { class: 'chk-tip-top' }, lean && h('b', { class: 'chk-tip-num' }, `${lean.n}%`), h('span', { class: 'chk-tip-word' }, lean ? lean.word : 'Not reviewed')),
+          h('p', { class: `chk-tip-band ${cls(s)}` }, lean ? BAND[s.band] : s.unreviewedReason),
+          h('p', { class: 'chk-tip-note' }, lean ? `Writing patterns, not proof of who wrote it. ${hint}` : hint));
+      }
+      tipFor = el;
+      tipLine = li;
+      // over the pointed-at line of the sentence (its first line for the keyboard); below it when there is no room above
+      const line = rects[li];
+      const w = tipEl.offsetWidth;
+      const ht = tipEl.offsetHeight;
+      const cx = x == null ? line.left + Math.min(line.width, 200) / 2 : x;
+      const left = Math.max(8, Math.min(innerWidth - w - 8, cx - w / 2));
+      const top = line.top - ht - 8 >= 8 ? line.top - ht - 8 : line.bottom + 8;
+      tipEl.style.left = `${Math.round(left)}px`;
+      tipEl.style.top = `${Math.round(top)}px`;
+      tipEl.classList.add('on');
+    }
+    /** Hover and keyboard focus on the marked text show the sentence's number (one listener for the whole text). */
+    function tipEvents(ms, byI) {
+      const sentenceOf = (target) => (target instanceof Element ? target.closest('.chk-s') : null);
+      const at = (el) => el && byI.get(Number(el.dataset.s));
+      ms.addEventListener('pointerover', (e) => { if (e.pointerType === 'touch') return; const el = sentenceOf(e.target); if (el) showTip(el, at(el), e.clientX, e.clientY, false); });
+      ms.addEventListener('pointermove', (e) => { if (e.pointerType === 'touch') return; const el = sentenceOf(e.target); if (el && el === tipFor) showTip(el, at(el), e.clientX, e.clientY, false); });
+      ms.addEventListener('pointerout', (e) => { if (!tipFor || !(e.relatedTarget instanceof Node) || !tipFor.contains(e.relatedTarget)) hideTip(); });
+      ms.addEventListener('focusin', (e) => { const el = sentenceOf(e.target); if (el && el.matches(':focus-visible')) showTip(el, at(el), null, null, true); });
+      ms.addEventListener('focusout', () => hideTip());
+    }
+
     /** Spoken and written description of one sentence: the band, the model's rating, or why it was not reviewed. */
     function sentenceSay(s) {
       if (s.review !== 'model') return `Not reviewed. ${s.unreviewedReason}`;
@@ -757,8 +1034,10 @@
         'aria-describedby': desc.id(sentenceSay(s)),
         onclick: () => pickSentence(t, s.i), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickSentence(t, s.i); } },
       }));
+      tipEvents(ms, new Map(eligible.map((s) => [s.i, s])));
 
       const pick = t.pick != null ? r.sentences.find((s) => s.i === t.pick && s.eligible) : null;
+      if (pick) placeInline(ms, whyCard(t, r, pick, 'inline'));
       const tabList = [['flags', 'Patterns', flagged.length], ['mistakes', 'Suggestions', r.issues.length]];
       if (unreviewed.length) tabList.push(['unreviewed', 'Not reviewed', unreviewed.length]);
       tabList.push(['signals', 'How it was read']);
@@ -766,42 +1045,88 @@
       const score = aiScore(r);
       score.tabIndex = -1; // where focus goes when the report replaces the running view
       score.dataset.focusDefault = '';
-      const slip = h('aside', { class: 'chk-slip' },
+      const slip = h('aside', { class: `chk-slip${pick ? ' why-open' : ''}` },
+        pick && whyCard(t, r, pick, 'side'),
         score,
-        pick && sentenceCard(r, pick),
         tabs(t, tabList),
         tabPanel(t, t.tab === 'flags' ? flagList(t, r, flagged, reviewed.length, unreviewed.length)
           : t.tab === 'mistakes' ? mistakeList(t, r)
             : t.tab === 'unreviewed' ? unreviewedList(t, r, unreviewed) : signalsPanel(r)));
 
-      return h('div', { class: 'chk-report ai' },
-        h('div', { class: 'chk-ms-wrap' }, aiLegend(unreviewed.length > 0, r.issues.length > 0), ms, desc.box()),
+      // Escape closes an open reason, from the text or from the panel (an open menu handles its own Escape first)
+      const onkeydown = (e) => { if (e.key === 'Escape' && t.pick != null) { e.preventDefault(); e.stopPropagation(); pickSentence(t, t.pick, 'close'); } };
+      return h('div', { class: 'chk-report ai', onkeydown },
+        h('div', { class: 'chk-ms-wrap' }, ms, aiLegend(unreviewed.length > 0, r.issues.length > 0, true), desc.box()),
         slip);
     }
 
-    /** The key to the marks in the text (on the page and on paper). */
-    function aiLegend(unreviewed, issues) {
+    /** The key to the marks in the text (on the page, under the text, with a hint; on paper, above it). */
+    function aiLegend(unreviewed, issues, onPage = false) {
       return h('div', { class: 'chk-legend' },
-        h('span', { class: 'chk-key strong' }, 'Strong patterns (65+)'),
+        h('span', { class: 'chk-key few' }, 'Few patterns (under 40)'),
         h('span', { class: 'chk-key some' }, 'Some patterns (40–64)'),
+        h('span', { class: 'chk-key strong' }, 'Strong patterns (65+)'),
         unreviewed && h('span', { class: 'chk-key unreviewed' }, 'Not reviewed'),
         h('span', { class: 'chk-key word' }, 'Word or phrase common since ChatGPT'),
-        issues && h('span', { class: 'chk-key err' }, 'Writing suggestion'));
+        issues && h('span', { class: 'chk-key err' }, 'Writing suggestion'),
+        onPage && h('span', { class: 'chk-legend-hint' }, 'Point at a sentence to see its number. Click it for the reason.'));
+    }
+
+    /** The whole-number flag line the window shows (the exact line is 52.1: a shown 52 is never flagged, a shown 53 always is). */
+    const shownLine = (r) => Math.ceil(r.benchmark.flagAt - 1e-9);
+    /** The style model's held-back test, in one sentence (version 4 numbers come from the report, older ones from the model file). */
+    function styleTested(r) {
+      const so = r.benchmark && r.benchmark.styleOnly;
+      if (so) return `On ${so.texts} held-back texts it flagged ${so.aiFlagged} of ${so.ai} texts written by Claude and ${so.humanFlagged} of ${so.human} human texts (${so.nonNativeFlagged} of ${so.nonNative} by non-native writers).`;
+      return r.style && r.style.tested && r.style.tested.nonNativeFalsePositive ? `It wrongly flags ${r.style.tested.nonNativeFalsePositive}.` : '';
     }
 
     /** The trained style model: a separate reading, with its tested accuracy and weak spots, never part of the score. */
     function styleLine(sr) {
       return h('p', { class: 'chk-style' },
         h('span', { class: 'chk-from' }, 'Style model'),
-        h('span', null, sr.flagged ? 'Its writing style resembles AI text in the public test sets' : 'Its writing style does not stand out as AI-like in the public test sets',
+        h('span', null, sr.flagged ? 'Its writing style resembles AI text in Lectern’s test sets' : 'Its writing style does not stand out as AI-like in Lectern’s test sets',
           ` (${Math.round(sr.probability * 100)} of 100; flags at ${Math.round(sr.threshold * 100)}). A second reading, not part of the score.`));
     }
-    function styleTable(sr) {
-      const t = sr.tested;
+    function styleTable(r) {
+      const sr = r.style;
       return h('div', { class: 'chk-style-tested' },
         h('h3', { class: 'chk-h3' }, `Style model (version ${sr.version}), tested before use`),
-        h('p', { class: 'chk-note' }, `A logistic regression over 30 measurable style features, trained on public labelled human and AI texts (HC3, RAID, MAGE, DACTYL). On a fresh test set of 2024–25 models (${t.set}) it separated human and AI text with AUROC ${t.auroc}, flagged ${t.falsePositive} of human texts and caught ${t.detection} of AI texts.`),
-        h('p', { class: 'chk-note' }, `Known weak spots: it wrongly flags ${t.nonNativeFalsePositive}, against ${t.nativeStudentFalsePositive} for native student writing, and it barely separates student essays (AUROC ${t.studentEssayAuroc}). Treat it as a pointer to read the text, never as evidence about who wrote it.`));
+        h('p', { class: 'chk-note' }, sr.parts
+          ? 'Two small statistical models over measurable features of the writing, built into Lectern (no model is asked, and the same text always gets the same number): one learned from public labelled human and AI text of 2023–25 (HC3, RAID, MAGE, DACTYL), one learned with text from current Claude models. A text is flagged when either model reaches its own line; the number shown is the higher of the two, with 50 as the line. '
+          : 'A logistic regression over measurable style features, trained on public labelled human and AI texts. ',
+        styleTested(r)),
+        h('p', { class: 'chk-note' }, 'Known weak spots: it misses about half of current Claude text, it also flags some human writing, and short texts carry little signal. Treat it as a pointer to read the text, never as evidence about who wrote it.'));
+    }
+
+    /**
+     * When the sentence review and the style model point different ways, say so plainly: a low pattern score must not
+     * read as clearing the text, and the style model must not read as the better judge (it also flags human writing).
+     * Null when they agree.
+     */
+    function readingsDiffer(r) {
+      if (!r.style || r.score == null || r.flagged == null) return null;
+      if (r.style.flagged && !r.flagged) return 'style';
+      if (!r.style.flagged && r.flagged) return 'pattern';
+      return null;
+    }
+    function differWhy(r, which) {
+      const b = r.benchmark, so = b && b.styleOnly;
+      if (which === 'pattern') return 'The sentence review finds strong patterns that the style model does not. Neither reading is proof: read the reasons for the highlighted sentences.';
+      return [
+        so ? `On held-back texts the sentence review flagged ${b.aiFlagged} of ${b.ai} texts written by Claude and the style model ${so.aiFlagged} of ${so.ai}, so a low score here does not clear the text.` : 'A low score here does not clear the text.',
+        so ? ` The style model also flagged ${so.humanFlagged} of ${so.human} human texts.` : ' The style model also flags some human writing.',
+        ' Neither reading is proof.',
+      ].join('');
+    }
+    const lineWord = (flagged) => (flagged ? 'at or over its line' : 'under its line');
+    function differBox(r, which) {
+      return h('div', { class: 'chk-differ', role: 'note' },
+        h('p', { class: 'chk-differ-lead' }, 'The two readings disagree.'),
+        h('p', { class: 'chk-differ-pair' },
+          h('span', null, 'Sentence review ', h('b', null, String(r.score)), `, ${lineWord(r.flagged)}`),
+          h('span', null, 'Style model ', h('b', null, String(Math.round(r.style.probability * 100))), `, ${lineWord(r.style.flagged)}`)),
+        h('p', { class: 'chk-differ-why' }, differWhy(r, which)));
     }
 
     /** The result card. On the page its limits and the model line fold behind one line; on paper (`print`) all is shown. */
@@ -813,17 +1138,25 @@
           ? h('p', { class: 'chk-status partial', role: 'status' }, h('b', null, 'Partly reviewed. '), `${pct(r.coverage)} of the eligible text was reviewed; the rest is marked “not reviewed” and is not counted either way.`)
           : null;
       const notEligible = Math.max(0, r.words - r.eligibleWords);
+      const differ = readingsDiffer(r);
       return h('section', { class: 'chk-score', 'aria-label': 'Writing-pattern review result' },
         h('div', { class: 'chk-score-head' }, h('span', null, 'Writing-pattern review'), h('span', { class: 'chk-nv', title: 'This method has not been tested on an independent benchmark.' }, r.validated ? 'Validated' : 'Not validated')),
         status,
         h('div', { class: 'chk-score-main' },
-          h('span', { class: 'chk-num' }, r.score == null ? '–' : `${r.score}%`),
+          h('span', { class: 'chk-num', 'aria-label': r.score == null ? 'No score' : `Pattern score ${r.score} out of 100` }, r.score == null ? '–' : r.score, r.score != null && h('small', { class: 'chk-num-of', 'aria-hidden': 'true' }, '/100')),
           r.score == null
             ? h('span', { class: 'chk-withheld' }, r.status === 'unavailable' ? 'No score.' : `No score. ${r.scoreWithheld}`)
-            : h('span', { class: 'chk-num-say' }, 'of the reviewed words are in sentences the model rated 65 or more for strong AI-like writing patterns.')),
+            : h('span', { class: `chk-num-say${r.flagged ? ' flagged' : ''}` }, r.flagged
+              ? 'Strong AI-like writing patterns overall.'
+              : `Below the ${shownLine(r)}-point line. A low score does not clear a text.`)),
+        differ && differBox(r, differ),
+        r.score != null && h('p', { class: 'chk-note chk-bench' }, 'Pattern score: the model’s sentence ratings (0–100), averaged by words over the reviewed text. ',
+          `On ${r.benchmark.texts} held-back test texts: ${r.benchmark.aiFlagged} of ${r.benchmark.ai} texts written by Claude and ${r.benchmark.humanFlagged} of ${r.benchmark.human} human texts scored ${shownLine(r)} or more `,
+          // The model name and date stay on one line: a narrow window otherwise breaks the date at a hyphen.
+          h('span', { class: 'chk-bench-src' }, `(${r.benchmark.model}, ${r.benchmark.date})`), '.'),
         h('p', { class: 'chk-denom' },
           'Reviewed ', h('b', null, fmt(r.reviewedWords)), ' of ', h('b', null, fmt(r.eligibleWords)), ` eligible words (${pct(r.coverage)}).`,
-          notEligible > 0 ? ` ${fmt(notEligible)} words were not eligible: headings, short lines and the reference list.` : ''),
+          notEligible > 0 ? ` ${fmt(notEligible)} ${notEligible === 1 ? 'word was' : 'words were'} not eligible: headings, short lines and the reference list.` : ''),
         r.eligibleWords > 0 && h('div', { class: 'chk-bands', role: 'img', 'aria-label': `Of ${fmt(r.eligibleWords)} eligible words: strong patterns ${b.strong}%, some patterns ${b.some}%, few patterns ${b.few}%, not reviewed ${b.notReviewed}%.` },
           h('span', { class: 'chk-band strong', style: `flex-grow:${b.strong}` }),
           h('span', { class: 'chk-band some', style: `flex-grow:${b.some}` }),
@@ -843,30 +1176,48 @@
           ? h('ul', { class: 'chk-limits-list', 'aria-label': 'Limits of this review' }, r.limits.map((x) => h('li', null, x)))
           : about('ai-limits', 'Not validated: do not use this result as evidence against a writer.', 'Limits',
             h('ul', { class: 'chk-limits-list', 'aria-label': 'Limits of this review' }, r.limits.map((x) => h('li', null, x))),
-            r.style && h('p', null, `The style model’s known weak spots: it wrongly flags ${r.style.tested.nonNativeFalsePositive}, against ${r.style.tested.nativeStudentFalsePositive} for native student writing, and it barely separates student essays (AUROC ${r.style.tested.studentEssayAuroc}).`),
+            r.style && h('p', null, `The style model is a second reading, not part of the score. ${styleTested(r)} It misses about half of current Claude text and also flags some human writing.`),
             h('p', null, modelLine(r))));
     }
 
-    function sentenceCard(r, s) {
-      return h('section', { class: 'chk-card', 'aria-live': 'polite' },
+    /** Why one sentence was rated as it was: its number, the model's reason and what was measured in it. */
+    function sentenceCard(r, s, { where = 'side', onClose = null } = {}) {
+      const lean = s.review === 'model' ? leanOf(s) : null;
+      return h('section', { class: `chk-card chk-why ${where}`, 'data-s': s.i, 'aria-live': 'polite', 'aria-label': 'Why this sentence was rated', tabindex: '-1' },
         h('div', { class: 'chk-card-head' },
           h('span', { class: `chk-pill ${cls(s)}` }, BAND[cls(s)]),
-          s.review === 'model' && h('span', { class: 'chk-card-score', 'aria-label': `model rating ${s.rating} out of 100` }, `${s.rating}`, h('small', null, '/100'))),
+          onClose && h('button', { type: 'button', class: 'btn quiet chk-why-close', 'aria-label': 'Close the reason', onclick: onClose }, 'Close')),
+        lean && h('p', { class: 'chk-why-lean' },
+          h('span', null, h('b', { class: 'chk-card-score' }, `${lean.n}%`), ` ${lean.word}`),
+          h('span', { class: 'chk-why-rating' }, 'model rating ', h('b', null, `${s.rating}`), ' of 100 for AI-like patterns')),
         h('blockquote', { class: 'chk-quote' }, r.text.slice(s.start, s.end)),
+        h('h3', { class: 'chk-h3 chk-why-h' }, lean ? 'Why it was rated this way' : 'Why it was not reviewed'),
         s.review === 'model'
           ? (s.why ? h('ul', { class: 'chk-reasons' }, h('li', null, h('span', { class: 'chk-from' }, 'Model'), s.why)) : h('p', { class: 'chk-note' }, 'The model gave no reason.'))
           : h('p', { class: 'chk-note' }, s.unreviewedReason),
         s.signals.length > 0 && h('div', { class: 'chk-measured' },
           h('div', { class: 'chk-measured-head' }, 'Measured in the text · not part of the rating'),
           h('ul', { class: 'chk-reasons' }, s.signals.map((x) => h('li', null, x)))),
-        s.part && h('p', { class: 'chk-note' }, 'This is part of a long sentence that was cut so the model could read every part whole.'));
+        s.part && h('p', { class: 'chk-note' }, 'This is part of a long sentence that was cut so the model could read every part whole.'),
+        lean && h('p', { class: 'chk-why-foot' }, 'The number describes writing patterns in this sentence, not who wrote it.'));
+    }
+    const whyCard = (t, r, s, where) => sentenceCard(r, s, { where, onClose: () => pickSentence(t, t.pick, 'close') });
+    /** The narrow-window copy of the reason goes right under the paragraph of its sentence. */
+    function placeInline(ms, card) {
+      const at = ms && ms.querySelector(`.chk-s[data-s="${card.dataset.s}"]`);
+      const para = at && at.closest('p');
+      if (para) para.after(card);
     }
 
     /**
      * Pick a sentence (or unpick it). Only what depends on the pick changes: the outline in the text, the row in the
-     * list and the card above the tabs. The rest of the report stays as it is, so focus and the slip's scroll stay put.
+     * list and the reason. In a wide window the reason takes the side panel's place and the summary's scroll position
+     * is kept for when it closes; in a narrow one it opens under the sentence's paragraph. The page scrolls only when
+     * the reader picked the sentence from the list (to show it in the text), never for a click in the text itself.
      */
-    function pickSentence(t, i) {
+    function pickSentence(t, i, from = 'text') {
+      hideTip(true);
+      const was = t.pick;
       t.pick = t.pick === i ? null : i;
       const page = root.querySelector('.chk-report.ai');
       if (!page || !t.result) { draw(); return; }
@@ -876,13 +1227,30 @@
         for (const el of page.querySelectorAll(`.chk-item[data-s="${t.pick}"]`)) el.classList.add('on');
       }
       const slip = page.querySelector('.chk-slip');
-      const old = slip.querySelector(':scope > .chk-card');
+      for (const el of page.querySelectorAll('.chk-why')) el.remove();
       const s = t.pick != null ? t.result.sentences.find((x) => x.i === t.pick && x.eligible) : null;
-      const card = s ? sentenceCard(t.result, s) : null;
-      if (old && card) old.replaceWith(card);
-      else if (old) old.remove();
-      else if (card) slip.querySelector(':scope > .chk-score').after(card);
-      if (t.pick != null) selectInText(`.chk-s[data-s="${i}"]`);
+      if (s) {
+        if (was == null) t.slipTop = slip.scrollTop;
+        slip.prepend(whyCard(t, t.result, s, 'side'));
+        placeInline(page.querySelector('.chk-ms'), whyCard(t, t.result, s, 'inline'));
+        slip.classList.add('why-open');
+        slip.scrollTop = 0;
+      } else {
+        slip.classList.remove('why-open');
+        slip.scrollTop = t.slipTop || 0;
+      }
+      const lost = !document.activeElement || document.activeElement === document.body || document.activeElement.getClientRects().length === 0;
+      if (s && from === 'list') {
+        // the list just went behind the reason: keyboard focus moves to the reason
+        const shown = [...page.querySelectorAll('.chk-why')].find((c) => c.getClientRects().length > 0);
+        if (lost && shown) shown.focus({ preventScroll: true });
+        selectInText(`.chk-s[data-s="${i}"]`); // the reader asked to see this sentence in the text
+      } else if (!s && lost) {
+        // Close took the focused button away: focus returns to the row or the sentence that was open
+        const row = page.querySelector(`.chk-item[data-s="${was}"]`);
+        const back = row && row.getClientRects().length ? row : page.querySelector(`.chk-s[data-s="${was}"]`);
+        if (back) back.focus({ preventScroll: true });
+      }
     }
 
     function flagList(t, r, flagged, reviewedCount, unreviewedCount) {
@@ -892,7 +1260,7 @@
           : `The model rated none of the ${reviewedCount} reviewed sentences 40 or more. This describes writing patterns, not who wrote the text.${unreviewedCount ? ` ${unreviewedCount} sentences were not reviewed.` : ''}`);
       }
       return h('ol', { class: 'chk-list' }, flagged.slice(0, 120).map((s) => h('li', null, h('button', {
-        type: 'button', class: `chk-item${t.pick === s.i ? ' on' : ''}`, 'data-s': s.i, onclick: () => pickSentence(t, s.i), 'aria-label': `${sentenceSay(s)} ${clipText(r.text.slice(s.start, s.end), 140)}`,
+        type: 'button', class: `chk-item${t.pick === s.i ? ' on' : ''}`, 'data-s': s.i, onclick: () => pickSentence(t, s.i, 'list'), 'aria-label': `${sentenceSay(s)} ${clipText(r.text.slice(s.start, s.end), 140)}`,
       },
       h('span', { class: `chk-dot ${s.band}`, 'aria-hidden': 'true' }),
       h('span', { class: 'chk-item-text' }, clipText(r.text.slice(s.start, s.end), 140)),
@@ -901,7 +1269,7 @@
 
     function unreviewedList(t, r, list) {
       return h('ol', { class: 'chk-list' }, list.slice(0, 200).map((s) => h('li', null, h('button', {
-        type: 'button', class: `chk-item${t.pick === s.i ? ' on' : ''}`, 'data-s': s.i, onclick: () => pickSentence(t, s.i), 'aria-label': `${sentenceSay(s)} ${clipText(r.text.slice(s.start, s.end), 140)}`,
+        type: 'button', class: `chk-item${t.pick === s.i ? ' on' : ''}`, 'data-s': s.i, onclick: () => pickSentence(t, s.i, 'list'), 'aria-label': `${sentenceSay(s)} ${clipText(r.text.slice(s.start, s.end), 140)}`,
       },
       h('span', { class: 'chk-dot unreviewed', 'aria-hidden': 'true' }),
       h('span', { class: 'chk-item-text' }, clipText(r.text.slice(s.start, s.end), 140), h('span', { class: 'chk-note-line' }, s.unreviewedReason))))));
@@ -934,7 +1302,7 @@
       const row = (name, value, say) => h('tr', null, h('th', { scope: 'row' }, name), h('td', null, value), h('td', null, say));
       const STATUS = { complete: 'Complete', partial: 'Partly rated', failed: 'Failed', 'not sent': 'Not sent' };
       return h('div', { class: 'chk-signals' },
-        h('p', { class: 'chk-note' }, `How the result is made: the model rates each sentence 0–100 for how strongly it shows generic, formulaic writing patterns. Sentences rated 65 or more count as strong, 40–64 as some. The headline is the share of reviewed words in strong sentences. A sentence the model did not rate validly is “not reviewed” and counts nowhere. Long sentences are cut into parts so the model reads every part whole. Scoring rules version ${p.scoring.version}; no score below ${p.scoring.minReviewedWords} reviewed words or ${Math.round(p.scoring.minCoverage * 100)}% coverage.`),
+        h('p', { class: 'chk-note' }, `How the result is made: the model rates each sentence 0–100 for how strongly it shows generic, formulaic writing patterns. Sentences rated 65 or more count as strong, 40–64 as some. The pattern score is the mean of the sentence ratings weighted by words, over reviewed words only; it is flagged at ${shownLine(r)} or more, a line chosen on development texts and tested once on held-back texts. The bands below show where the ratings fall; they are not the score. A sentence the model did not rate validly is “not reviewed” and counts nowhere. Long sentences are cut into parts so the model reads every part whole. Scoring rules version ${p.scoring.version}; no score below ${p.scoring.minReviewedWords} reviewed words or ${Math.round(p.scoring.minCoverage * 100)}% coverage.`),
         h('h3', { class: 'chk-h3' }, 'Review parts'),
         h('table', { class: 'chk-prov' },
           h('thead', null, h('tr', null, h('th', null, 'Part'), h('th', null, 'Sentences'), h('th', null, 'Words'), h('th', null, 'Result'), h('th', null, 'Time'))),
@@ -951,7 +1319,7 @@
             row('Stock phrases', `${g.phrasesPer1000}`, 'Per 1,000 words, such as “plays a crucial role”.'),
             row('Signpost openers', `${Math.round(g.signpostShare * 100)}%`, 'Sentences opening with Furthermore, Moreover, In conclusion and similar.'),
             row('Measured index', `${g.docSignal}/100`, 'A fixed, uncalibrated summary of the rows above. Shown for transparency only.'))),
-        r.style && styleTable(r.style),
+        r.style && styleTable(r),
         // The limits themselves are in the result card above (folded on the page, in full on paper), not repeated here.
         h('p', { class: 'chk-note' }, 'Lectern cannot measure perplexity (how predictable each word is to a model), which dedicated detectors use; the models on your plan do not expose it.'));
     }
@@ -1083,11 +1451,13 @@
       if (id === 'ai') {
         const p = r.provenance;
         out += 'Writing-pattern review (Lectern) - NOT VALIDATED, not an AI detector\n';
-        out += r.score == null ? `No score. ${r.scoreWithheld}\n` : `${r.score}% of reviewed words are in sentences the model rated 65+ for strong AI-like writing patterns\n`;
+        out += r.score == null ? `No score. ${r.scoreWithheld}\n` : `Pattern score ${r.score}/100 (mean sentence rating, weighted by words): ${r.flagged ? 'strong AI-like writing patterns overall' : `below the ${shownLine(r)}-point line that ${r.benchmark.aiFlagged} of ${r.benchmark.ai} Claude-written test texts reached`}\n`;
+        if (r.score != null) out += `On ${r.benchmark.texts} held-back test texts: ${r.benchmark.aiFlagged} of ${r.benchmark.ai} texts written by Claude and ${r.benchmark.humanFlagged} of ${r.benchmark.human} human texts scored ${shownLine(r)} or more (${r.benchmark.model}, ${r.benchmark.date})\n`;
         out += `Reviewed ${r.reviewedWords} of ${r.eligibleWords} eligible words (${Math.round(r.coverage * 100)}%); status: ${r.status}\n`;
         out += `Of eligible words: strong patterns ${r.bands.strong}% · some patterns ${r.bands.some}% · few patterns ${r.bands.few}% · not reviewed ${r.bands.notReviewed}%\n`;
         out += `${modelLine(r)}\nChecked ${p.finishedAt}; scoring rules version ${p.scoring.version}\n`;
-        if (r.style) out += `Style model (second reading, not in the score): ${Math.round(r.style.probability * 100)}/100, flags at ${Math.round(r.style.threshold * 100)}; non-native writers are wrongly flagged ${r.style.tested.nonNativeFalsePositive}\n`;
+        if (readingsDiffer(r)) out += `The two readings disagree (sentence review ${r.score}, ${lineWord(r.flagged)}; style model ${Math.round(r.style.probability * 100)}, ${lineWord(r.style.flagged)}). ${differWhy(r, readingsDiffer(r))}\n`;
+        if (r.style) out += `Style model (second reading, not in the score): ${Math.round(r.style.probability * 100)}/100, flags at ${Math.round(r.style.threshold * 100)}. ${styleTested(r)}\n`;
         out += '\n';
         for (const s of r.sentences.filter((x) => x.eligible && x.review === 'model' && x.band !== 'few')) out += `[model rating ${s.rating}/100, ${s.band} patterns] ${r.text.slice(s.start, s.end)}\n  ${s.why}\n`;
         const un = r.sentences.filter((x) => x.eligible && x.review !== 'model');
