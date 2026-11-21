@@ -21,7 +21,7 @@ It runs on your Mac or Windows PC. Your chats and saved papers stay on your comp
 
 ## Install on a Mac
 
-1. Open the [latest release](../../releases/latest) and download **Lectern-0.2.2.dmg**.
+1. Open the [latest release](../../releases/latest) and download **Lectern-0.2.3.dmg**.
 2. Open the downloaded file and drag **Lectern** onto **Applications**.
 3. Open Lectern from Applications. The first time, macOS says it cannot check the app for
    malicious software. Click **Done**, then open **System Settings > Privacy & Security**, scroll
@@ -32,7 +32,7 @@ It runs on your Mac or Windows PC. Your chats and saved papers stay on your comp
 
 ## Install on Windows (preview)
 
-1. From the [latest release](../../releases/latest), download **Lectern-0.2.2-windows-x64.zip**.
+1. From the [latest release](../../releases/latest), download **Lectern-0.2.3-windows-x64.zip**.
 2. Right-click the file, choose **Extract All**, and put the **Lectern** folder somewhere that suits you
    (for example your Documents folder).
 3. Open the folder and double-click **Lectern.exe**. The first time, Windows SmartScreen may say it

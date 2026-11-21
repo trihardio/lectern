@@ -124,16 +124,22 @@ if eject_dmg "$MOUNT"; then MOUNT=""; fi # if this fails, on_exit tries again
 [ "$SIGNED" = 1 ] || fail "the app in the DMG fails 'codesign --verify --deep --strict'"
 [ "$VOICE" = 1 ] || fail "the voice helper is missing from the app in the DMG"
 
-echo "== launch a copy once"
-env -u ELECTRON_RUN_AS_NODE LECTERN_DATA_DIR="$TRY/data" "$TRY/Lectern.app/Contents/MacOS/Lectern" --user-data-dir="$TRY/profile" >"$TRY/app.log" 2>&1 &
+echo "== launch a copy once, hidden"
+# LECTERN_CHECK=1 (electron/main.js): no window, no Dock icon, no dialog. The app loads its own page, prints
+# "LECTERN_CHECK ok" and quits by itself, so nothing pops up on the owner's screen and nothing has to be killed.
+env -u ELECTRON_RUN_AS_NODE LECTERN_CHECK=1 LECTERN_DATA_DIR="$TRY/data" "$TRY/Lectern.app/Contents/MacOS/Lectern" --user-data-dir="$TRY/profile" >"$TRY/app.log" 2>&1 &
+APP_PID=$!
 STARTED=0
-for _ in $(seq 1 60); do
-  PID="$(pgrep -f "user-data-dir=$TRY/profile" | head -1 || true)"
-  if [ -n "$PID" ] && lsof -nP -a -p "$PID" -iTCP -sTCP:LISTEN >/dev/null 2>&1; then STARTED=1; break; fi
+for _ in $(seq 1 120); do
+  if grep -q '^LECTERN_CHECK ok' "$TRY/app.log" 2>/dev/null; then STARTED=1; break; fi
+  grep -q '^LECTERN_CHECK failed' "$TRY/app.log" 2>/dev/null && break
+  kill -0 "$APP_PID" 2>/dev/null || break
   sleep 0.5
 done
-pkill -f "user-data-dir=$TRY/profile" || true
-[ "$STARTED" = 1 ] || fail "the built app did not start its local server (log: $TRY/app.log)"
+# it quits by itself; only if it is still running after the wait is it asked to stop (SIGTERM to the main process)
+for _ in $(seq 1 10); do kill -0 "$APP_PID" 2>/dev/null || break; sleep 0.5; done
+kill -0 "$APP_PID" 2>/dev/null && kill "$APP_PID" 2>/dev/null || true
+[ "$STARTED" = 1 ] || fail "the built app did not load its window page (log: $TRY/app.log: $(grep LECTERN_CHECK "$TRY/app.log" 2>/dev/null | tail -1))"
 echo "   version $GOT, signed, voice helper present, starts"
 
 if [ "$DRY" = 1 ]; then

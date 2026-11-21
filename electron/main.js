@@ -15,6 +15,11 @@ const { stopAll } = require('../server/llm/cli');
 // (saved filters, chosen models, spelling variant): a browser keeps that per address. `npm run web` uses 4319.
 // If another program holds this port, any free port is used for this launch.
 const PORT = 47319;
+// Check mode (LECTERN_CHECK=1, used by scripts/release.sh and launch tests): the app starts as usual but never shows a
+// window, a Dock icon or a dialog, so it does not interrupt the person at the computer. When the window's page has loaded
+// it prints "LECTERN_CHECK ok <address>" and quits; when anything fails it prints "LECTERN_CHECK failed <reason>" and
+// exits with status 1.
+const CHECK = process.env.LECTERN_CHECK === '1';
 
 let lectern = null;
 let baseUrl = '';
@@ -51,6 +56,7 @@ async function createWindow() {
     minWidth: 900,
     minHeight: 620,
     title: 'Lectern',
+    show: !CHECK,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0D1512' : '#EBEFEA',
     // macOS: the traffic lights sit on the green rail. Windows keeps its normal title bar and controls.
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 20 } } : { autoHideMenuBar: true }),
@@ -73,6 +79,10 @@ async function createWindow() {
   win.webContents.on('render-process-gone', () => voice?.stop());
   win.webContents.on('did-start-loading', () => voice?.stop());
 
+  if (CHECK) {
+    win.webContents.once('did-fail-load', (_e, code, desc) => { console.log(`LECTERN_CHECK failed page load ${code} ${desc}`); app.exit(1); });
+    win.webContents.once('did-finish-load', () => { console.log(`LECTERN_CHECK ok ${new URL(baseUrl).origin}`); app.quit(); });
+  }
   await win.loadURL(baseUrl);
 }
 
@@ -81,11 +91,13 @@ function startupFailed(e) {
   let folder = '';
   try { folder = lectern ? lectern.config.dataDir : defaultDataDir(); } catch { /* the message alone will do */ }
   const message = (e && e.message) || String(e);
+  if (CHECK) { console.log(`LECTERN_CHECK failed ${message}`); app.exit(1); return; }
   dialog.showErrorBox('Lectern could not start', `${message}${folder ? `\n\nLectern keeps its settings, chats and library in:\n${folder}` : ''}`);
   if (!win) app.quit();
 }
 
 async function start() {
+  if (CHECK && process.platform === 'darwin') app.setActivationPolicy('accessory'); // no Dock icon, never takes focus
   if (process.platform === 'darwin') voice = createVoice({ getBundle: async () => {
     // In a built app the helper sits beside app.asar, in app.asar.unpacked (scripts/make-app.sh unpacks
     // native/): macOS `open` is a separate program and cannot see inside the archive.
